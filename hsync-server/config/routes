@@ -1,0 +1,23 @@
+/static                           StaticR Static getStatic
+/auth                             AuthR   Auth   getAuth
+
+/favicon.ico                      FaviconR        GET
+/robots.txt                       RobotsR         GET
+
+/                                 HomeR           GET POST
+
+/login/#UserIdent/#HashedPassword MyLoginR        GET
+/test                             TestR           GET
+
+
+/registerClient/*Path             RegisterClientR POST
+
+/file/*Path                       FileR           GET
+/delta/*Path                      DeltaR          GET
+/signature/*Path                  SignatureR      GET
+
+/delete/#FileIdent/*Path          DeleteR         DELETE
+/patch/#FileIdent/*Path           PatchR          POST
+/putFile/*Path                    PutFileR        POST
+
+/changes/#DateTime/*Path          ChangesR        GET
