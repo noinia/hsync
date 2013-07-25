@@ -14,17 +14,11 @@ import qualified  Data.Text as T
 
 
 getMyLoginR      :: UserIdent -> HashedPassword -> Handler Text
-getMyLoginR u hp = validateUser (u,Just hp) >>= \isValid ->
-                             if isValid
-                             then do
-                               setCreds True $ Creds "RESTfull" u []
-                               return "VALID"
-                             else return "INVALID"
-
-
-
-
-
+getMyLoginR u hp = protect (validateUser u $ Just hp)
+                           (do
+                              setCreds True $ Creds "RESTfull" u []
+                              return "VALID")
+                           (return "INVALID")
 
 -- getMyLoginR u = return $ RepPlain "login"
 
@@ -39,16 +33,14 @@ getTestR = do
 
 requireRead             :: Path -> Handler Bool
 requireRead (Path u ps) = do
-                            u' <- requireAuthId
-                            let ui = userIdent u'
+                            ui <- requireAuthId'
                             return $ u == ui
-
 
 requireWrite             :: Path -> Handler Bool
 requireWrite p@(Path u ps) = requireRead p
 
 
-
+requireAuthId' = maybeAuthId >>= maybe (permissionDenied "Login Required") return
 
 --------------------------------------------------------------------------------
 -- Based on Yesod.Auth.HashDB
@@ -66,14 +58,10 @@ requireWrite p@(Path u ps) = requireRead p
 -- | Given a (user,password) in plaintext, validate them against the
 --   database values
 
--- validateUser :: (YesodPersist y,
---                  PersistBackend (YesodDB y (GGHandler sub y IO)))
---              => (Text, Text)
---              -> GHandler sub y Bool
-
-validateUser (user,mHashedPw) = runDB (getBy $ UniqueUser user) >>= \dbUser ->
+validateUser              :: UserIdent -> Maybe HashedPassword -> Handler Bool
+validateUser ui mHashedPw = runDB (getBy . UniqueUser $ ui) >>= \dbUser ->
     case dbUser of
         -- user not found
-        Nothing          -> return False
+        Nothing                 -> return False
         -- validate password
         Just (Entity _ sqlUser) -> return $ mHashedPw == userPassword sqlUser

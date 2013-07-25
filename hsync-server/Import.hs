@@ -28,3 +28,7 @@ infixr 5 <>
 (<>) :: Monoid m => m -> m -> m
 (<>) = mappend
 #endif
+
+
+protect                     :: Monad m => m Bool -> m a -> m a -> m a
+protect g thenCase elseCase = g >>= \b -> if b then thenCase else elseCase

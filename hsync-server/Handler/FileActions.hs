@@ -32,11 +32,6 @@ postRegisterClientR (Path u ps) = undefined
 getFileR   :: Path -> Handler Text
 getFileR p = protect (requireRead p) (serveFile p) (permissionDenied "")
 
-
-protect                     :: Monad m => m Bool -> m a -> m a -> m a
-protect g thenCase elseCase = g >>= \b -> if b then thenCase else elseCase
-
-
 getDeltaR             :: Path -> Handler Text
 getDeltaR (Path u ps) = undefined
 

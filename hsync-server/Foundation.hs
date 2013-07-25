@@ -138,13 +138,15 @@ instance YesodAuth App where
     -- Where to send a user after logout
     logoutDest _ = HomeR
 
-    getAuthId creds = return Nothing
+    getAuthId creds = runDB $ do
+        x <- getBy $ UniqueUser $ credsIdent creds
+        return $ case x of
+            Just (Entity _ (User uid _)) -> Just uid
+            Nothing                      -> Nothing
 
--- runDB $ do
---         x <- getBy $ UniqueUser $ credsIdent creds
---         return $ case x of
---             Just (Entity _ (User uid _)) -> Just uid
---             Nothing                      -> Nothing
+    maybeAuthId = do
+      m <- lookupSession credsKey
+      return $ m >>= fromPathPiece
 
     -- You can add other plugins like BrowserID, email or OAuth here
     authPlugins _ = []
@@ -172,5 +174,3 @@ getExtra = fmap (appExtra . settings) getYesod
 -- wiki:
 --
 -- https://github.com/yesodweb/yesod/wiki/Sending-email
-
-    -- maybeAuthId = fromPathPiece <$> lookupSession credsKey
