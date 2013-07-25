@@ -6,7 +6,7 @@
 
 /                                 HomeR           GET POST
 
-/login/#UserIdent/#HashedPassword MyLoginR        GET
+/login/#UserId/#HashedPassword MyLoginR        GET
 /test                             TestR           GET
 
 

@@ -5,6 +5,7 @@ module Handler.Auth where
 import Data.Maybe
 
 import Import
+import Data.Text(Text)
 
 import Data.ByteString.Lazy.Char8  (pack)
 import Data.Digest.Pure.SHA        (sha1, showDigest)
@@ -36,8 +37,21 @@ getTestR = do
 
 
 
+requireRead             :: Path -> Handler Bool
+requireRead (Path u ps) = do
+                            u' <- requireAuthId
+                            let ui = userIdent u'
+                            return $ u == ui
+
+
+requireWrite             :: Path -> Handler Bool
+requireWrite p@(Path u ps) = requireRead p
+
+
+
+
 --------------------------------------------------------------------------------
--- Direclty copied from Yesod.Auth.HashDB
+-- Based on Yesod.Auth.HashDB
 
 
 

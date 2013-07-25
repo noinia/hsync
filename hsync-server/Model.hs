@@ -2,9 +2,10 @@ module Model where
 
 import Prelude
 import Yesod
-import Data.Text (Text)
+import Data.Text(Text)
 import Database.Persist.Quasi
-import Data.Typeable (Typeable)
+
+import Data.Typeable
 
 -- import System.Locale
 -- import Data.Time
@@ -12,11 +13,9 @@ import Data.Typeable (Typeable)
 -- import qualified Data.Time.Format as D
 import qualified Data.Text as T
 
-
 type UserIdent = Text
 type Password = Text
 type HashedPassword = Text
-
 
 
 type DateTime = Text
@@ -36,6 +35,12 @@ type DateTime = Text
 --     fromPathPiece = D.parseTime defaultTimeLocale dateTimeFormat . T.unpack
 
 
+-- You can define all of your database entities in the entities file.
+-- You can find more information on persistent and how to declare entities
+-- at:
+-- http://www.yesodweb.com/book/persistent/
+share [mkPersist sqlOnlySettings, mkMigrate "migrateAll"]
+    $(persistFileWith lowerCaseSettings "config/models")
 
 
 type FileIdent = Text
@@ -47,14 +52,3 @@ data Path = Path UserIdent [Text]
 instance PathMultiPiece Path where
     toPathMultiPiece (Path u ps) = u : ps -- map T.pack ps
     fromPathMultiPiece (u:ps) = Just $ Path u ps -- . map T.unpack
-
-
-
-
-
--- You can define all of your database entities in the entities file.
--- You can find more information on persistent and how to declare entities
--- at:
--- http://www.yesodweb.com/book/persistent/
-share [mkPersist sqlOnlySettings, mkMigrate "migrateAll"]
-    $(persistFileWith lowerCaseSettings "config/models")

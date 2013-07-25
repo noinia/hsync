@@ -1,10 +1,15 @@
 module Foundation where
 
+
 import Prelude
+
+
+import Control.Applicative((<$>))
+
+import Data.Text(Text)
 import Yesod
 import Yesod.Static
 import Yesod.Auth
---import Yesod.Auth.HashDB(authHashDB,getAuthIdHashDB)
 import Yesod.Default.Config
 import Yesod.Default.Util (addStaticContentExternal)
 import Network.HTTP.Conduit (Manager)
@@ -126,24 +131,28 @@ instance YesodPersistRunner App where
     getDBRunner = defaultGetDBRunner connPool
 
 instance YesodAuth App where
-    type AuthId App = UserId
+    type AuthId App = UserIdent
 
     -- Where to send a user after successful login
     loginDest _ = HomeR
     -- Where to send a user after logout
     logoutDest _ = HomeR
 
-    getAuthId creds = runDB $ do
-        x <- getBy $ UniqueUser $ credsIdent creds
-        case x of
-            Just (Entity uid _) -> return $ Just uid
-            Nothing -> do
-                fmap Just $ insert $ User (credsIdent creds) Nothing
+    getAuthId creds = return Nothing
+
+-- runDB $ do
+--         x <- getBy $ UniqueUser $ credsIdent creds
+--         return $ case x of
+--             Just (Entity _ (User uid _)) -> Just uid
+--             Nothing                      -> Nothing
 
     -- You can add other plugins like BrowserID, email or OAuth here
     authPlugins _ = []
 
     authHttpManager = httpManager
+
+credsKey :: Text
+credsKey = "_ID"
 
 -- This instance is required to use forms. You can modify renderMessage to
 -- achieve customized and internationalized form validation messages.
@@ -163,3 +172,5 @@ getExtra = fmap (appExtra . settings) getYesod
 -- wiki:
 --
 -- https://github.com/yesodweb/yesod/wiki/Sending-email
+
+    -- maybeAuthId = fromPathPiece <$> lookupSession credsKey
