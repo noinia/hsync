@@ -7,16 +7,28 @@ import System.Directory(removeFile)
 
 import Handler.Auth(requireRead,requireWrite)
 
+import Data.Conduit
+import Data.Conduit.Binary
+import Data.ByteString(ByteString)
 
 import qualified Data.Text as T
 
 -- TODO: Handle Directories!!!
 
+dummy :: MonadResource m => Source m ByteString
+dummy = sourceFile "/Users/frank/tmp/test.jpg"
+
+
+serveSource s = respondSource typeOctet (s $= awaitForever sendChunkBS)
+
 
 serveFile   :: MonadHandler m => Path -> m a
 serveFile p = sendFile typeOctet (toFilePath p)
 
-checkFileIdent = undefined
+
+-- TODO
+checkFileIdent     :: FileIdent -> Path -> Handler Bool
+checkFileIdent _ _ = return True
 
 
 
@@ -30,10 +42,13 @@ postListenR (Path u ps) = undefined
 
 
 getFileR   :: Path -> Handler Text
-getFileR p = protect (requireRead p) (serveFile p) (permissionDenied "")
+getFileR p = protect (requireRead p) (serveFile p) (permissionDenied "file")
 
-getDeltaR             :: Path -> Handler Text
-getDeltaR (Path u ps) = undefined
+getDeltaR   :: Path -> Handler TypedContent
+getDeltaR p = protect (requireRead p) serveDelta (permissionDenied "delta")
+    where
+      serveDelta = serveSource dummy
+
 
 getSignatureR             :: Path -> Handler Text
 getSignatureR (Path u ps) = undefined
