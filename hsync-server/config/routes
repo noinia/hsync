@@ -1,16 +1,17 @@
 /static                           StaticR Static getStatic
 /auth                             AuthR   Auth   getAuth
 
+
 /favicon.ico                      FaviconR        GET
 /robots.txt                       RobotsR         GET
 
 /                                 HomeR           GET POST
 
 /login/#UserIdent/#HashedPassword MyLoginR        GET
-/test                             TestR           GET
+/register                         RegisterR       GET POST
 
 
-/registerClient/*Path             RegisterClientR POST
+/listen/*Path                     ListenR         POST
 
 /file/*Path                       FileR           GET
 /delta/*Path                      DeltaR          GET

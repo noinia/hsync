@@ -52,3 +52,4 @@ data Path = Path UserIdent [Text]
 instance PathMultiPiece Path where
     toPathMultiPiece (Path u ps) = u : ps -- map T.pack ps
     fromPathMultiPiece (u:ps) = Just $ Path u ps -- . map T.unpack
+    fromPathMultiPiece _      = Nothing

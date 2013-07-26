@@ -25,8 +25,8 @@ toFilePath             :: Path -> FilePath
 toFilePath (Path u ps) = intercalate "/" . map T.unpack $ filesDir:u:ps
 
 
-postRegisterClientR             :: Path -> Handler Text
-postRegisterClientR (Path u ps) = undefined
+postListenR             :: Path -> Handler Text
+postListenR (Path u ps) = undefined
 
 
 getFileR   :: Path -> Handler Text
