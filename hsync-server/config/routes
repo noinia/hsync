@@ -11,7 +11,10 @@
 /register                         RegisterR       GET POST
 
 
-/listen/*Path                     ListenR         GET
+/listen/now/*Path                 ListenNowR      GET
+/listen/from/#DateTime/*Path      ListenR         GET
+
+
 
 /file/*Path                       FileR           GET
 /delta/*Path                      DeltaR          GET
@@ -20,5 +23,3 @@
 /delete/#FileIdent/*Path          DeleteR         DELETE
 /patch/#FileIdent/*Path           PatchR          POST
 /putFile/*Path                    PutFileR        POST
-
-/changes/#DateTime/*Path          ChangesR        GET

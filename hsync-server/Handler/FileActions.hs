@@ -23,18 +23,18 @@ import qualified Data.Text as T
 --------------------------------------------------------------------------------
 -- | Handles related to notifications
 
-getChangesR                :: DateTime -> Path -> Handler Text
-getChangesR dt (Path u ps) = undefined
+getListenR      :: DateTime -> Path -> Handler Text
+getListenR dt p = undefined
+                  -- TODO: merge this one with the one below, since they are
+                  -- essencially the same
 
-
-getListenR   :: Path -> Handler TypedContent
-getListenR p = do
-                 ns <- notifications <$> getYesod
-                 c  <- liftIO $ atomically (dupTChan ns)
-                 let evtSource = chanToSource c
-                 respondSource typePlain
-                                   (evtSource $= C.map show $= awaitForever sendChunk)
-
+getListenNowR   :: Path -> Handler TypedContent
+getListenNowR p = protectRead p "listen" $ do
+                   ns <- notifications <$> getYesod
+                   c  <- liftIO $ atomically (dupTChan ns)
+                   let evtSource = chanToSource c
+                   respondSource typePlain
+                                 (evtSource $= C.map show $= awaitForever sendChunk)
 
 --------------------------------------------------------------------------------
 -- | Handles related to file events

@@ -3,7 +3,7 @@ module Foundation where
 
 import Prelude
 
-import HSync.Types
+import HSync.Common.Types
 
 import Data.Text(Text)
 import Yesod

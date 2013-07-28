@@ -7,7 +7,7 @@ import Database.Persist.Quasi
 
 import Data.Typeable
 
-import HSync.Types
+import HSync.Common.Types
 
 import qualified Data.Text as T
 

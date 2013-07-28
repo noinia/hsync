@@ -25,7 +25,7 @@ library
                      Handler.Home
                      Handler.Auth
                      Handler.FileActions
-                     HSync.Types
+                     HSync.Common.Types
 
     if flag(dev) || flag(library-only)
         cpp-options:   -DDEVELOPMENT
