@@ -1,4 +1,4 @@
-module HSync.Types where
+module HSync.Common.Types where
 
 import Prelude
 
