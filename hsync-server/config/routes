@@ -11,7 +11,7 @@
 /register                         RegisterR       GET POST
 
 
-/listen/*Path                     ListenR         POST
+/listen/*Path                     ListenR         GET
 
 /file/*Path                       FileR           GET
 /delta/*Path                      DeltaR          GET
