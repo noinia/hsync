@@ -1,27 +1,41 @@
-{-# Language OverloadedStrings #-}
+{-# Language  OverloadedStrings
+            , TypeFamilies
+  #-}
 module Main where
 
 
-import Network
+import Blaze.ByteString.Builder(toLazyByteString)
 
-import Control.Concurrent(forkIO)
-
-import Network.HTTP.Conduit
-
-import Control.Monad.State
-
-import Data.Conduit.Binary
-
-import System.Environment (getArgs)
-
-import Control.Monad.IO.Class (liftIO)
 
 import Creds
 
-import Data.Text
 
-import qualified Data.ByteString.Lazy as L
-import qualified Data.Conduit as C
+import HSync.Client.Import
+--import HSync.Server.Foundation(HSyncServer)
+
+import HSync.Server.Handler.Auth
+import HSync.Server.Application
+
+
+import Control.Concurrent(forkIO)
+import Control.Monad.State
+import Control.Monad.IO.Class (liftIO)
+
+import Data.Conduit.Binary
+import Data.Default
+
+import Network.HTTP.Conduit
+import Network
+
+import System.Environment (getArgs)
+
+-- import Yesod
+
+
+
+--import qualified Data.ByteString.Lazy       as L
+import qualified Data.ByteString.Lazy.Char8 as LC
+import qualified Data.Conduit               as C
 
 --------------------------------------------------------------------------------
 
@@ -29,7 +43,7 @@ type GlobalSettings = Text
 type InstanceSettings = Text
 
 protocol = "http://"
-urlString = protocol ++ "localhost:3000/login/" ++ user ++ "/" ++ hashedPass
+urlString = mconcat [protocol,"localhost:3000/login/",myuser,"/",myhashedPass]
 
 
 --------------------------------------------------------------------------------
@@ -38,37 +52,102 @@ urlString = protocol ++ "localhost:3000/login/" ++ user ++ "/" ++ hashedPass
 data HSyncClient = HSyncClient { globalSettings :: GlobalSettings
                                }
 
+type ServerAddress = Text
 type PersistentState = ()
+type PartialPath = Text
+
 
 -- | Each Synchronized Tree has its own manager/settings etc
 data ClientInstance = ClientInstance { httpManager     :: Manager
                                      , localBaseDir    :: FilePath
-                                     , remoteBase      :: String
+                                     , serverAddress   :: ServerAddress
+                                     , user            :: UserIdent
+                                     , hashedPassword  :: HashedPassword
+                                     , remoteBaseDir   :: PartialPath
                                      , presistentState :: PersistentState
                                      -- Database
                                      }
 
 
-type InstanceState = ()
-
-newtype GHandler m a = Handler (StateT InstanceState m a)
-
-type Handler = GHandler IO
-
-
-runInstance ci = do
-                   loadPersistent
-                   login
-                   from <- return "now" -- TODO get the data from loadPersistent
-                   forkIO $ listenRemote ci from
-                   forkIO $ listenLocal ci
+instance Default ClientInstance where
+    def = ClientInstance { httpManager     = undefined
+                         , localBaseDir    = "/home/frank/tmp"
+                         , serverAddress   = "localhost:3000"
+                         , user            = "nobody"
+                         , hashedPassword  = "hashed-secret"
+                         , remoteBaseDir   = ""
+                         , presistentState = ()
+                         -- Database
+                         }
 
 
-loadPersistent = return ()
-login = undefined
 
-listenRemote = undefined
-listenLocal = undefined
+
+type InstanceState inst = inst
+
+type ActionT inst m a = StateT (InstanceState inst) m a
+
+
+type Action m a = ActionT ClientInstance m a
+
+
+
+
+-- instance Monad (GAction inst m) where
+--     return x = Action $ return x
+--     -- (Action m) >>= f  = Action $ run
+
+
+-- login :: Route HSyncServer
+
+
+class IsYesodClient client where
+    type YesodServer client
+
+    serverRoot :: client -> Text
+    server     :: client -> YesodServer client
+
+
+instance IsYesodClient ClientInstance where
+    type YesodServer ClientInstance = HSyncServer
+    serverRoot = serverAddress
+    server   _ = def
+
+
+toUrl     :: (IsYesodClient client,
+             Yesod server,
+             YesodServer client ~ server) =>
+                client -> Route server -> String
+toUrl cli r = let root     = serverRoot cli
+                  (pcs,qs) = renderRoute r
+                  urlBldr  = joinPath (server cli) root pcs qs in
+              LC.unpack . toLazyByteString $ urlBldr
+
+
+toReq cli = parseUrl . toUrl cli
+
+
+
+
+
+
+
+
+
+
+
+-- runInstance ci = do
+--                    loadPersistent
+--                    login
+--                    from <- return "now" -- TODO get the data from loadPersistent
+--                    forkIO $ listenRemote ci from
+--                    forkIO $ listenLocal ci
+
+
+-- loadPersistent = return ()
+
+-- listenRemote = undefined
+-- listenLocal = undefined
 
 
 
@@ -76,13 +155,23 @@ listenLocal = undefined
 
 --------------------------------------------------------------------------------
 
+login :: Action ()
+login = do
+  MyLoginR myuser myhashedPass
+
+
 main :: IO ()
 main = withSocketsDo $ withManager $ \manager -> do
-         case parseUrl urlString of
-           Nothing  -> liftIO $ putStrLn "Invalid URL"
-           Just req -> do
-                         let reqHead = req { method = "GET" }
-                         resp <- http reqHead manager
-                         liftIO $ print $ responseStatus resp
-                         liftIO $ mapM_ print $ responseHeaders resp
-                         responseBody resp C.$$+- sinkFile "google.html"
+         let cli = ClientInstance manager "/Users/frank/tmp/" "http://localhost:3000" ()
+             url = toUrl cli login
+         liftIO $ print url
+
+
+--          case parseUrl urlString of
+--            Nothing  -> liftIO $ putStrLn "Invalid URL"
+--            Just req -> do
+--                          let reqHead = req { method = "GET" }
+--                          resp <- http reqHead manager
+--                          liftIO $ print $ responseStatus resp
+--                          liftIO $ mapM_ print $ responseHeaders resp
+--                          responseBody resp C.$$+- sinkFile "google.html"
