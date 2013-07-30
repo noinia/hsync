@@ -1,4 +1,4 @@
-module Foundation where
+module HSync.Server.Foundation where
 
 
 import Prelude
@@ -6,31 +6,37 @@ import Prelude
 import HSync.Common.Types
 
 import Data.Text(Text)
+import Data.Default
+
 import Yesod
 import Yesod.Static
 import Yesod.Auth
 import Yesod.Default.Config
 import Yesod.Default.Util (addStaticContentExternal)
 import Network.HTTP.Conduit (Manager)
-import qualified Settings
-import Settings.Development (development)
-import qualified Database.Persist
+
 import Database.Persist.Sql (SqlPersistT)
-import Settings.StaticFiles
-import Settings (widgetFile, Extra (..))
-import Model
+
+
+import HSync.Server.Settings (widgetFile, Extra (..))
+import HSync.Server.Settings.StaticFiles
+import HSync.Server.Settings.Development (development)
+import HSync.Server.Model
+
 import Text.Jasmine (minifym)
 import Text.Hamlet (hamletFile)
 import System.Log.FastLogger (Logger)
 
 import Control.Concurrent.STM.TChan
 
+import qualified HSync.Server.Settings as Settings
+import qualified Database.Persist
 
 -- | The site argument for your application. This can be a good place to
 -- keep settings and values requiring initialization before your application
 -- starts running, such as database connections. Every handler will have
 -- access to the data present here.
-data App = App
+data HSyncServer = HSyncServer
     { settings      :: AppConfig DefaultEnv Extra
     , getStatic     :: Static -- ^ Settings for static file serving.
     , connPool      :: Database.Persist.PersistConfigPool Settings.PersistConf -- ^ Database connection pool.
@@ -40,8 +46,19 @@ data App = App
     , notifications :: TChan Notification
     }
 
+
+instance Default HSyncServer where
+    def = HSyncServer { settings      = undefined
+                      , getStatic     = undefined
+                      , connPool      = undefined
+                      , httpManager   = undefined
+                      , persistConfig = undefined
+                      , appLogger     = undefined
+                      , notifications = undefined
+                      }
+
 -- Set up i18n messages. See the message folder.
-mkMessage "App" "messages" "en"
+mkMessage "HSyncServer" "messages" "en"
 
 -- This is where we define all of the routes in our application. For a full
 -- explanation of the syntax, please see:
@@ -49,26 +66,26 @@ mkMessage "App" "messages" "en"
 --
 -- This function does three things:
 --
--- * Creates the route datatype AppRoute. Every valid URL in your
+-- * Creates the route datatype HSyncServerRouteRoute. Every valid URL in your
 --   application can be represented as a value of this type.
 -- * Creates the associated type:
---       type instance Route App = AppRoute
--- * Creates the value resourcesApp which contains information on the
+--       type instance Route HSyncServer = HSyncServerRoute
+-- * Creates the value resourcesHSyncServer which contains information on the
 --   resources declared below. This is used in Handler.hs by the call to
 --   mkYesodDispatch
 --
 -- What this function does *not* do is create a YesodSite instance for
 -- App. Creating that instance requires all of the handler functions
 -- for our application to be in scope. However, the handler functions
--- usually require access to the AppRoute datatype. Therefore, we
+-- usually require access to the HSyncServerRoute datatype. Therefore, we
 -- split these actions into two functions and place them in separate files.
-mkYesodData "App" $(parseRoutesFile "config/routes")
+mkYesodData "HSyncServer" $(parseRoutesFile "config/routes")
 
-type Form x = Html -> MForm (HandlerT App IO) (FormResult x, Widget)
+type Form x = Html -> MForm (HandlerT HSyncServer IO) (FormResult x, Widget)
 
 -- Please see the documentation for the Yesod typeclass. There are a number
 -- of settings which can be configured by overriding methods here.
-instance Yesod App where
+instance Yesod HSyncServer where
     approot = ApprootMaster $ appRoot . settings
 
     -- Store session data on the client in encrypted cookies,
@@ -127,14 +144,14 @@ instance Yesod App where
     makeLogger = return . appLogger
 
 -- How to run database actions.
-instance YesodPersist App where
-    type YesodPersistBackend App = SqlPersistT
+instance YesodPersist HSyncServer where
+    type YesodPersistBackend HSyncServer = SqlPersistT
     runDB = defaultRunDB persistConfig connPool
-instance YesodPersistRunner App where
+instance YesodPersistRunner HSyncServer where
     getDBRunner = defaultGetDBRunner connPool
 
-instance YesodAuth App where
-    type AuthId App = UserIdent
+instance YesodAuth HSyncServer where
+    type AuthId HSyncServer = UserIdent
 
     -- Where to send a user after successful login
     loginDest _ = HomeR
@@ -161,7 +178,7 @@ credsKey = "_ID"
 
 -- This instance is required to use forms. You can modify renderMessage to
 -- achieve customized and internationalized form validation messages.
-instance RenderMessage App FormMessage where
+instance RenderMessage HSyncServer FormMessage where
     renderMessage _ _ = defaultFormMessage
 
 

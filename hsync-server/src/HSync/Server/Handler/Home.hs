@@ -1,7 +1,7 @@
 {-# LANGUAGE TupleSections, OverloadedStrings #-}
-module Handler.Home where
+module HSync.Server.Handler.Home where
 
-import Import
+import HSync.Server.Import
 
 -- This is a handler function for the GET request method on the HomeR
 -- resource pattern. All of your resource patterns are defined in

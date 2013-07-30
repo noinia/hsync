@@ -1,10 +1,10 @@
 {-# LANGUAGE QuasiQuotes       #-}
 {-# LANGUAGE TupleSections, TemplateHaskell, OverloadedStrings #-}
-module Handler.Auth where
+module HSync.Server.Handler.Auth where
 
 import Data.Maybe
 
-import Import
+import HSync.Server.Import
 import Yesod.Form
 
 import Data.Text(Text)

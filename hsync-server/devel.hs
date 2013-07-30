@@ -1,5 +1,5 @@
 {-# LANGUAGE PackageImports #-}
-import "hsync-server" Application (getApplicationDev)
+import "hsync-server" HSync.Server.Application (getApplicationDev)
 import Network.Wai.Handler.Warp
     (runSettings, defaultSettings, settingsPort)
 import Control.Concurrent (forkIO)

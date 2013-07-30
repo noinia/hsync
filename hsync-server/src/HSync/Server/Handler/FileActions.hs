@@ -1,12 +1,12 @@
-module Handler.FileActions where
+module HSync.Server.Handler.FileActions where
 
-import Import
+import HSync.Server.Import
 
 import Control.Concurrent.STM
 
 import System.Directory(removeFile)
 
-import Handler.Auth(requireRead,requireWrite)
+import HSync.Server.Handler.Auth(requireRead,requireWrite)
 
 import Data.Conduit
 import Data.Conduit.Binary
@@ -28,6 +28,8 @@ getListenR dt p = undefined
                   -- TODO: merge this one with the one below, since they are
                   -- essencially the same
 
+
+-- TODO: Filter the source so we only send the notifications matching pat h
 getListenNowR   :: Path -> Handler TypedContent
 getListenNowR p = protectRead p "listen" $ do
                    ns <- notifications <$> getYesod
@@ -35,6 +37,9 @@ getListenNowR p = protectRead p "listen" $ do
                    let evtSource = chanToSource c
                    respondSource typePlain
                                  (evtSource $= C.map show $= awaitForever sendChunk)
+
+
+
 
 --------------------------------------------------------------------------------
 -- | Handles related to file events

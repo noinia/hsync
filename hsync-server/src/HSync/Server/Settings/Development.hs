@@ -1,4 +1,4 @@
-module Settings.Development where
+module HSync.Server.Settings.Development where
 
 import Prelude
 

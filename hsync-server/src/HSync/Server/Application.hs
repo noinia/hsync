@@ -1,12 +1,13 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
-module Application
+module HSync.Server.Application
     ( makeApplication
     , getApplicationDev
     , makeFoundation
     ) where
 
-import Import
-import Settings
+import HSync.Server.Import
+import qualified HSync.Server.Settings as Settings
+
 import Yesod.Default.Config
 import Yesod.Default.Main
 import Yesod.Default.Handlers
@@ -24,14 +25,19 @@ import Control.Concurrent.STM.TChan
 
 -- Import all relevant handler modules here.
 -- Don't forget to add new modules to your cabal file!
-import Handler.Home
-import Handler.Auth
-import Handler.FileActions
+import HSync.Server.Handler.Home
+import HSync.Server.Handler.Auth
+import HSync.Server.Handler.FileActions
+
+
+
+
+
 
 -- This line actually creates our YesodDispatch instance. It is the second half
 -- of the call to mkYesodData which occurs in Foundation.hs. Please see the
 -- comments there for more details.
-mkYesodDispatch "App" resourcesApp
+mkYesodDispatch "HSyncServer" resourcesHSyncServer
 
 -- This function allocates resources (such as a database connection pool),
 -- performs initialization and creates a WAI application. This is also the
@@ -56,7 +62,7 @@ makeApplication conf = do
 
 -- | Loads up any necessary settings, creates your foundation datatype, and
 -- performs some initialization.
-makeFoundation :: AppConfig DefaultEnv Extra -> IO App
+makeFoundation :: AppConfig DefaultEnv Extra -> IO HSyncServer
 makeFoundation conf = do
     manager <- newManager def
     s <- staticSite
@@ -66,7 +72,7 @@ makeFoundation conf = do
     p <- Database.Persist.createPoolConfig (dbconf :: Settings.PersistConf)
     logger <- mkLogger True stdout
     nots <- newBroadcastTChanIO
-    let foundation = App conf s p manager dbconf logger nots
+    let foundation = HSyncServer conf s p manager dbconf logger nots
 
     -- Perform database migration using our application's logging settings.
     runLoggingT
