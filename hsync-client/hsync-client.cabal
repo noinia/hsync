@@ -37,6 +37,7 @@ executable hsync-client
                  , network                       >= 2.4.1.2    && < 2.5
                  , mtl                           >= 2.1.2      && < 2.2
                  , blaze-builder                 >= 0.3.1.1    && < 0.4
+                 , http-types                    >= 0.8        && < 0.9
                  , data-default                  >= 0.5.3      && < 0.6
                  , hsync-common                  >= 0.0.0.0    && < 0.2
                  , hsync-server                  >= 0.0.0      && < 0.2
