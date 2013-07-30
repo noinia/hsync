@@ -42,10 +42,6 @@ import qualified Data.Conduit               as C
 type GlobalSettings = Text
 type InstanceSettings = Text
 
-protocol = "http://"
-urlString = mconcat [protocol,"localhost:3000/login/",myuser,"/",myhashedPass]
-
-
 --------------------------------------------------------------------------------
 
 -- | The global application
@@ -72,14 +68,13 @@ data ClientInstance = ClientInstance { httpManager     :: Manager
 instance Default ClientInstance where
     def = ClientInstance { httpManager     = undefined
                          , localBaseDir    = "/home/frank/tmp"
-                         , serverAddress   = "localhost:3000"
+                         , serverAddress   = "http://localhost:3000"
                          , user            = "nobody"
                          , hashedPassword  = "hashed-secret"
                          , remoteBaseDir   = ""
                          , presistentState = ()
                          -- Database
                          }
-
 
 
 
@@ -90,6 +85,11 @@ type ActionT inst m a = StateT (InstanceState inst) m a
 
 type Action m a = ActionT ClientInstance m a
 
+
+getClientInstance = get
+
+runAction        :: ActionT inst m a -> InstanceState inst -> m (a,InstanceState inst)
+runAction act st = runStateT act st
 
 
 
@@ -124,11 +124,13 @@ toUrl cli r = let root     = serverRoot cli
               LC.unpack . toLazyByteString $ urlBldr
 
 
-toReq cli = parseUrl . toUrl cli
+toReq r = getClientInstance >>= \cli -> lift . parseUrl . toUrl cli $ r
 
 
-
-
+runReq r = do
+  mgr <- httpManager <$> getClientInstance
+  req <- toReq r
+  http req mgr
 
 
 
@@ -155,17 +157,22 @@ toReq cli = parseUrl . toUrl cli
 
 --------------------------------------------------------------------------------
 
-login :: Action ()
+
+
+
+-- login :: Action m ()
 login = do
-  MyLoginR myuser myhashedPass
+  cli  <- getClientInstance
+  resp <- runReq $ MyLoginR (user cli) (hashedPassword cli)
+  responseBody resp C.$$+- sinkFile "/tmp/out"
+
 
 
 main :: IO ()
 main = withSocketsDo $ withManager $ \manager -> do
-         let cli = ClientInstance manager "/Users/frank/tmp/" "http://localhost:3000" ()
-             url = toUrl cli login
-         liftIO $ print url
-
+         let cli = def { httpManager = manager }
+         (x,_) <- runAction login cli
+         return x
 
 --          case parseUrl urlString of
 --            Nothing  -> liftIO $ putStrLn "Invalid URL"
