@@ -2,6 +2,8 @@
   #-}
 module HSync.Common.Types where
 
+
+
 import Prelude
 
 import Control.Applicative((<$>))
@@ -14,7 +16,8 @@ import Data.List(intercalate, isPrefixOf)
 import qualified Data.Text as T
 
 -- import System.Locale
--- import Data.Time (UTCTime)
+import Data.Time (UTCTime, getCurrentTime)
+import Data.Time.Format
 -- import qualified Data.Time.Format as D
 
 showT :: Show a => a -> Text
@@ -33,24 +36,26 @@ type ClientIdent = Text
 
 --------------------------------------------------------------------------------
 
--- newtype DateTime = DateTime UTCTime
---     deriving (Show,Eq,Ord)
+newtype DateTime = DateTime UTCTime
+    deriving (Show,Read,Eq,Ord)
 
--- instance ParseTime DateTime where
---     buildTime tl = DateTime . buildTime tl
+instance ParseTime DateTime where
+    buildTime tl = DateTime . buildTime tl
+
+
+currentTime :: IO DateTime
+currentTime = DateTime <$> getCurrentTime
 
 
 -- dateTimeFormat :: String
 -- dateTimeFormat = "%0C%F-%T"
 
--- instance PathPiece DateTime where
---     toPathPiece (DateTime t) = T.pack . formatTime defaultTimeLocale dateTimeFormat $ t
---     fromPathPiece = D.parseTime defaultTimeLocale dateTimeFormat . T.unpack
-
-
-
-
-type DateTime = Text
+instance PathPiece DateTime where
+    toPathPiece (DateTime t) = showT t
+    fromPathPiece s          = case reads . T.unpack $ s of
+                                 ((t,""):_) -> Just $ DateTime t
+                                 _          -> Nothing
+-- type DateTime = Text
 
 type HashedFile = Text
 

@@ -69,7 +69,7 @@ deleteDeleteR fi p = protectWrite p "delete" delete'
                         (Just n)  -> logNotification n >> return "OK"
       delete'' ci = protectedByFI fi fp $ do
                       removeFile fp
-                      t <- return "getCurrentTime" -- TODO!!!
+                      t <- currentTime
                       return $ Notification (FileRemoved p) ci t
 
 protectedByFI fi fp h = protect (checkFileIdent fi fp)
