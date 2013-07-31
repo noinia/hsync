@@ -17,6 +17,8 @@ import Data.ByteString(ByteString)
 
 import System.Lock.FLock
 
+import Network.Wai(requestBody)
+
 
 import qualified Data.Conduit.List as C
 import qualified Data.Text as T
@@ -58,29 +60,35 @@ getSignatureR p = protectRead p "signature" $ serveSource dummy
 
 
 deleteDeleteR                :: FileIdent -> Path -> Handler Text
-deleteDeleteR fi p = protectWrite p "delete" delete'
+deleteDeleteR fi p = atomicallyWriteR fi p "delete" delete'
     where
-      fp          = toFilePath filesDir p
-      delete'     = do
-                      ci <- return "clientId" -- TODO
-                      mn <- liftIO $ atomicallyIO fp (delete'' ci)
-                      case mn of
-                        Nothing   -> invalidArgs [] -- TODO: this hosuld be a 409
-                        (Just n)  -> logNotification n >> return "OK"
-      delete'' ci = protectedByFI fi fp $ do
-                      removeFile fp
-                      t <- currentTime
-                      return $ Notification (FileRemoved p) ci t
+      delete' ci fp = protectedByFI fi fp "delete" $ do
+                        removeFile fp
+                        notification (FileRemoved p) ci
 
-protectedByFI fi fp h = protect (checkFileIdent fi fp)
-                                (h >>= return . Just)
-                                (return Nothing)
+notification evt ci = currentTime >>= return . Notification evt ci
+
 
 postPatchR                :: FileIdent -> Path -> Handler Text
-postPatchR fi (Path u ps) = undefined
+postPatchR fi p = atomicallyWriteR fi p "patch" patch'
+    where
+      patch' ci = undefined
 
-postPutFileR                :: FileIdent -> Path -> Handler Text
-postPutFileR fi (Path u ps) = undefined
+postPutFileR      :: FileIdent -> Path -> Handler Text
+postPutFileR fi p = do
+  wr <- waiRequest
+  atomicallyWriteR fi p "file" (putFile' (requestBody wr))
+    where
+      putFile' s ci fp = protectedByFI fi fp "file" $ do
+                           runResourceT $ s $$ sinkFile fp
+                           notification (FileRemoved p) ci
+    -- where
+    --   putFile' = do
+    --                ci <- clientId
+    --                mn <- liftIO $ atomicallyIO fp (putFile'' ci)
+
+clientId :: Handler ClientIdent
+clientId = return "clientId"
 
 
 --------------------------------------------------------------------------------
@@ -99,15 +107,45 @@ serveSource s = respondSource typeOctet (s $= awaitForever sendChunkBS)
 serveFile   :: MonadHandler m => Path -> m a
 serveFile p = sendFile typeOctet (toFilePath filesDir p)
 
+type ErrorDescription = [Text]
+type FIStatus         = Maybe ErrorDescription
 
--- TODO
-checkFileIdent             :: MonadIO m => FileIdent -> FilePath -> m Bool
-checkFileIdent NonExistent  p = liftIO $ (\a b -> not $ a || b)
-                                         <$> doesFileExist      p
-                                         <*> doesDirectoryExist p
-checkFileIdent Directory    p = liftIO $ doesDirectoryExist p
-checkFileIdent (FileDate d) p = return True
-checkFileIdent (FileHash h) p = return True
+
+
+protectedByFI               :: MonadIO m => FileIdent -> FilePath -> Text -> m a ->
+                               m (Either ErrorDescription a)
+protectedByFI fi fp hName h = do
+  me <- checkFileIdent fi fp
+  case me of
+    Nothing -> h >>= return . Right
+    Just e  -> return . Left . insertHName hName $ e
+
+
+insertHName   :: Text -> [Text] -> [Text]
+insertHName n = map ((n <> ": ") <>)
+
+
+
+
+noError :: Monad m => m (Maybe a)
+noError = return Nothing
+
+fiErr   :: Monad m => Text -> m (Maybe ErrorDescription)
+fiErr t = return . Just $ [t]
+
+checkFileIdent                :: MonadIO m => FileIdent -> FilePath -> m FIStatus
+checkFileIdent NonExistent  p = protect (liftIO $ doesFileExist p)
+                                        (fiErr "no file expected but file found")
+                                        checkDir'
+    where
+      checkDir' = protect (liftIO $ doesDirectoryExist p)
+                          (fiErr "no file expected but directory found")
+                          noError
+checkFileIdent Directory    p = protect (liftIO $ doesDirectoryExist p)
+                                        noError
+                                        (fiErr "directory expected but not found")
+checkFileIdent (FileDate d) p = return Nothing -- TODO
+checkFileIdent (FileHash h) p = return Nothing
 
 
 protectRead         :: Path -> Text -> Handler a -> Handler a
@@ -121,6 +159,21 @@ logNotification   :: Notification -> Handler ()
 logNotification n = do
                     c <- notifications <$> getYesod
                     lift $ atomically (writeTChan c n)
+
+type FINotification = Either ErrorDescription Notification
+
+atomicallyWriteR              :: FileIdent -> Path -> Text ->
+                                 (ClientIdent -> FilePath -> IO FINotification) ->
+                                     Handler Text
+atomicallyWriteR fi p hName h = protectWrite p hName h'
+    where
+      fp = toFilePath filesDir p
+      h' = do
+             ci <- clientId
+             mn <- liftIO $ atomicallyIO fp (h ci fp)
+             case mn of
+               Left err -> invalidArgs err
+               Right n  -> logNotification n >> return "OK"
 
 
 atomicallyIO    :: FilePath -> IO a -> IO a
