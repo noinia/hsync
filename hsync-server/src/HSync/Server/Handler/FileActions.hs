@@ -4,10 +4,7 @@ import HSync.Server.Import
 
 import Control.Concurrent.STM
 
-import System.Directory( removeFile
-                       , doesFileExist
-                       , doesDirectoryExist
-                       )
+import System.Directory( removeFile )
 
 import HSync.Server.Handler.Auth(requireRead,requireWrite)
 
@@ -107,10 +104,6 @@ serveSource s = respondSource typeOctet (s $= awaitForever sendChunkBS)
 serveFile   :: MonadHandler m => Path -> m a
 serveFile p = sendFile typeOctet (toFilePath filesDir p)
 
-type ErrorDescription = [Text]
-type FIStatus         = Maybe ErrorDescription
-
-
 
 protectedByFI               :: MonadIO m => FileIdent -> FilePath -> Text -> m a ->
                                m (Either ErrorDescription a)
@@ -123,30 +116,6 @@ protectedByFI fi fp hName h = do
 
 insertHName   :: Text -> [Text] -> [Text]
 insertHName n = map ((n <> ": ") <>)
-
-
-
-
-noError :: Monad m => m (Maybe a)
-noError = return Nothing
-
-fiErr   :: Monad m => Text -> m (Maybe ErrorDescription)
-fiErr t = return . Just $ [t]
-
-checkFileIdent                :: MonadIO m => FileIdent -> FilePath -> m FIStatus
-checkFileIdent NonExistent  p = protect (liftIO $ doesFileExist p)
-                                        (fiErr "no file expected but file found")
-                                        checkDir'
-    where
-      checkDir' = protect (liftIO $ doesDirectoryExist p)
-                          (fiErr "no file expected but directory found")
-                          noError
-checkFileIdent Directory    p = protect (liftIO $ doesDirectoryExist p)
-                                        noError
-                                        (fiErr "directory expected but not found")
-checkFileIdent (FileDate d) p = return Nothing -- TODO
-checkFileIdent (FileHash h) p = return Nothing
-
 
 protectRead         :: Path -> Text -> Handler a -> Handler a
 protectRead p err h = protect (requireRead p) h (permissionDenied err)

@@ -4,6 +4,7 @@ module HSync.Server.Foundation where
 import Prelude
 
 import HSync.Common.Types
+import HSync.Common.FileIdent(FileIdent)
 
 import Data.Text(Text)
 import Data.Default
