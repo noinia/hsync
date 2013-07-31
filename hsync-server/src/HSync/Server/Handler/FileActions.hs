@@ -4,7 +4,10 @@ import HSync.Server.Import
 
 import Control.Concurrent.STM
 
-import System.Directory(removeFile)
+import System.Directory( removeFile
+                       , doesFileExist
+                       , doesDirectoryExist
+                       )
 
 import HSync.Server.Handler.Auth(requireRead,requireWrite)
 
@@ -98,8 +101,13 @@ serveFile p = sendFile typeOctet (toFilePath filesDir p)
 
 
 -- TODO
-checkFileIdent     :: Monad m => FileIdent -> FilePath -> m Bool
-checkFileIdent _ _ = return True
+checkFileIdent             :: MonadIO m => FileIdent -> FilePath -> m Bool
+checkFileIdent NonExistent  p = liftIO $ (\a b -> not $ a || b)
+                                         <$> doesFileExist      p
+                                         <*> doesDirectoryExist p
+checkFileIdent Directory    p = liftIO $ doesDirectoryExist p
+checkFileIdent (FileDate d) p = return True
+checkFileIdent (FileHash h) p = return True
 
 
 protectRead         :: Path -> Text -> Handler a -> Handler a
