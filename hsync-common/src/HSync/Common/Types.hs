@@ -1,17 +1,37 @@
 {-# Language  OverloadedStrings
   #-}
-module HSync.Common.Types where
+module HSync.Common.Types( UserIdent
+                         , Password
+                         , HashedPassword
+                         , ClientIdent
+                         -- DateTime
+                         , DateTime(..)
+                         , currentTime
+                         -- Paths
+                         , Path(..)
+                         , toFilePath
+                         , isSubPathOf
+                         -- Events
+                         , EventKind(..)
+                         , affectedPaths
+                         -- Notifications
+                         , Notification(..)
+                         , toLog
+                         , matchesNotification
+                         ) where
 
 
 
 import Prelude
 
 import Control.Applicative((<$>))
-import Data.Monoid
 import Data.Text(Text)
 import Yesod.Core
 
 import Data.List(intercalate, isPrefixOf)
+
+import HSync.Common.Import(showT)
+
 
 import qualified Data.Text as T
 
@@ -19,9 +39,6 @@ import qualified Data.Text as T
 import Data.Time (UTCTime, getCurrentTime)
 import Data.Time.Format
 -- import qualified Data.Time.Format as D
-
-showT :: Show a => a -> Text
-showT = T.pack . show
 
 --readT = read . T.unpack
 
@@ -57,36 +74,9 @@ instance PathPiece DateTime where
                                  _          -> Nothing
 -- type DateTime = Text
 
-type HashedFile = Text
-
 --------------------------------------------------------------------------------
 
-data FileIdent = NonExistent
-               | Directory
-               | FileDate DateTime
-               | FileHash HashedFile
-               deriving (Show,Read,Eq)
 
-dtPrefix,hashPrefix :: Text
-dtPrefix   = "dt_"
-hashPrefix = "hash_"
-
-startsWith :: Text -> Text -> Bool
-startsWith = flip T.isPrefixOf
-
-
-instance PathPiece FileIdent where
-    toPathPiece NonExistent   = "nonexistent"
-    toPathPiece Directory     = "directory"
-    toPathPiece (FileDate dt) = dtPrefix   <> showT dt
-    toPathPiece (FileHash h)  = hashPrefix <> showT h
-    fromPathPiece t | t == "nonexistent"        = Just NonExistent
-                    | t == "directory"          = Just Directory
-                    | t `startsWith` dtPrefix   = FileDate <$> f dtPrefix
-                    | t `startsWith` hashPrefix = FileHash <$> f hashPrefix
-                    | otherwise                 = Nothing
-        where
-          f s = fromPathPiece $ T.drop (T.length s) t
 
 --------------------------------------------------------------------------------
 
