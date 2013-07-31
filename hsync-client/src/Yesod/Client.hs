@@ -3,10 +3,12 @@
              , ConstraintKinds
              , Rank2Types
              , FlexibleContexts
+             , FlexibleInstances
+             , MultiParamTypeClasses
   #-}
 module Yesod.Client where
 
-import Control.Applicative((<$>))
+import Control.Applicative -- (Applicative((<$>))
 
 import Blaze.ByteString.Builder( Builder
                                , fromByteString
@@ -14,13 +16,23 @@ import Blaze.ByteString.Builder( Builder
                                , toLazyByteString
                                )
 
+import Control.Monad.Reader(MonadReader(..),ReaderT,runReaderT)
+import Control.Monad.State( MonadState(..)
+                          , StateT(..)
+                          , runStateT
+                          , modify
+                          )
 
 import Control.Failure
 
-import Data.Monoid((<>))
+
 import Data.ByteString(ByteString)
 import Data.Conduit(Source, ResumableSource,mapOutput)
+import Data.Default
+import Data.Monoid((<>))
 import Data.Text(Text)
+
+
 
 
 import Network.HTTP.Conduit( Request
@@ -31,12 +43,12 @@ import Network.HTTP.Conduit( Request
                            , HttpException(..)
                            , http
                            , parseUrl
-                           -- , createCookieJar
+                           , createCookieJar
                            -- , withManager
                            , method
                            , requestBody
                            -- , responseBody
-                           -- , responseCookieJar
+                           , responseCookieJar
                            )
 import Network.HTTP.Types
 
@@ -56,11 +68,79 @@ class IsYesodClient client where
     server        :: client -> YesodServer client
 
 
-class YesodClientAction m where
-    type ClientInstance m
+-- class YesodClientAction m where
+--     type ClientInstance m
 
-    clientInstance :: m (ClientInstance m)
-    cookieJar      :: m (Maybe CookieJar)
+--     clientInstance :: m (ClientInstance m)
+--     cookieJar      :: m (Maybe CookieJar)
+
+data YesodClientState = YesodClientState { cookieJar'      :: Maybe CookieJar
+                                         }
+                         deriving (Show,Eq)
+
+instance Default YesodClientState where
+    def = YesodClientState . Just . createCookieJar $ []
+
+newtype YesodClientMonadT cli m a =
+    YesodClientMonadT { unYCT :: StateT YesodClientState (ReaderT cli m) a }
+
+
+instance Monad m => Monad (YesodClientMonadT cli m) where
+    return                      = YesodClientMonadT . return
+    (YesodClientMonadT m) >>= f = let f' = unYCT . f in
+                                  YesodClientMonadT $ m >>= f'
+
+instance Functor m => Functor (YesodClientMonadT cli m) where
+    fmap f = YesodClientMonadT . fmap f . unYCT
+
+instance (Functor m, Monad m) => Applicative (YesodClientMonadT cli m) where
+    pure = YesodClientMonadT . pure
+    (YesodClientMonadT f) <*> (YesodClientMonadT x) = YesodClientMonadT $ f <*> x
+
+
+instance MonadTrans (YesodClientMonadT cli) where
+    lift = YesodClientMonadT . lift . lift
+
+instance Monad m => MonadReader cli (YesodClientMonadT cli m) where
+    ask     = YesodClientMonadT . lift $ ask
+    local f = YesodClientMonadT . StateT . fmap (local f) . runStateT . unYCT
+
+
+instance Monad m => MonadState YesodClientState (YesodClientMonadT cli m) where
+    state = YesodClientMonadT . state
+
+
+runYesodClientT                                :: YesodClientMonadT cli m a ->
+                                                  cli ->
+                                                  YesodClientState ->
+                                                      m (a,YesodClientState)
+runYesodClientT (YesodClientMonadT comp) cli s = runReaderT (runStateT comp s) cli
+
+
+
+evalYesodClientT            :: Functor m => YesodClientMonadT cli m a ->
+                                 cli -> YesodClientState -> m a
+evalYesodClientT comp cli s = fst <$> runYesodClientT comp cli s
+
+
+
+
+
+clientInstance :: Monad m => YesodClientMonadT cli m cli
+clientInstance = ask
+
+
+
+cookieJar :: (Monad m, Functor m) => YesodClientMonadT cli m (Maybe CookieJar)
+cookieJar = cookieJar' <$> get
+
+
+updateCookieJar   :: Monad m => Response body => YesodClientMonadT cli m ()
+updateCookieJar r = modify $ \st -> st {cookieJar' = Just . responseCookieJar $ r}
+
+
+
+
 
 
 type IsYesodClientFor client server = ( IsYesodClient client
@@ -68,9 +148,9 @@ type IsYesodClientFor client server = ( IsYesodClient client
                                       , YesodServer client ~ server
                                       )
 
-type IsActionMonadFor m client = ( YesodClientAction m
-                                 , ClientInstance m ~ client
-                                 )
+-- type IsActionMonadFor m client = ( YesodClientAction m
+--                                  , ClientInstance m ~ client
+--                                  )
 
 --------------------------------------------------------------------------------
 
@@ -90,9 +170,9 @@ toUrl cli r = let root     = serverAppRoot cli
 
 
 toReq   :: (client `IsYesodClientFor` server,
-            m `IsActionMonadFor` client,
+            Functor m,
             Failure HttpException m ) =>
-           Route server -> m (Request m')
+           Route server -> YesodClientMonadT client m (Request m')
 toReq r = do
   cli <- clientInstance
   mcj <- cookieJar
@@ -101,35 +181,33 @@ toReq r = do
 
 
 runRouteWith   :: ( client `IsYesodClientFor` server
-               , m `IsActionMonadFor` client
                , MonadResource m, MonadBaseControl IO m
                , Failure HttpException m
                ) =>
                Route server ->
                (Request m -> Request m) ->
-                   m (Response (ResumableSource m ByteString))
+                   YesodClientMonadT client m (Response (ResumableSource m ByteString))
 runRouteWith r f = do
   mgr <- manager <$> clientInstance
   req' <- toReq r
   let req = f req'
-  http req mgr
+  lift $ http req mgr
 
 runGetRoute :: ( client `IsYesodClientFor` server
-               , m `IsActionMonadFor` client
                , MonadResource m, MonadBaseControl IO m
                , Failure HttpException m
                ) =>
-               Route server -> m (Response (ResumableSource m ByteString))
+               Route server ->
+                   YesodClientMonadT client m (Response (ResumableSource m ByteString))
 runGetRoute = flip runRouteWith id
 
 
 runPostRoute :: ( client `IsYesodClientFor` server
-                , m `IsActionMonadFor` client
                 , ToBuilder a
                 , MonadResource m, MonadBaseControl IO m
                 , Failure HttpException m) =>
                 Route server -> Source m a
-                  -> m (Response (ResumableSource m ByteString))
+                  -> YesodClientMonadT client m (Response (ResumableSource m ByteString))
 runPostRoute r s = runRouteWith r $ \req ->
                    req { method      = methodPost
                        , requestBody = RequestBodySourceChunked . toBuilder $ s
