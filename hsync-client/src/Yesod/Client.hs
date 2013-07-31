@@ -23,6 +23,8 @@ import Control.Monad.State( MonadState(..)
                           , modify
                           )
 
+
+
 import Control.Failure
 
 
@@ -109,6 +111,8 @@ instance Monad m => MonadReader cli (YesodClientMonadT cli m) where
 instance Monad m => MonadState YesodClientState (YesodClientMonadT cli m) where
     state = YesodClientMonadT . state
 
+instance MonadIO m => MonadIO (YesodClientMonadT cli m) where
+    liftIO = YesodClientMonadT . liftIO
 
 runYesodClientT                                :: YesodClientMonadT cli m a ->
                                                   cli ->
@@ -212,6 +216,11 @@ runPostRoute r s = runRouteWith r $ \req ->
                    req { method      = methodPost
                        , requestBody = RequestBodySourceChunked . toBuilder $ s
                        }
+
+
+
+
+
 
 class ToBuilder a where
     toBuilder :: Monad m => Source m a -> Source m Builder

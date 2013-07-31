@@ -91,10 +91,15 @@ data HSyncClient = HSyncClient { globalSettings :: GlobalSettings
 toRemotePath        :: Sync -> FilePath -> Path
 toRemotePath cli fp = let n   = length . localBaseDir $ cli
                           fp' = Data.List.drop (n+1) fp
-                          p   = T.split (== '/') . T.pack $ fp
+                          p   = T.split (== '/') . T.pack $ fp'
                       in Path (user cli) p
 
 
+remoteFileInfo    :: MonadIO m => FilePath -> ActionT m (FileIdent,Path)
+remoteFileInfo fp = do
+  sync <- getSync
+  fi   <- liftIO $ fileIdent fp
+  return (fi,toRemotePath sync fp)
 
 
 -- instanceState      :: Sync -> InstanceState Sync
@@ -158,10 +163,15 @@ login = do
     "VALID"   -> setSessionCreds resp >> return True
     "INVALID" -> return False
 
+
+putFile    :: ( MonadResource m, Failure HttpException m
+              , MonadIO m, MonadBaseControl IO m) => FilePath -> ActionT m ()
 putFile fp = do
-  sync <- getSync
-  let h = PutFileR . toRemotePath sync $ fp
+  (fi,p) <- remoteFileInfo fp
+  let h = PutFileR fi p
       s = sourceFile fp
+  sync <- getSync
+  liftIO $ print $ toUrl sync h
   resp <- runPostRoute h s
   liftIO $ print "woei"
 
@@ -184,7 +194,8 @@ main = withSocketsDo $ withManager $ \mgr -> do
                         }
          x <- flip runActionT sync $ do
                 loggedIn <- login
-                when loggedIn $ getFile $ Path (user sync) ["test.jpg"]
+                when loggedIn $ putFile "/Users/frank/tmp/synced/test_put.jpg"
+                -- when loggedIn $ getFile $ Path (user sync) ["test.jpg"]
                 return loggedIn
          liftIO $ print x
 
