@@ -4,11 +4,13 @@
 module HSync.Client.Sync where
 
 import Data.Default
-
+import Data.List(intercalate)
 
 import HSync.Client.Import
 
 import Network.HTTP.Conduit(Manager)
+
+import qualified Data.Text as T
 
 
 --------------------------------------------------------------------------------
@@ -33,7 +35,7 @@ data Sync = Sync { httpManager     :: Manager
 
 instance Default Sync where
     def = Sync { httpManager     = undefined
-               , localBaseDir    = "/home/frank/tmp"
+               , localBaseDir    = "/Users/frank/tmp/synced"
                , serverAddress   = "http://localhost:3000"
                , user            = "nobody"
                , hashedPassword  = "hashed-secret"
@@ -42,3 +44,7 @@ instance Default Sync where
                , clientIdent     = "client-ident"
                -- Database
                }
+
+
+toLocalPath               :: Sync -> Path -> FilePath
+toLocalPath s (Path _ ps) = intercalate "/" . (localBaseDir s :) . map T.unpack $ ps

@@ -25,8 +25,9 @@ import HSync.Server.Application
 
 import Control.Concurrent(forkIO)
 import Control.Failure
-import Control.Monad.State.Class
-import Control.Monad.Reader.Class
+import Control.Monad(when)
+-- import Control.Monad.State.Class
+-- import Control.Monad.Reader.Class
 
 import Control.Monad.IO.Class (liftIO)
 
@@ -41,15 +42,15 @@ import Network.HTTP.Conduit( Request
                            , CookieJar
                            , RequestBody(..)
                            , HttpException(..)
-                           , http
-                           , parseUrl
 --                           , createCookieJar
                            , withManager
-                           , method
                            , requestBody
                            , responseBody
+                           , responseStatus
                            , responseCookieJar
                            )
+import Network.HTTP.Types
+
 import Network
 
 import System.Environment (getArgs)
@@ -150,7 +151,7 @@ setSessionCreds = updateCookieJar
 login :: ( MonadResource m, Failure HttpException m
          , MonadBaseControl IO m) => ActionT m Bool
 login = do
-  sync <- clientInstance
+  sync <- getSync
   resp <- runGetRoute $ MyLoginR (user sync) (hashedPassword sync)
   body <- lift $ responseBody resp C.$$+- sinkLbs
   case LC.unpack body of
@@ -158,18 +159,33 @@ login = do
     "INVALID" -> return False
 
 putFile fp = do
-  sync <- clientInstance
+  sync <- getSync
   let h = PutFileR . toRemotePath sync $ fp
       s = sourceFile fp
   resp <- runPostRoute h s
   liftIO $ print "woei"
 
 
+getFile   :: ( MonadResource m, Failure HttpException m
+         , MonadBaseControl IO m) => Path -> ActionT m ()
+getFile p = do
+  sync <- getSync
+  resp <- runGetRoute $ FileR p
+  let fp     = toLocalPath sync p
+      status = responseStatus resp
+  when (status == ok200) $ lift (responseBody resp C.$$+- sinkFile fp)
+
 
 main :: IO ()
 main = withSocketsDo $ withManager $ \mgr -> do
-         let sync = def { httpManager = mgr }
-         x <- runActionT login sync
+         let sync = def { httpManager    = mgr
+                        , user           = myUser
+                        , hashedPassword = myHashedPass
+                        }
+         x <- flip runActionT sync $ do
+                loggedIn <- login
+                when loggedIn $ getFile $ Path (user sync) ["test.jpg"]
+                return loggedIn
          liftIO $ print x
 
 --          case parseUrl urlString of
