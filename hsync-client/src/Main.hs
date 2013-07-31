@@ -1,21 +1,22 @@
 {-# Language  OverloadedStrings
             , TypeFamilies
+            , TypeSynonymInstances
+            , FlexibleContexts
   #-}
 module Main where
 
 
-import Blaze.ByteString.Builder( Builder
-                               , fromByteString
-                               , flush
-                               , toLazyByteString
-                               )
+
 
 
 import Creds
 
-import Network.HTTP.Types
+
+
 
 import HSync.Client.Import
+import HSync.Client.Sync
+
 --import HSync.Server.Foundation(HSyncServer)
 
 import HSync.Server.Handler.Auth
@@ -23,7 +24,10 @@ import HSync.Server.Application
 
 
 import Control.Concurrent(forkIO)
-import Control.Monad.State
+import Control.Failure
+import Control.Monad.State.Class
+import Control.Monad.Reader.Class
+
 import Control.Monad.IO.Class (liftIO)
 
 import Data.ByteString(ByteString)
@@ -36,9 +40,10 @@ import Network.HTTP.Conduit( Request
                            , Manager
                            , CookieJar
                            , RequestBody(..)
+                           , HttpException(..)
                            , http
                            , parseUrl
-                           , createCookieJar
+--                           , createCookieJar
                            , withManager
                            , method
                            , requestBody
@@ -49,8 +54,11 @@ import Network
 
 import System.Environment (getArgs)
 
-
-
+import Yesod.Client -- ( IsYesodClient(..)
+                   -- , YesodClientMonadT(..)
+                   -- , runYesodClientT
+                   -- , runRouteWith, runGetRoute, runPostRoute
+                   -- )
 
 -- import Yesod
 
@@ -74,143 +82,47 @@ type InstanceSettings = Text
 data HSyncClient = HSyncClient { globalSettings :: GlobalSettings
                                }
 
-type ServerAddress = Text
-type PersistentState = ()
-type PartialPath = Text
-
-
--- | Each Synchronized Tree has its own manager/settings etc
-data ClientInstance = ClientInstance { httpManager     :: Manager
-                                     , localBaseDir    :: FilePath -- without trailing /
-                                     , serverAddress   :: ServerAddress
-                                     , user            :: UserIdent
-                                     , hashedPassword  :: HashedPassword
-                                     , remoteBaseDir   :: PartialPath
-                                     , presistentState :: PersistentState
-                                     , clientIdent     :: ClientIdent
-                                     -- Database
-                                     }
-
-
-instance Default ClientInstance where
-    def = ClientInstance { httpManager     = undefined
-                         , localBaseDir    = "/home/frank/tmp"
-                         , serverAddress   = "http://localhost:3000"
-                         , user            = "nobody"
-                         , hashedPassword  = "hashed-secret"
-                         , remoteBaseDir   = ""
-                         , presistentState = ()
-                         , clientIdent     = "client-ident"
-                         -- Database
-                         }
-
 
 -- | given a local file path, create a (remote) Path corresponding to it
 --
 -- Precondition: localBaseDir cli is a basedir of the given file path.
 -- this is not checked.
-toRemotePath        :: ClientInstance -> FilePath -> Path
+toRemotePath        :: Sync -> FilePath -> Path
 toRemotePath cli fp = let n   = length . localBaseDir $ cli
                           fp' = Data.List.drop (n+1) fp
                           p   = T.split (== '/') . T.pack $ fp
                       in Path (user cli) p
 
-data InstanceState inst = InstanceState { clientInstance :: inst
-                                        , cookieJar      :: CookieJar
-                                        }
-                        deriving (Show,Eq)
 
 
 
-instanceState      :: ClientInstance -> InstanceState ClientInstance
-instanceState inst = InstanceState { clientInstance = inst
-                                   , cookieJar      = createCookieJar []
-                                   }
+-- instanceState      :: Sync -> InstanceState Sync
+-- instanceState inst = InstanceState { clientInstance = inst
+--                                    , cookieJar      = createCookieJar []
+--                                    }
 
 
 
-
-type ActionT inst m a = StateT (InstanceState inst) m a
-
-
-type Action m a = ActionT ClientInstance m a
+-- | maintain mutable state and imutable state
 
 
-getClientInstance = clientInstance <$> get
+type ActionT = YesodClientMonadT Sync
 
 
-
-runAction        :: ActionT inst m a -> InstanceState inst -> m (a,InstanceState inst)
-runAction act st = runStateT act st
+getSync :: Monad m => ActionT m Sync
+getSync = clientInstance
 
 
 
--- instance Monad (GAction inst m) where
---     return x = Action $ return x
---     -- (Action m) >>= f  = Action $ run
+runActionT          :: Functor m => ActionT m a -> Sync -> m a
+runActionT act sync = evalYesodClientT act sync def
 
 
--- login :: Route HSyncServer
-
-
-class IsYesodClient client where
-    type YesodServer client
-
-    serverRoot :: client -> Text
-    server     :: client -> YesodServer client
-
-
-instance IsYesodClient ClientInstance where
-    type YesodServer ClientInstance = HSyncServer
-    serverRoot = serverAddress
-    server   _ = def
-
-
-toUrl     :: (IsYesodClient client,
-             Yesod server,
-             YesodServer client ~ server) =>
-                client -> Route server -> String
-toUrl cli r = let root     = serverRoot cli
-                  (pcs,qs) = renderRoute r
-                  urlBldr  = joinPath (server cli) root pcs qs in
-              LC.unpack . toLazyByteString $ urlBldr
-
-
--- class ClientActionMonad m where
---     type ClientInstance m
-
-
-
-
-
-
-toReq r = do
-  cli <- getClientInstance
-  cj  <- cookieJar <$> get
-  req <- lift . parseUrl . toUrl cli $ r
-  return $ req { HC.cookieJar = Just cj }
-
-
-runGetReq r = do
-  mgr <- httpManager <$> getClientInstance
-  req <- toReq r
-  http req mgr
-
-
--- runPostReq :: Handle HSyncServer ->
-
-runPostReq r s = do
-  mgr <- httpManager <$> getClientInstance
-  req' <- toReq r
-  let req = req' { method      = methodPost
-                 , requestBody = RequestBodySourceChunked . toBuilder $ s}
-  http req mgr
-
-
-toBuilder :: Monad m => Source m ByteString -> Source m Builder
-toBuilder = C.mapOutput (\bs -> fromByteString bs <> flush)
-
-
+instance IsYesodClient Sync where
+    type YesodServer Sync = HSyncServer
+    serverAppRoot = serverAddress
+    server   _    = def
+    manager       = httpManager
 
 -- runInstance ci = do
 --                    loadPersistent
@@ -231,34 +143,33 @@ toBuilder = C.mapOutput (\bs -> fromByteString bs <> flush)
 
 --------------------------------------------------------------------------------
 
-setSessionCreds      :: Monad m => Response body -> Action m ()
-setSessionCreds resp = modify (\s -> s {cookieJar = responseCookieJar resp })
+setSessionCreds :: Monad m => Response body -> ActionT m ()
+setSessionCreds = updateCookieJar
 
 
+login :: ( MonadResource m, Failure HttpException m
+         , MonadBaseControl IO m) => ActionT m Bool
 login = do
-  cli  <- getClientInstance
-  resp <- runGetReq $ MyLoginR (user cli) (hashedPassword cli)
-  body <- responseBody resp C.$$+- sinkLbs
+  sync <- clientInstance
+  resp <- runGetRoute $ MyLoginR (user sync) (hashedPassword sync)
+  body <- lift $ responseBody resp C.$$+- sinkLbs
   case LC.unpack body of
     "VALID"   -> setSessionCreds resp >> return True
     "INVALID" -> return False
 
 putFile fp = do
-  cli  <- getClientInstance
-  let h = PutFileR . toRemotePath cli $ fp
+  sync <- clientInstance
+  let h = PutFileR . toRemotePath sync $ fp
       s = sourceFile fp
-  resp <- runPostReq h s
+  resp <- runPostRoute h s
   liftIO $ print "woei"
 
 
 
-
-
-
 main :: IO ()
-main = withSocketsDo $ withManager $ \manager -> do
-         let cli = def { httpManager = manager }
-         (x,_) <- runAction login $ instanceState cli
+main = withSocketsDo $ withManager $ \mgr -> do
+         let sync = def { httpManager = mgr }
+         x <- runActionT login sync
          liftIO $ print x
 
 --          case parseUrl urlString of
