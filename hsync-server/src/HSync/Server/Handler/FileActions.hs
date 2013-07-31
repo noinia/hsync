@@ -57,7 +57,7 @@ getSignatureR p = protectRead p "signature" $ serveSource dummy
 
 
 deleteDeleteR                :: FileIdent -> Path -> Handler Text
-deleteDeleteR fi p = atomicallyWriteR fi p "delete" delete'
+deleteDeleteR fi p = atomicallyWriteR p "delete" delete'
     where
       delete' ci fp = protectedByFI fi fp "delete" $ do
                         removeFile fp
@@ -67,16 +67,17 @@ notification evt ci = currentTime >>= return . Notification evt ci
 
 
 postPatchR                :: FileIdent -> Path -> Handler Text
-postPatchR fi p = atomicallyWriteR fi p "patch" patch'
+postPatchR fi p = atomicallyWriteR p "patch" patch'
     where
       patch' ci = undefined
 
 postPutFileR      :: FileIdent -> Path -> Handler Text
+postPutFileR Directory _ = invalidArgs ["putFile: cannot replace directory by file."]
 postPutFileR fi p = do
   wr <- waiRequest
-  atomicallyWriteR fi p "file" (putFile' (requestBody wr))
+  atomicallyWriteR p "putFile" (putFile' (requestBody wr))
     where
-      putFile' s ci fp = protectedByFI fi fp "file" $ do
+      putFile' s ci fp = protectedByFI fi fp "putFile" $ do
                            runResourceT $ s $$ sinkFile fp
                            notification (FileRemoved p) ci
     -- where
@@ -131,10 +132,10 @@ logNotification n = do
 
 type FINotification = Either ErrorDescription Notification
 
-atomicallyWriteR              :: FileIdent -> Path -> Text ->
+atomicallyWriteR              :: Path -> Text ->
                                  (ClientIdent -> FilePath -> IO FINotification) ->
                                      Handler Text
-atomicallyWriteR fi p hName h = protectWrite p hName h'
+atomicallyWriteR p hName h = protectWrite p hName h'
     where
       fp = toFilePath filesDir p
       h' = do
