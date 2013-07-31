@@ -76,8 +76,8 @@ protectedByFI fi fp h = protect (checkFileIdent fi fp)
 postPatchR                :: FileIdent -> Path -> Handler Text
 postPatchR fi (Path u ps) = undefined
 
-postPutFileR             :: Path -> Handler Text
-postPutFileR (Path u ps) = undefined
+postPutFileR                :: FileIdent -> Path -> Handler Text
+postPutFileR fi (Path u ps) = undefined
 
 
 --------------------------------------------------------------------------------
