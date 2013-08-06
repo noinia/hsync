@@ -38,7 +38,7 @@ import qualified Data.Text as T
 -- import System.Locale
 import Data.Time (UTCTime, getCurrentTime)
 import Data.Time.Format
--- import qualified Data.Time.Format as D
+import qualified Data.Time.Format as D
 
 --readT = read . T.unpack
 
@@ -64,15 +64,19 @@ currentTime :: IO DateTime
 currentTime = DateTime <$> getCurrentTime
 
 
--- dateTimeFormat :: String
--- dateTimeFormat = "%0C%F-%T"
+dateTimeFormat :: String
+dateTimeFormat = "%F-%T.%q-%Z"
 
 instance PathPiece DateTime where
-    toPathPiece (DateTime t) = showT t
-    fromPathPiece s          = case reads . T.unpack $ s of
-                                 ((t,""):_) -> Just $ DateTime t
-                                 _          -> Nothing
--- type DateTime = Text
+    toPathPiece (DateTime t) = T.pack . formatTime undefined dateTimeFormat $ t
+    fromPathPiece = D.parseTime undefined dateTimeFormat . T.unpack
+
+-- instance PathPiece DateTime where
+--     toPathPiece (DateTime t) = showT t
+--     fromPathPiece s          = case reads . T.unpack $ s of
+--                                  ((t,""):_) -> Just $ DateTime t
+--                                  _          -> Nothing
+-- -- type DateTime = Text
 
 --------------------------------------------------------------------------------
 
