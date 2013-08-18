@@ -12,7 +12,6 @@ import Data.Conduit
 import Data.Conduit.Binary
 import Data.ByteString(ByteString)
 
-import System.Lock.FLock
 
 import Network.Wai(requestBody)
 
@@ -63,23 +62,26 @@ deleteDeleteR fi p = atomicallyWriteR p "delete" delete'
                         removeFile fp
                         notification (FileRemoved p) ci
 
-notification evt ci = currentTime >>= return . Notification evt ci
-
-
 postPatchR                :: FileIdent -> Path -> Handler Text
 postPatchR fi p = atomicallyWriteR p "patch" patch'
     where
       patch' ci = undefined
 
-postPutFileR      :: FileIdent -> Path -> Handler Text
+postPutFileR             :: FileIdent -> Path -> Handler Text
 postPutFileR Directory _ = invalidArgs ["putFile: cannot replace directory by file."]
-postPutFileR fi p = do
-  wr <- waiRequest
-  atomicallyWriteR p "putFile" (putFile' (requestBody wr))
+postPutFileR fi        p = do
+                             wr <- waiRequest
+                             atomicallyWriteR p "putFile" (putFile' (requestBody wr))
     where
       putFile' s ci fp = protectedByFI fi fp "putFile" $ do
                            runResourceT $ s $$ sinkFile fp
-                           notification (FileRemoved p) ci
+                           notification (determineEvent fi p) ci
+      determineEvent NonExistent  = FileAdded
+      determineEvent (FileHash _) = FileUpdated
+      determineEvent (FileDate _) = FileUpdated
+      determineEvent _            = error "putFile: unknown event."
+
+
     -- where
     --   putFile' = do
     --                ci <- clientId
@@ -124,12 +126,6 @@ protectRead p err h = protect (requireRead p) h (permissionDenied err)
 protectWrite         :: Path -> Text -> Handler a -> Handler a
 protectWrite p err h = protect (requireWrite p) h (permissionDenied err)
 
-
-logNotification   :: Notification -> Handler ()
-logNotification n = do
-                    c <- notifications <$> getYesod
-                    lift $ atomically (writeTChan c n)
-
 type FINotification = Either ErrorDescription Notification
 
 atomicallyWriteR              :: Path -> Text ->
@@ -140,14 +136,10 @@ atomicallyWriteR p hName h = protectWrite p hName h'
       fp = toFilePath filesDir p
       h' = do
              ci <- clientId
-             mn <- liftIO $ atomicallyIO fp (h ci fp)
+             mn <- liftIO $ atomicallyWriteIO fp (h ci fp)
              case mn of
                Left err -> invalidArgs err
                Right n  -> logNotification n >> return "OK"
-
-
-atomicallyIO    :: FilePath -> IO a -> IO a
-atomicallyIO fp = withLock fp Exclusive Block
 
 
 chanToSource   :: MonadIO m => TChan a -> Source m a
@@ -155,6 +147,16 @@ chanToSource c = do
                    x <- liftIO $ atomically (readTChan c)
                    yield x
                    chanToSource c
+
+logNotification   :: Notification -> Handler ()
+logNotification n = do
+                    c <- notifications <$> getYesod
+                    lift $ atomically (writeTChan c n)
+
+
+notification        :: EventKind -> ClientIdent -> IO Notification
+notification evt ci = currentTime >>= return . Notification evt ci
+
 
 --------------------------------------------------------------------------------
 -- | Testing functions

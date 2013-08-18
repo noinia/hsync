@@ -98,8 +98,8 @@ toRemotePath cli fp = let n   = length . localBaseDir $ cli
 remoteFileInfo    :: MonadIO m => FilePath -> ActionT m (FileIdent,Path)
 remoteFileInfo fp = do
   sync <- getSync
-  fi   <- liftIO $ fileIdent fp
-  return (fi,toRemotePath sync fp)
+--  fi   <- liftIO $ fileIdent fp -- TODO: Get the fi if it exists, and Nonexistent otherwise
+  return (NonExistent,toRemotePath sync fp)
 
 
 -- instanceState      :: Sync -> InstanceState Sync

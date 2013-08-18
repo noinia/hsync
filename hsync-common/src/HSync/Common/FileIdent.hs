@@ -18,8 +18,10 @@ import Yesod.Core
 import HSync.Common.Types
 import HSync.Common.Import
 
-import System.Directory( doesFileExist
-                       , doesDirectoryExist
+import HSync.Common.AtomicIO(isPropperFile)
+
+
+import System.Directory( doesDirectoryExist
                        , getModificationTime
                        )
 
@@ -42,7 +44,7 @@ hashPrefix = "hash_"
 instance PathPiece FileIdent where
     toPathPiece NonExistent   = "nonexistent"
     toPathPiece Directory     = "directory"
-    toPathPiece (FileDate dt) = dtPrefix   <> showT dt
+    toPathPiece (FileDate dt) = dtPrefix   <> toPathPiece dt
     toPathPiece (FileHash h)  = hashPrefix <> showT h
     fromPathPiece t | t == "nonexistent"        = Just NonExistent
                     | t == "directory"          = Just Directory
@@ -120,5 +122,5 @@ modificationTime fp = liftIO $ DateTime <$> getModificationTime fp
 
 -- | Check if a file is a regular file or a directory
 exists    :: MonadIO m => FilePath -> m (Bool, Bool)
-exists fp = liftIO $ (\a b -> (a,b)) <$> doesFileExist      fp
+exists fp = liftIO $ (\a b -> (a,b)) <$> isPropperFile      fp
                                      <*> doesDirectoryExist fp
