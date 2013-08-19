@@ -30,6 +30,8 @@ import System.Log.FastLogger (Logger)
 
 import Control.Concurrent.STM.TChan
 
+
+
 import qualified HSync.Server.Settings as Settings
 import qualified Database.Persist
 
@@ -143,6 +145,15 @@ instance Yesod HSyncServer where
         development || level == LevelWarn || level == LevelError
 
     makeLogger = return . appLogger
+
+    maximumContentLength _ (Just r)
+                     | postsBigFile r = Nothing
+                   where
+                     postsBigFile (PatchR _ _)   = True
+                     postsBigFile (PutFileR _ _) = True
+                     postsBigFile _              = False
+    maximumContentLength _ _          = Just $ 2 * 1024 * 1024 -- 2 megabytes
+
 
 -- How to run database actions.
 instance YesodPersist HSyncServer where
