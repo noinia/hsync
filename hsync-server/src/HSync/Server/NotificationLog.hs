@@ -3,6 +3,7 @@ module HSync.Server.NotificationLog where
 import HSync.Server.Import
 
 import Data.Function(on)
+import Data.Maybe(isJust)
 import Data.Conduit
 import Data.Conduit.Binary(sinkFile)
 import Data.Conduit.Internal(connectResume,sourceToPipe,Pipe(..),ResumableSource(..))
@@ -57,17 +58,10 @@ testNots = do
 notificationsByDate dir s = (s $$+ sink) >>= f . fst
     where
       sink = takeWhileByDate =$ simpleNotificationSinkByDate dir
-      f rs = connectResume rs sink >>= f . fst
-        -- | hasInputLeft rs =
-        -- | otherwise       = return ()
-
-hasInputLeft (ResumableSource s _ ) = case sourceToPipe s of
-                                        Done     _   -> False
-                                        _            -> True
-
-
-
--- await >>= maybe (return False) (\x -> leftover x >> return True)
+      f rs = protect (hasInputLeft rs)
+                     (connectResume rs sink >>= f . fst)
+                     (return ())
+      hasInputLeft (ResumableSource s _ ) = (s $$ C.peek) >>= return . isJust
 
 
 -- | A conduit that passes through the notifications as long as they occur on
