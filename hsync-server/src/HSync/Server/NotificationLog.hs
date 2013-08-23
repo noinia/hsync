@@ -5,7 +5,7 @@ import HSync.Server.Import
 import Data.Function(on)
 import Data.Conduit
 import Data.Conduit.Binary(sinkFile)
-import Data.Conduit.Internal(connectResume)
+import Data.Conduit.Internal(connectResume,sourceToPipe,Pipe(..),ResumableSource(..))
 
 import qualified Data.Conduit.List as C
 import qualified Data.ByteString.Char8 as B
@@ -58,12 +58,16 @@ notificationsByDate dir s = (s $$+ sink) >>= f . fst
     where
       sink = takeWhileByDate =$ simpleNotificationSinkByDate dir
       f rs = connectResume rs sink >>= f . fst
-              -- TODO: Almost: we should stop this recursion if there is no more input left
+        -- | hasInputLeft rs =
+        -- | otherwise       = return ()
+
+hasInputLeft (ResumableSource s _ ) = case sourceToPipe s of
+                                        Done     _   -> False
+                                        _            -> True
 
 
 
-hasInputLeft :: Monad m => ConduitM i i m Bool
-hasInputLeft = await >>= maybe (return False) (\x -> leftover x >> return True)
+-- await >>= maybe (return False) (\x -> leftover x >> return True)
 
 
 -- | A conduit that passes through the notifications as long as they occur on
@@ -75,7 +79,7 @@ takeWhileByDate = conduitFromFirst ((==) `on` (day . timestamp))
 -- | A sink that logs all notifications to a single file. The log file that we
 -- write to is stored in dir and its name is obtained from the (date) of the
 -- first filename from the first
-simpleNotificationSinkByDate dir = fromFirst (=$) (simpleNotificationSinkByDate' dir)
+simpleNotificationSinkByDate dir = fromFirst (simpleNotificationSinkByDate' dir)
 
 
 -- | A sink that logs all notifications to a single file. The log file that we
@@ -108,14 +112,11 @@ simpleNotificationFileSink f = C.map printNotification =$ sinkFile f
 --
 -- precondition: (mkP x) x == True
 conduitFromFirst     :: Monad m => (a -> a -> Bool) -> Conduit a m a
-conduitFromFirst mkP = fromFirst (=$=) (\n -> takeWhileC (mkP n))
+conduitFromFirst mkP = fromFirst (\n -> takeWhileC (mkP n))
 
-
--- fromFirst                 :: Monad m =>
---                           (Conduit i m i -> Conduit i m o
---                           -> (i -> Conduit i m o) -> Conduit i m o
-fromFirst fuse mkConsumer = await >>= maybe (return ())
-                                            (\n -> yield n `fuse` mkConsumer n)
+fromFirst            :: Monad m => (i -> Conduit i m o) -> Conduit i m o
+fromFirst mkConsumer = await >>= maybe (return ())
+                                       (\n -> leftover n >> mkConsumer n)
 
 
 -- | takewhile as a conduit: i.e. it passes through the incoming stream as long as
@@ -129,12 +130,28 @@ takeWhileC p = await >>= maybe (return ())
 --------------------------------------------------------------------------------
 -- | Testing stuff
 
+eqToFrst :: (Eq a, Monad m) => Conduit a m a
+eqToFrst = conduitFromFirst (==)
+
+
+-- eqToF = fromFirst (=$)
+
+
+sink' :: (MonadIO m, Eq a, Show a) => Sink a m ()
+sink' = eqToFrst =$ sink
+
+testF = runResourceT $  source $$ sink'
+
+--testF = runResourceT $ xs
+
+
 
 
 source :: Monad m => Source m Integer
-source = C.sourceList . concat . replicate 10 $ [1,2,0]
+source = C.sourceList [0,0,0,1,1,1,2,2,3,3,3]
 
 
+sink :: (Show a, MonadIO m) => Sink a m ()
 sink = await >>= maybe (return ()) (\x -> (liftIO $ print x) >> sink)
 
 -- takeWhileC   :: Monad m => (a -> Bool) -> ConduitM a a m (Source m a)
