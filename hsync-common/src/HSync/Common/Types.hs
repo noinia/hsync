@@ -7,6 +7,8 @@ module HSync.Common.Types( UserIdent
                          -- DateTime
                          , DateTime(..)
                          , currentTime
+                         , Day
+                         , day
                          -- Paths
                          , Path(..)
                          , toFilePath
@@ -28,6 +30,7 @@ import Control.Applicative((<$>))
 import Data.Text(Text)
 import Yesod.Core
 
+import Data.Function(on)
 import Data.List(intercalate, isPrefixOf)
 
 import HSync.Common.Import(showT)
@@ -36,7 +39,7 @@ import HSync.Common.Import(showT)
 import qualified Data.Text as T
 
 -- import System.Locale
-import Data.Time (UTCTime, getCurrentTime)
+import Data.Time (Day, UTCTime, getCurrentTime , utctDay)
 import Data.Time.Format
 import qualified Data.Time.Format as D
 
@@ -53,33 +56,29 @@ type ClientIdent = Text
 
 --------------------------------------------------------------------------------
 
-newtype DateTime = DateTime UTCTime
-    deriving (Show,Read,Eq,Ord)
+newtype DateTime = DateTime { unDT :: UTCTime }
+    deriving (Read,Eq,Ord)
+
+instance Show DateTime where
+    show (DateTime t) = formatTime undefined dateTimeFormat $ t
+
 
 instance ParseTime DateTime where
     buildTime tl = DateTime . buildTime tl
+
+dateTimeFormat :: String
+dateTimeFormat = "%F-%T.%q-%Z"
 
 
 currentTime :: IO DateTime
 currentTime = DateTime <$> getCurrentTime
 
-
-dateTimeFormat :: String
-dateTimeFormat = "%F-%T.%q-%Z"
+day :: DateTime -> Day
+day = utctDay . unDT
 
 instance PathPiece DateTime where
-    toPathPiece (DateTime t) = T.pack . formatTime undefined dateTimeFormat $ t
+    toPathPiece = T.pack . show
     fromPathPiece = D.parseTime undefined dateTimeFormat . T.unpack
-
--- instance PathPiece DateTime where
---     toPathPiece (DateTime t) = showT t
---     fromPathPiece s          = case reads . T.unpack $ s of
---                                  ((t,""):_) -> Just $ DateTime t
---                                  _          -> Nothing
--- -- type DateTime = Text
-
---------------------------------------------------------------------------------
-
 
 
 --------------------------------------------------------------------------------

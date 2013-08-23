@@ -3,11 +3,19 @@ module HSync.Server.Foundation where
 
 import Prelude
 
+import Control.Applicative((<$>))
+
+import Control.Concurrent.STM.TChan
+import Control.Concurrent.STM(atomically)
+
+
 import HSync.Common.Types
 import HSync.Common.FileIdent(FileIdent)
 
 import Data.Text(Text)
 import Data.Default
+import Data.Conduit(Source,yield)
+
 
 import Yesod
 import Yesod.Static
@@ -28,9 +36,6 @@ import Text.Jasmine (minifym)
 import Text.Hamlet (hamletFile)
 import System.Log.FastLogger (Logger)
 
-import Control.Concurrent.STM.TChan
-
-
 
 import qualified HSync.Server.Settings as Settings
 import qualified Database.Persist
@@ -40,24 +45,24 @@ import qualified Database.Persist
 -- starts running, such as database connections. Every handler will have
 -- access to the data present here.
 data HSyncServer = HSyncServer
-    { settings      :: AppConfig DefaultEnv Extra
-    , getStatic     :: Static -- ^ Settings for static file serving.
-    , connPool      :: Database.Persist.PersistConfigPool Settings.PersistConf -- ^ Database connection pool.
-    , httpManager   :: Manager
-    , persistConfig :: Settings.PersistConf
-    , appLogger     :: Logger
-    , notifications :: TChan Notification
+    { settings         :: AppConfig DefaultEnv Extra
+    , getStatic        :: Static -- ^ Settings for static file serving.
+    , connPool         :: Database.Persist.PersistConfigPool Settings.PersistConf -- ^ Database connection pool.
+    , httpManager      :: Manager
+    , persistConfig    :: Settings.PersistConf
+    , appLogger        :: Logger
+    , notificationChan :: TChan Notification
     }
 
 
 instance Default HSyncServer where
-    def = HSyncServer { settings      = undefined
-                      , getStatic     = undefined
-                      , connPool      = undefined
-                      , httpManager   = undefined
-                      , persistConfig = undefined
-                      , appLogger     = undefined
-                      , notifications = undefined
+    def = HSyncServer { settings         = undefined
+                      , getStatic        = undefined
+                      , connPool         = undefined
+                      , httpManager      = undefined
+                      , persistConfig    = undefined
+                      , appLogger        = undefined
+                      , notificationChan = undefined
                       }
 
 -- Set up i18n messages. See the message folder.
@@ -206,3 +211,22 @@ getExtra = fmap (appExtra . settings) getYesod
 -- wiki:
 --
 -- https://github.com/yesodweb/yesod/wiki/Sending-email
+
+
+notifications :: MonadIO m => Handler (Source m Notification)
+notifications = do
+                  ns <- notificationChan <$> getYesod
+                  c  <- liftIO $ atomically (dupTChan ns)
+                  return $ chanToSource c
+
+logNotification   :: Notification -> Handler ()
+logNotification n = do
+                    c <- notificationChan <$> getYesod
+                    lift $ atomically (writeTChan c n)
+
+
+chanToSource   :: MonadIO m => TChan a -> Source m a
+chanToSource c = do
+                   x <- liftIO $ atomically (readTChan c)
+                   yield x
+                   chanToSource c

@@ -18,6 +18,8 @@ import HSync.Server.Settings.Development
 import Data.Default (def)
 import Text.Hamlet
 
+import qualified Data.Text as T
+
 -- | Which Persistent backend this site is using.
 type PersistConf = SqliteConf
 
@@ -70,11 +72,13 @@ widgetFile = (if development then widgetFileReload
               widgetFileSettings
 
 data Extra = Extra
-    { extraCopyright :: Text
-    , extraAnalytics :: Maybe Text -- ^ Google Analytics
+    { extraNotificationLogDir :: FilePath
+    , extraCopyright          :: Text
+    , extraAnalytics          :: Maybe Text -- ^ Google Analytics
     } deriving Show
 
 parseExtra :: DefaultEnv -> Object -> Parser Extra
-parseExtra _ o = Extra
-    <$> o .:  "copyright"
+parseExtra _ o = (\tp -> Extra (T.unpack tp))
+    <$> o .:  "notificationLogDir"
+    <*> o .:  "copyright"
     <*> o .:? "analytics"

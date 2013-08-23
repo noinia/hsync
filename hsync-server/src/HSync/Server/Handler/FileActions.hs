@@ -2,8 +2,6 @@ module HSync.Server.Handler.FileActions where
 
 import HSync.Server.Import
 
-import Control.Concurrent.STM
-
 import System.Directory( removeFile )
 
 import HSync.Server.Handler.Auth(requireRead,requireWrite)
@@ -33,9 +31,7 @@ getListenR dt p = undefined
 -- TODO: Filter the source so we only send the notifications matching pat h
 getListenNowR   :: Path -> Handler TypedContent
 getListenNowR p = protectRead p "listen" $ do
-                   ns <- notifications <$> getYesod
-                   c  <- liftIO $ atomically (dupTChan ns)
-                   let evtSource = chanToSource c
+                   evtSource <- notifications
                    respondSource typePlain
                                  (evtSource $= C.map show $= awaitForever sendChunk)
 
@@ -63,7 +59,8 @@ deleteDeleteR fi p = atomicallyWriteR p "delete" delete'
                         notification (FileRemoved p) ci
 
 postPatchR                :: FileIdent -> Path -> Handler Text
-postPatchR fi p = atomicallyWriteR p "patch" patch'
+postPatchR NonExistent _ = invalidArgs ["postPatch: cannot patch a nonexistent file."]
+postPatchR fi          p = atomicallyWriteR p "patch" patch'
     where
       patch' ci = undefined
 
@@ -140,18 +137,6 @@ atomicallyWriteR p hName h = protectWrite p hName h'
              case mn of
                Left err -> invalidArgs err
                Right n  -> logNotification n >> return "OK"
-
-
-chanToSource   :: MonadIO m => TChan a -> Source m a
-chanToSource c = do
-                   x <- liftIO $ atomically (readTChan c)
-                   yield x
-                   chanToSource c
-
-logNotification   :: Notification -> Handler ()
-logNotification n = do
-                    c <- notifications <$> getYesod
-                    lift $ atomically (writeTChan c n)
 
 
 notification        :: EventKind -> ClientIdent -> IO Notification
