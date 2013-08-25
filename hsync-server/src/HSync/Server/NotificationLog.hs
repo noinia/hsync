@@ -6,30 +6,29 @@ import Data.Function(on)
 import Data.Maybe(isJust)
 import Data.Conduit
 import Data.Conduit.Binary(sinkFile)
-import Data.Conduit.Internal(connectResume,sourceToPipe,Pipe(..),ResumableSource(..))
+import Data.Conduit.Internal( connectResume
+                            , ResumableSource(..))
 
 import qualified Data.Conduit.List as C
 import qualified Data.ByteString.Char8 as B
 
 
-import Data.Time.Calendar
-import Data.Time.Clock
+-- import Data.Time.Calendar
+-- import Data.Time.Clock
 
-writeNotificationLog :: Handler ()
-writeNotificationLog = do
-                         ns  <- notifications
-                         dir <- extraNotificationLogDir <$> getExtra
-                         runResourceT $ notificationsByDate dir ns
 
-notificationsByDate       :: MonadResource m => FilePath -> Source m Notification ->
-                             m ()
+logNotificationsToFile :: MonadResource m => FilePath -> Source m Notification -> m ()
+logNotificationsToFile = notificationsByDate
+
+
+notificationsByDate       :: MonadResource m => FilePath -> Source m Notification -> m ()
 notificationsByDate dir s = (s $$+ sink) >>= f . fst
     where
       sink = takeWhileByDate =$ simpleNotificationSinkByDate dir
       f rs = protect (hasInputLeft rs)
                      (connectResume rs sink >>= f . fst)
                      (return ())
-      hasInputLeft (ResumableSource s _ ) = (s $$ C.peek) >>= return . isJust
+      hasInputLeft (ResumableSource s' _ ) = (s' $$ C.peek) >>= return . isJust
 
 
 -- | A conduit that passes through the notifications as long as they occur on
@@ -41,6 +40,10 @@ takeWhileByDate = conduitFromFirst ((==) `on` (day . timestamp))
 -- | A sink that logs all notifications to a single file. The log file that we
 -- write to is stored in dir and its name is obtained from the (date) of the
 -- first filename from the first
+
+simpleNotificationSinkByDate     :: MonadResource m =>
+                                   FilePath ->
+                                       Sink Notification m ()
 simpleNotificationSinkByDate dir = fromFirst (simpleNotificationSinkByDate' dir)
 
 
@@ -91,62 +94,62 @@ takeWhileC p = await >>= maybe (return ())
 -- | Testing stuff
 
 
-nextDay (DateTime (UTCTime d t)) = DateTime $ UTCTime (addDays 1 d) t
+-- nextDay (DateTime (UTCTime d t)) = DateTime $ UTCTime (addDays 1 d) t
 
-generateNots = do
-  now <- currentTime
-  let days = take 10 . iterate nextDay $ now
-  return . map noti . concatMap (replicate 3) $ days
-      where
-        path = Path "" []
-        noti = (Notification (FileAdded path) "")
+-- generateNots = do
+--   now <- currentTime
+--   let days = take 10 . iterate nextDay $ now
+--   return . map noti . concatMap (replicate 3) $ days
+--       where
+--         path = Path "" []
+--         noti = (Notification (FileAdded path) "")
 
--- -- notificationFileSink :: MonadIO m => Sink Notification m ()
--- notificationFileSink dir s = do
---                            (rs,_) <- s $$+ byDate =$
-
-
-
-testNots = do
-  n <- generateNots
-  let s = C.sourceList n
-  runResourceT $ notificationsByDate "/tmp" s
+-- -- -- notificationFileSink :: MonadIO m => Sink Notification m ()
+-- -- notificationFileSink dir s = do
+-- --                            (rs,_) <- s $$+ byDate =$
 
 
 
-eqToFrst :: (Eq a, Monad m) => Conduit a m a
-eqToFrst = conduitFromFirst (==)
-
-
--- eqToF = fromFirst (=$)
-
-
-sink' :: (MonadIO m, Eq a, Show a) => Sink a m ()
-sink' = eqToFrst =$ sink
-
-testF = runResourceT $  source $$ sink'
-
---testF = runResourceT $ xs
+-- testNots = do
+--   n <- generateNots
+--   let s = C.sourceList n
+--   runResourceT $ notificationsByDate "/tmp" s
 
 
 
-
-source :: Monad m => Source m Integer
-source = C.sourceList [0,0,0,1,1,1,2,2,3,3,3]
-
-
-sink :: (Show a, MonadIO m) => Sink a m ()
-sink = await >>= maybe (return ()) (\x -> (liftIO $ print x) >> sink)
-
-test = runResourceT $ source $$+ (takeWhileC (/=0) =$ sink)
-
-test2 = runResourceT $ splitC (/=0) source
+-- eqToFrst :: (Eq a, Monad m) => Conduit a m a
+-- eqToFrst = conduitFromFirst (==)
 
 
+-- -- eqToF = fromFirst (=$)
 
-splitC p s = do
-             (rs,_)   <- s  $$+  (takeWhileC p =$ sink)
-             (rs',mh) <- rs $$++ C.head
-             (s',_)   <- unwrapResumable rs'
-             liftIO $ print $ "PART DONE: " ++ show mh
-             splitC p s'
+
+-- sink' :: (MonadIO m, Eq a, Show a) => Sink a m ()
+-- sink' = eqToFrst =$ sink
+
+-- testF = runResourceT $  source $$ sink'
+
+-- --testF = runResourceT $ xs
+
+
+
+
+-- source :: Monad m => Source m Integer
+-- source = C.sourceList [0,0,0,1,1,1,2,2,3,3,3]
+
+
+-- sink :: (Show a, MonadIO m) => Sink a m ()
+-- sink = await >>= maybe (return ()) (\x -> (liftIO $ print x) >> sink)
+
+-- test = runResourceT $ source $$+ (takeWhileC (/=0) =$ sink)
+
+-- test2 = runResourceT $ splitC (/=0) source
+
+
+
+-- splitC p s = do
+--              (rs,_)   <- s  $$+  (takeWhileC p =$ sink)
+--              (rs',mh) <- rs $$++ C.head
+--              (s',_)   <- unwrapResumable rs'
+--              liftIO $ print $ "PART DONE: " ++ show mh
+--              splitC p s'

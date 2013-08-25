@@ -8,29 +8,37 @@ module HSync.Server.Application
 import HSync.Server.Import
 import qualified HSync.Server.Settings as Settings
 
-import Yesod.Default.Config
-import Yesod.Default.Main
-import Yesod.Default.Handlers
-import Network.Wai.Middleware.RequestLogger
-import qualified Database.Persist
-import Database.Persist.Sql (runMigration)
-import Network.HTTP.Conduit (newManager, def)
+import Control.Concurrent(forkIO, ThreadId)
+import Control.Concurrent.STM.TChan
 import Control.Monad.Logger (runLoggingT)
+
+import Data.Conduit(runResourceT)
+
+import Database.Persist.Sql (runMigration)
+
+
+import Network.Wai.Middleware.RequestLogger
+import Network.HTTP.Conduit (newManager, def)
+
 import System.IO (stdout)
 import System.Log.FastLogger (mkLogger)
 
+import Yesod.Default.Config
+import Yesod.Default.Main
+import Yesod.Default.Handlers
 
-import Control.Concurrent.STM.TChan
 
 
--- Import all relevant handler modules here.
--- Don't forget to add new modules to your cabal file!
 import HSync.Server.Handler.Home
 import HSync.Server.Handler.Auth
 import HSync.Server.Handler.FileActions
 
 
+import HSync.Server.NotificationLog(logNotificationsToFile)
 
+import qualified Database.Persist
+
+--------------------------------------------------------------------------------
 
 
 
@@ -56,6 +64,10 @@ makeApplication conf = do
         , destination = Logger $ appLogger foundation
         }
 
+
+    -- Start the Notification logging component
+    -- startNotificationLogger foundation
+
     -- Create the WAI application and apply middlewares
     app <- toWaiAppPlain foundation
     return $ logWare app
@@ -80,6 +92,17 @@ makeFoundation conf = do
         (messageLoggerSource foundation logger)
 
     return foundation
+
+
+startNotificationLogger     :: HSyncServer -> IO ThreadId
+startNotificationLogger hss = forkIO start
+    where
+      start :: IO ()
+      start = do
+                ns <- notifications' hss
+                runResourceT $ logNotificationsToFile dir ns
+      dir   = extraNotificationLogDir . appExtra . settings $ hss
+
 
 -- for yesod devel
 getApplicationDev :: IO (Int, Application)

@@ -87,6 +87,7 @@ library
                  , stm                           >= 2.4.2      && < 2.5
                  , wai                           >= 1.4.0.1    && < 1.5
                  , hsync-common                  >= 0.0.0.0    && < 0.2
+                 -- , time
 
                  -- , old-locale                    >= 1.0.0.5    && < 1.1
 

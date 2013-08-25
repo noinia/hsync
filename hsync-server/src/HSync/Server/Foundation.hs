@@ -213,11 +213,14 @@ getExtra = fmap (appExtra . settings) getYesod
 -- https://github.com/yesodweb/yesod/wiki/Sending-email
 
 
-notifications :: MonadIO m => Handler (Source m Notification)
-notifications = do
-                  ns <- notificationChan <$> getYesod
-                  c  <- liftIO $ atomically (dupTChan ns)
-                  return $ chanToSource c
+notifications :: Handler (Source Handler Notification)
+notifications = getYesod >>= notifications'
+
+-- notifications' :: (Functor m, MonadIO m) => HSyncServer -> m (Source m Notification)
+notifications' = fmap chanToSource . dupChan . notificationChan
+  where
+    dupChan c = liftIO $ atomically (dupTChan c)
+
 
 logNotification   :: Notification -> Handler ()
 logNotification n = do
