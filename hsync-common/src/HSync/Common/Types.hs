@@ -26,22 +26,31 @@ module HSync.Common.Types( UserIdent
 
 import Prelude
 
-import Control.Applicative((<$>))
+import Control.Applicative((<$>),(<*>))
 import Data.Text(Text)
 import Yesod.Core
 
+import Data.ByteString(ByteString)
 import Data.Function(on)
 import Data.List(intercalate, isPrefixOf)
 
 import HSync.Common.Import(showT)
 
 
-import qualified Data.Text as T
 
 -- import System.Locale
 import Data.Time (Day, UTCTime, getCurrentTime , utctDay)
 import Data.Time.Format
+
+--import System.Locale(default)
+
+import Text.Read(readMaybe)
+
+
+
+import qualified Data.ByteString.Char8 as B
 import qualified Data.Time.Format as D
+import qualified Data.Text as T
 
 --readT = read . T.unpack
 
@@ -57,29 +66,38 @@ type ClientIdent = Text
 --------------------------------------------------------------------------------
 
 newtype DateTime = DateTime { unDT :: UTCTime }
-    deriving (Read,Eq,Ord)
+    deriving (Eq,Ord)
+
+
+dtPrefix = "DateTime "
 
 instance Show DateTime where
-    show (DateTime t) = formatTime undefined dateTimeFormat $ t
+    show (DateTime t) = dtPrefix ++ showDateTime t
 
+instance Read DateTime where
+    readsPrec _ = readDateTime . drop (length dtPrefix)
 
 instance ParseTime DateTime where
     buildTime tl = DateTime . buildTime tl
 
+showDateTime :: UTCTime -> String
+showDateTime = formatTime undefined dateTimeFormat
+
+readDateTime :: ReadS DateTime
+readDateTime = readsTime undefined dateTimeFormat
+
 dateTimeFormat :: String
 dateTimeFormat = "%F-%T.%q-%Z"
 
+instance PathPiece DateTime where
+    toPathPiece = T.pack . showDateTime . unDT
+    fromPathPiece = D.parseTime undefined dateTimeFormat . T.unpack
 
 currentTime :: IO DateTime
 currentTime = DateTime <$> getCurrentTime
 
 day :: DateTime -> Day
 day = utctDay . unDT
-
-instance PathPiece DateTime where
-    toPathPiece = T.pack . show
-    fromPathPiece = D.parseTime undefined dateTimeFormat . T.unpack
-
 
 --------------------------------------------------------------------------------
 
@@ -126,12 +144,26 @@ data Notification = Notification { event     :: EventKind
                                  , changee   :: ClientIdent
                                  , timestamp :: DateTime
                                  }
-                  deriving (Show,Read,Eq)
+                  deriving (Read,Eq)
 
 
-toLog                          :: Notification -> String
-toLog (Notification evt ci ti) = intercalate ":" $ [show ti, show ci, show evt]
+instance Show Notification where
+    show (Notification evt ci ti) = intercalate ":" $ [show ti, show ci, show evt]
+
+toLog :: Notification -> String
+toLog = show
+
+fromLog :: ByteString -> Maybe Notification
+fromLog = const Nothing --TODO: Implement this
 
 matchesNotification       :: Path -> Notification -> Bool
 p `matchesNotification` n = let ps = affectedPaths . event $ n in
                             any (`isSubPathOf` p) ps
+
+
+
+
+
+evtS = "FileAdded (Path \"\" [])"
+
+testS = B.pack "2013-08-23-18:40:59.975000000000-UTC:\"\":FileAdded (Path \"\" [])"
