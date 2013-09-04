@@ -14,7 +14,7 @@
 /listen/now/*Path                 ListenNowR      GET
 /listen/from/#DateTime/*Path      ListenR         GET
 
-
+/tree/*Path                       TreeR           GET
 
 /file/*Path                       FileR           GET
 /delta/*Path                      DeltaR          GET
