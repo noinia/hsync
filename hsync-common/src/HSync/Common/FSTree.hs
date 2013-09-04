@@ -37,7 +37,7 @@ instance ToJSON (Blob m) where
 instance Monad m => FromJSON (Blob m) where
     parseJSON (Object (H.toList -> [(key, value)]))
               | key == "Blob" = Blob (return $ B.pack []) <$> parseJSON value
-    parseJSON _          = mzero
+    parseJSON _               = mzero
 
 
 instance ToJSON (TreeItem m) where
