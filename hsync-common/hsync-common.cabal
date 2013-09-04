@@ -20,6 +20,7 @@ library
                        HSync.Common.Import
                        HSync.Common.FileIdent
                        HSync.Common.AtomicIO
+                       HSync.Common.FSTree
 
   -- other-modules:
   build-depends:
