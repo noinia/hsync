@@ -78,7 +78,7 @@ library
                  , directory                     >= 1.1        && < 1.3
                  , warp                          >= 1.3        && < 1.4
                  , data-default
-                 , aeson
+                 , aeson                         >= 0.6.1.0    && < 0.7
                  , conduit                       >= 1.0
                  , monad-logger                  >= 0.3
                  , fast-logger                   >= 0.3
@@ -87,6 +87,7 @@ library
                  , stm                           >= 2.4.2      && < 2.5
                  , wai                           >= 1.4.0.1    && < 1.5
                  , hsync-common                  >= 0.0.0.0    && < 0.2
+                 , hashed-storage                >= 0.5.10     && < 0.6
                  -- , time
 
                  -- , old-locale                    >= 1.0.0.5    && < 1.1

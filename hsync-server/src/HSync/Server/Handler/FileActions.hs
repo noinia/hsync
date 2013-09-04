@@ -2,9 +2,8 @@ module HSync.Server.Handler.FileActions where
 
 import HSync.Server.Import
 
-import System.Directory( removeFile )
 
-import HSync.Server.Handler.Auth(requireRead,requireWrite)
+import Data.Aeson(encode,Value)
 
 import Data.Conduit
 import Data.Conduit.Binary
@@ -12,6 +11,14 @@ import Data.ByteString(ByteString)
 
 
 import Network.Wai(requestBody)
+
+import HSync.Common.FSTree
+import HSync.Server.Handler.Auth(requireRead,requireWrite)
+
+import Storage.Hashed.Plain(readPlainTree)
+import Storage.Hashed.Tree(Tree)
+
+import System.Directory( removeFile )
 
 
 import qualified Data.Conduit.List as C
@@ -35,6 +42,17 @@ getListenNowR p = protectRead p "listen" $ do
                    respondSource typePlain
                                  (evtSource $= C.map show $= awaitForever sendChunk)
 
+
+--------------------------------------------------------------------------------
+-- | Handles related to listing files/trees
+
+getTreeR   :: Path -> Handler Value
+getTreeR p = protectRead p "tree" $
+               toJSON <$> getTreeOf p
+
+
+getTreeOf :: Path -> Handler (Tree IO)
+getTreeOf =  liftIO . readPlainTree . toFilePath filesDir
 
 
 
