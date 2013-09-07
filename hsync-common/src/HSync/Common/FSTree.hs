@@ -1,53 +1,81 @@
 {-# Language TemplateHaskell #-}
-module HSync.Common.FSTree( readFSTree
+module HSync.Common.FSTree( FSTree(..)
+                          , name
+                          , isRegularFile
+                          , isDirectory
+                          , label
+                          , children
+
+                          , readFSTree
+                          , readFSTree'
                           ) where
 
+import Control.Applicative((<$>))
+import Control.Monad.IO.Class(liftIO, MonadIO(..))
 
-import Storage.Hashed.Plain(readPlainTree)
-import Storage.Hashed.Darcs(darcsTreeHash, darcsAddMissingHashes)
-import Storage.Hashed.Hash
-import Storage.Hashed.AnchoredPath
-import Storage.Hashed.Tree( Tree )
-
-
-import System.Directory
-
-import Storage.Hashed.Index
-
-import qualified Storage.Hashed.Tree as HT
-import qualified Storage.Hashed.Index as I
 
 import Data.Aeson.TH
 
-
-$(deriveJSON id ''Name)
-$(deriveJSON id ''AnchoredPath)
-$(deriveJSON id ''Hash)
+import Data.List(isPrefixOf)
+import Data.Text(Text)
 
 
-readFSTree   :: FilePath -> IO (Tree IO)
-readFSTree p = darcsAddMissingHashes =<< readPlainTree p
+import HSync.Common.AtomicIO
+import HSync.Common.DateTime(DateTime, modificationTime)
+
+import System.Directory
+import System.FilePath (takeFileName, dropTrailingPathSeparator, (</>))
+import System.Directory (getDirectoryContents)
+
+import qualified Data.Text as T
+
+--------------------------------------------------------------------------------
+
+type Name = Text
+
+data FSTree l = Directory Name l [FSTree l]
+              | File      Name l
+                deriving (Show,Read,Eq)
 
 
+$(deriveJSON id ''FSTree)
 
 
+name (Directory n _ _) = n
+name (File      n _)   = n
 
-printTree = print . map (\(a,b) -> (a, HT.itemHash b)) . HT.list
+isRegularFile (File _ _) = True
+isRegularFile _        = False
+
+isDirectory (Directory _ _ _) = True
+isDirectory _                 = False
+
+label (Directory _ l _) = l
+label (File      _ l)   = l
+
+children (Directory _ _ chs) = chs
+children _                   = []
+
+readFSTree'            :: (Functor m, MonadIO m) =>
+                         (FilePath -> m l) ->  FilePath -> m (FSTree l)
+readFSTree' genLabel p = do
+                          t <- exists p
+                          l <- genLabel p
+                          case t of
+                            (False, False) ->
+                                error "readFSTree: file is no file or directory?"
+                            (True,  False) -> return $ File      n l
+                            (_,     True)  ->          Directory n l <$> chs
+                            -- (True,  True)  ->
+                            --     error "readFSTree: p is both a file and a directory"
+    where
+      n            = T.pack . takeFileName . dropTrailingPathSeparator $ p
+      selfOrParent = (`elem` [".",".."])
+      chs          = do
+                       ps' <- liftIO $ getDirectoryContents p
+                       let ps = map (p </>) . filter (not . selfOrParent) $ ps'
+                       mapM (readFSTree' genLabel) ps
 
 
-test = do
-  -- print =<< getCurrentDirectory
-  tree <- readPlainTree "/Users/frank/tmp/synced"
-  print "plain tree"
-  printTree tree
-  idx <- updateIndexFrom "/Users/frank/tmp/index" darcsTreeHash tree
-  -- idx  <- readIndex "/Users/frank/tmp/index" darcsTreeHash
-  idxTree <- updateIndex idx
-  print "unexpanded tree?"
-  printTree idxTree
-  fTree <- updateIndex $ I.filter (\a b -> True) idx
-  print "FTree"
-  printTree fTree
-  tree' <- HT.expand idxTree
-  print "expanded indexed tree"
-  printTree tree'
+readFSTree :: (Functor m, MonadIO m) => FilePath -> m (FSTree DateTime)
+readFSTree = readFSTree' modificationTime

@@ -4,9 +4,14 @@ import Control.Exception.Base(catchJust)
 
 
 import Control.Applicative(pure, (<$>), (<*>))
+import Control.Monad.IO.Class
+
+import System.Directory( doesDirectoryExist)
+
 import System.IO(writeFile)
 import System.IO.Error(isDoesNotExistErrorType, ioeGetErrorType)
 import System.Posix.Files(fileSize, getFileStatus)
+
 
 
 import System.Lock.FLock
@@ -33,3 +38,9 @@ isPropperFile    :: FilePath -> IO Bool
 isPropperFile fp = catchJust doesNotExistException
                    ((\s -> fileSize s > fromInteger 0) <$> getFileStatus fp)
                    (const $ return False)
+
+
+-- | Check if a file is a regular file or a directory
+exists    :: MonadIO m => FilePath -> m (Bool, Bool)
+exists fp = liftIO $ (\a b -> (a,b)) <$> isPropperFile      fp
+                                     <*> doesDirectoryExist fp

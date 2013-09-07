@@ -15,15 +15,14 @@ import Data.Monoid
 import Data.Text(Text)
 import Yesod.Core
 
+import HSync.Common.DateTime
 import HSync.Common.Types
 import HSync.Common.Import
 
-import HSync.Common.AtomicIO(isPropperFile)
+import HSync.Common.AtomicIO
 
 
-import System.Directory( doesDirectoryExist
-                       , getModificationTime
-                       )
+import System.Directory(doesDirectoryExist)
 
 import qualified Data.Text as T
 
@@ -71,9 +70,8 @@ fileDate fp = liftIO $ FileDate <$> modificationTime fp
 fileIdent    :: MonadIO m => FilePath -> m FileIdent
 fileIdent fp = exists fp >>= \t -> case t of
                  (False,False) -> return NonExistent
-                 (False,True)  -> return Directory
+                 (_,    True)  -> return Directory
                  (True,False)  -> fileDate fp
-                 (True,True)   -> error "fp is both a file and a directory!?"
 
 
 type ErrorDescription = [Text]
@@ -113,14 +111,3 @@ noError = return Nothing
 
 fiErr   :: Monad m => Text -> m (Maybe ErrorDescription)
 fiErr t = return . Just $ [t]
-
--- | Get the file modification time
-modificationTime    :: MonadIO m => FilePath -> m DateTime
-modificationTime fp = liftIO $ DateTime <$> getModificationTime fp
-
-
-
--- | Check if a file is a regular file or a directory
-exists    :: MonadIO m => FilePath -> m (Bool, Bool)
-exists fp = liftIO $ (\a b -> (a,b)) <$> isPropperFile      fp
-                                     <*> doesDirectoryExist fp
