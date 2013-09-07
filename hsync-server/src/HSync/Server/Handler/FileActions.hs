@@ -13,9 +13,10 @@ import Data.ByteString(ByteString)
 import Network.Wai(requestBody)
 
 import HSync.Common.FSTree
+import HSync.Common.FSTree.JSONInstances
+
 import HSync.Server.Handler.Auth(requireRead,requireWrite)
 
-import Storage.Hashed.Plain(readPlainTree)
 import Storage.Hashed.Tree(Tree)
 
 import System.Directory( removeFile )
@@ -52,7 +53,7 @@ getTreeR p = protectRead p "tree" $
 
 
 getTreeOf :: Path -> Handler (Tree IO)
-getTreeOf =  liftIO . readPlainTree . toFilePath filesDir
+getTreeOf =  liftIO . readFSTree . toFilePath filesDir
 
 
 

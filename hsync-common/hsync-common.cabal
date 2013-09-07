@@ -21,6 +21,8 @@ library
                        HSync.Common.FileIdent
                        HSync.Common.AtomicIO
                        HSync.Common.FSTree
+                       HSync.Common.FSTree.JSONInstances
+
 
   -- other-modules:
   build-depends:
