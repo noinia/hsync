@@ -20,7 +20,7 @@ import HSync.Common.Types     as HSync.Server.Import
 import HSync.Common.Import    as HSync.Server.Import
 import HSync.Common.FileIdent as HSync.Server.Import
 import HSync.Common.AtomicIO  as HSync.Server.Import
-import HSync.Common.FSTree    as HSync.Server.Import
+import HSync.Common.DateTime  as HSync.Server.Import
 
 #if __GLASGOW_HASKELL__ >= 704
 import           Data.Monoid          as HSync.Server.Import

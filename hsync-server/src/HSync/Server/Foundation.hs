@@ -9,6 +9,7 @@ import Control.Concurrent.STM.TChan
 import Control.Concurrent.STM(atomically)
 
 
+import HSync.Common.DateTime(DateTime)
 import HSync.Common.Types
 import HSync.Common.FileIdent(FileIdent)
 
