@@ -10,7 +10,10 @@ import HSync.Client.Import
 
 import Network.HTTP.Conduit(Manager)
 
+import Yesod.Client
+
 import qualified Data.Text as T
+import qualified Data.List
 
 
 --------------------------------------------------------------------------------
@@ -48,3 +51,38 @@ instance Default Sync where
 
 toLocalPath               :: Sync -> Path -> FilePath
 toLocalPath s (Path _ ps) = intercalate "/" . (localBaseDir s :) . map T.unpack $ ps
+
+
+
+-- | given a local file path, create a (remote) Path corresponding to it
+--
+-- Precondition: localBaseDir cli is a basedir of the given file path.
+-- this is not checked.
+toRemotePath        :: Sync -> FilePath -> Path
+toRemotePath cli fp = let n   = length . localBaseDir $ cli
+                          fp' = Data.List.drop (n+1) fp
+                          p   = T.split (== '/') . T.pack $ fp'
+                      in Path (user cli) p
+
+
+
+--------------------------------------------------------------------------------
+-- | A sync is YesodClient
+
+type ActionT = YesodClientMonadT Sync
+
+
+getSync :: Monad m => ActionT m Sync
+getSync = clientInstance
+
+
+
+runActionT          :: Functor m => ActionT m a -> Sync -> m a
+runActionT act sync = evalYesodClientT act sync def
+
+
+instance IsYesodClient Sync where
+    type YesodServer Sync = HSyncServer
+    serverAppRoot = serverAddress
+    server   _    = def
+    manager       = httpManager
