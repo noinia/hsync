@@ -80,17 +80,17 @@ setSessionCreds = updateCookieJar
 
 --------------------------------------------------------------------------------
 
-remoteFileInfo    :: MonadIO m => FilePath -> ActionT m (FileIdent,Path)
+remoteFileInfo    :: ( MonadResource m, MonadThrow m, MonadIO m
+                     , MonadBaseControl IO m, Failure HttpException m
+                     ) => FilePath -> ActionT m (FileIdent,Path)
 remoteFileInfo fp = do
-  sync <- getSync
---  fi   <- liftIO $ fileIdent fp -- TODO: Get the fi if it exists, and Nonexistent otherwise
-  return (NonExistent,toRemotePath sync fp)
-
-
+                      p  <- flip toRemotePath fp <$> getSync
+                      fi <- toFileIdent          <$> getTree p
+                      return (fi,p)
 
 getTree   :: ( MonadResource m, MonadThrow m
              , MonadBaseControl IO m, Failure HttpException m) =>
-             Path -> ActionT m (FSTree DateTime)
+             Path -> ActionT m (Maybe (FSTree DateTime))
 getTree p = do
               resp <- runGetRoute $ TreeR p
               lift $ responseBody resp C.$$+- parseFromJSONSink

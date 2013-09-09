@@ -44,15 +44,16 @@ getListenNowR p = protectRead p "listen" $ do
 --------------------------------------------------------------------------------
 -- | Handles related to listing files/trees
 
+-- | Produces a JSON value representing a Maybe (FSTree DateTime)
 getTreeR   :: Path -> Handler Value
 getTreeR p = protectRead p "tree" $
                toJSON <$> getTreeOf p
 
-
-getTreeOf :: Path -> Handler (FSTree DateTime)
-getTreeOf =  liftIO . readFSTree . toFilePath filesDir
-
-
+getTreeOf   :: Path -> Handler (Maybe (FSTree DateTime))
+getTreeOf p = let fp = toFilePath filesDir p in
+              protect (liftIO . atomicallyIO fp $ isPropperFile fp)
+                      ((liftIO $ readFSTree fp) >>= return . Just)
+                      (return Nothing)
 
 --------------------------------------------------------------------------------
 -- | Handles related to file events
@@ -80,25 +81,18 @@ postPatchR fi          p = atomicallyWriteR p "patch" patch'
     where
       patch' ci = undefined
 
-postPutFileR             :: FileIdent -> Path -> Handler Text
-postPutFileR Directory _ = invalidArgs ["putFile: cannot replace directory by file."]
-postPutFileR fi        p = do
-                             wr <- waiRequest
-                             atomicallyWriteR p "putFile" (putFile' (requestBody wr))
+postPutFileR                 :: FileIdent -> Path -> Handler Text
+postPutFileR (Directory _) _ = invalidArgs ["putFile: cannot replace directory by a file."]
+postPutFileR fi            p = do
+                                 wr <- waiRequest
+                                 atomicallyWriteR p "putFile" (putFile' (requestBody wr))
     where
       putFile' s ci fp = protectedByFI fi fp "putFile" $ do
                            runResourceT $ s $$ sinkFile fp
                            notification (determineEvent fi p) ci
-      determineEvent NonExistent  = FileAdded
-      determineEvent (FileHash _) = FileUpdated
-      determineEvent (FileDate _) = FileUpdated
-      determineEvent _            = error "putFile: unknown event."
-
-
-    -- where
-    --   putFile' = do
-    --                ci <- clientId
-    --                mn <- liftIO $ atomicallyIO fp (putFile'' ci)
+      determineEvent NonExistent = FileAdded
+      determineEvent (File _)    = FileUpdated
+      determineEvent _           = error "putFile: unknown event."
 
 clientId :: Handler ClientIdent
 clientId = return "clientId"

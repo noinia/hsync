@@ -1,5 +1,6 @@
 {-# Language TemplateHaskell #-}
 module HSync.Common.FSTree( FSTree(..)
+                          , Name
                           , name
                           , isRegularFile
                           , isDirectory
@@ -11,6 +12,7 @@ module HSync.Common.FSTree( FSTree(..)
 
                           , readFSTree
                           , toFileIdent
+                          , toFileIdent'
                           ) where
 
 import Control.Applicative((<$>))
@@ -75,7 +77,8 @@ children _                   = []
 
 
 -- | Read an FSTree from the disk. Use the genLabel function to generate the
--- labels stored in each node
+-- labels stored in each node. This function assumes that the file-path exists
+-- on disk if not, the function throws an exception.
 readFSTree'            :: (Functor m, MonadIO m) =>
                          (FilePath -> m l) ->  FilePath -> m (FSTree l)
 readFSTree' genLabel p = do
@@ -104,6 +107,9 @@ readFSTree :: (Functor m, MonadIO m) => FilePath -> m (FSTree DateTime)
 readFSTree = readFSTree' modificationTime
 
 
-toFileIdent                   :: FSTree DateTime -> FI.FileIdent
-toFileIdent (Directory _ d _) = FI.Directory d
-toFileIdent (File      _ d)   = FI.File d
+toFileIdent :: Maybe (FSTree DateTime) -> FI.FileIdent
+toFileIdent = maybe FI.NonExistent toFileIdent'
+
+toFileIdent'                   :: FSTree DateTime -> FI.FileIdent
+toFileIdent' (Directory _ d _) = FI.Directory d
+toFileIdent' (File      _ d)   = FI.File d
