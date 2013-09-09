@@ -4,8 +4,8 @@ module HSync.Common.FileIdent( FileIdent(..)
                              , fileIdent
                              , checkFileIdent
                              , ErrorDescription
-                             , fileHash
-                             , fileDate
+
+                             , checkMTime
                              ) where
 
 
@@ -31,48 +31,38 @@ import qualified Data.Text as T
 type HashedFile = Text
 
 data FileIdent = NonExistent
-               | Directory
-               | FileDate DateTime
-               | FileHash HashedFile
+               | Directory DateTime
+               | File      DateTime
                deriving (Show,Read,Eq)
 
-dtPrefix,hashPrefix :: Text
-dtPrefix   = "dt_"
-hashPrefix = "hash_"
+dirPrefix :: Text
+dirPrefix = "directory_"
+
+filePrefix :: Text
+filePrefix = "file_"
 
 instance PathPiece FileIdent where
     toPathPiece NonExistent   = "nonexistent"
-    toPathPiece Directory     = "directory"
-    toPathPiece (FileDate dt) = dtPrefix   <> toPathPiece dt
-    toPathPiece (FileHash h)  = hashPrefix <> showT h
+    toPathPiece (Directory d) = dirPrefix  <> toPathPiece d
+    toPathPiece (File      d) = filePrefix <> toPathPiece d
     fromPathPiece t | t == "nonexistent"        = Just NonExistent
-                    | t == "directory"          = Just Directory
-                    | t `startsWith` dtPrefix   = FileDate <$> f dtPrefix
-                    | t `startsWith` hashPrefix = FileHash <$> f hashPrefix
+                    | t `startsWith` dirPrefix  = Directory <$> f dirPrefix
+                    | t `startsWith` filePrefix = File      <$> f filePrefix
                     | otherwise                 = Nothing
         where
           f s = fromPathPiece $ T.drop (T.length s) t
-
--- | Given a path, compute a fileIdent using the file hash
-fileHash    :: MonadIO m => FilePath -> m FileIdent
-fileHash _  = return $ FileHash "dummy" --TODO
-
-
--- | Given a path, compute a fileIdent using the file modification time
-fileDate    :: MonadIO m => FilePath -> m FileIdent
-fileDate fp = liftIO $ FileDate <$> modificationTime fp
-
 
 --------------------------------------------------------------------------------
 -- | Computing and comparing File Idents
 
 -- | Given a path, compute the file ident
-fileIdent    :: MonadIO m => FilePath -> m FileIdent
+fileIdent    :: (Functor m, MonadIO m) => FilePath -> m FileIdent
 fileIdent fp = exists fp >>= \t -> case t of
                  (False,False) -> return NonExistent
-                 (_,    True)  -> return Directory
-                 (True,False)  -> fileDate fp
-
+                 (_,    True)  -> Directory <$> mT fp
+                 (True,False)  -> File      <$> mT fp
+    where
+      mT = liftIO . modificationTime
 
 type ErrorDescription = [Text]
 
@@ -80,28 +70,38 @@ type ErrorDescription = [Text]
 -- otherwise, we give a description of the error
 checkFileIdent                :: MonadIO m => FileIdent -> FilePath ->
                                    m (Maybe ErrorDescription)
-checkFileIdent NonExistent  p = exists p >>= \t -> case t of
-                                  (False,False) -> noError
-                                  (True,False)  ->
-                                      fiErr "no file expected but file found."
-                                  (False,True)  ->
-                                      fiErr "no file expected but directory found."
-                                  (True,True)   ->
-                                      fiErr "fp is both a file and a directory!?"
-checkFileIdent Directory    p = protect (liftIO $ doesDirectoryExist p)
-                                        noError
-                                        (fiErr "directory expected but not found.")
-checkFileIdent (FileDate d) p = protect (modificationTime p >>= return . (== d))
-                                        noError
-                                        (fiErr "file modification time does not match.")
-checkFileIdent (FileHash _) _ = fiErr "checking on file hash not implemented yet."
+checkFileIdent exp p = exists p >>= \(dir,file) -> iError p exp dir file
+
+
+-- | determine the error depending on the path, expected ident, and the result of
+-- the file and directory tests
+iError                             :: MonadIO m =>
+                                      FilePath -> FileIdent ->
+                                      Bool -> Bool -> m (Maybe ErrorDescription)
+iError _ NonExistent   False False = noError
+iError _ NonExistent   True  False = err "File found, no file or directory expected."
+iError _ NonExistent   _     True  = err "Directory found, no file or directory expected."
+
+iError _ (Directory _) False False = err "Nothing found, directory expected."
+iError _ (Directory _) True  False = err "File found, directory expected."
+iError p (Directory d) _     True  = checkMTime p d
+
+iError _ (File _)      False False = err "Nothing found, file expected."
+iError p (File d)      True  False = checkMTime p d
+iError _ (File _)      _     True  = err "Directory found, file expected."
+
+
+-- | Check the modification time of a file.
+checkMTime     :: MonadIO m => FilePath -> DateTime -> m (Maybe ErrorDescription)
+checkMTime p d = liftIO (modificationTime p) >>= \td ->
+                 if td == d then noError
+                            else err "Modification date mismatch."
 
 --------------------------------------------------------------------------------
 
 
 --------------------------------------------------------------------------------
 -- | Helper functions
-
 startsWith :: Text -> Text -> Bool
 startsWith = flip T.isPrefixOf
 
@@ -109,5 +109,5 @@ startsWith = flip T.isPrefixOf
 noError :: Monad m => m (Maybe a)
 noError = return Nothing
 
-fiErr   :: Monad m => Text -> m (Maybe ErrorDescription)
-fiErr t = return . Just $ [t]
+err   :: Monad m => Text -> m (Maybe ErrorDescription)
+err t = return . Just $ [t]
