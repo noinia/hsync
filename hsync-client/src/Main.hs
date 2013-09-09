@@ -45,36 +45,6 @@ data HSyncClient = HSyncClient { globalSettings :: GlobalSettings
 
 
 
-
-
--- instanceState      :: Sync -> InstanceState Sync
--- instanceState inst = InstanceState { clientInstance = inst
---                                    , cookieJar      = createCookieJar []
---                                    }
-
-
-
--- | maintain mutable state and imutable state
-
-
-
--- runInstance ci = do
---                    loadPersistent
---                    login
---                    from <- return "now" -- TODO get the data from loadPersistent
---                    forkIO $ listenRemote ci from
---                    forkIO $ listenLocal ci
-
-
--- loadPersistent = return ()
-
--- listenRemote = undefined
--- listenLocal = undefined
-
-
-
-
-
 --------------------------------------------------------------------------------
 
 
@@ -89,9 +59,10 @@ main = withSocketsDo $ withManager $ \mgr -> do
                         }
          x <- flip runActionT sync $ do
                 loggedIn <- login
-                when loggedIn $ putFile "/Users/frank/tmp/synced/test_put.jpg"
+                -- when loggedIn $ putFile "/Users/frank/tmp/synced/test_put.jpg"
                 -- when loggedIn $ getFile $ Path (user sync) ["test.jpg"]
-                return loggedIn
+                t <- getTree $ Path (user sync) []
+                return t
          liftIO $ print x
 
 --          case parseUrl urlString of

@@ -8,14 +8,23 @@ import Control.Monad(when)
 import Control.Monad.IO.Class (liftIO)
 
 
-import Data.Aeson(encode,Value)
+import Data.Aeson( Value
+                 , fromJSON
+                 ,  Result(..)
+                 )
+import Data.Aeson.Parser(json)
+
+import Data.Conduit.Attoparsec(sinkParser)
+
 import Data.ByteString(ByteString)
 import Data.Conduit
 import Data.Conduit.Binary
 
 
 import HSync.Client.Sync
-import HSync.Common.FSTree(FSTree, readFSTree)
+import HSync.Common.DateTime(DateTime)
+import HSync.Common.FSTree
+
 import HSync.Server.Import
 
 
@@ -29,8 +38,6 @@ import Network.HTTP.Conduit( Request
                            , CookieJar
                            , RequestBody(..)
                            , HttpException(..)
---                           , createCookieJar
---                           , withManager
                            , requestBody
                            , responseBody
                            , responseStatus
@@ -80,8 +87,22 @@ remoteFileInfo fp = do
   return (NonExistent,toRemotePath sync fp)
 
 
---------------------------------------------------------------------------------
 
+getTree   :: ( MonadResource m, MonadThrow m
+             , MonadBaseControl IO m, Failure HttpException m) =>
+             Path -> ActionT m (FSTree DateTime)
+getTree p = do
+              resp <- runGetRoute $ TreeR p
+              lift $ responseBody resp C.$$+- parseFromJSONSink
+
+parseFromJSONSink :: (MonadThrow m, FromJSON a) => Sink ByteString m a
+parseFromJSONSink = sinkParser jsonParser
+    where
+      jsonParser = json >>= \v -> case fromJSON v of
+                                    Error s   -> fail s
+                                    Success x -> return x
+
+--------------------------------------------------------------------------------
 
 -- | Run a getFile
 getFile   :: ( MonadResource m, Failure HttpException m
