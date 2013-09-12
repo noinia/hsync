@@ -309,7 +309,7 @@ data FSStatus l = FSStatus { added        :: Maybe (FSTree l)
                   deriving (Show,Read,Eq)
 
 
--- | fsStatus newTree oldTree computes the changes in the filesystem between
+-- | fsStatus oldTree newTree computes the changes in the filesystem between
 -- newTree and oldTree. It reports:
 
 --  * which files have been added in the new tree (i.e. the ones that were not
@@ -325,7 +325,7 @@ data FSStatus l = FSStatus { added        :: Maybe (FSTree l)
 --         without the label changing. However, by the previous note/assumption
 --         such changes should not happen!
 fsStatus                 :: Ord l => FSTree l -> FSTree l -> FSStatus l
-fsStatus newTree oldTree = FSStatus nt dt ut
+fsStatus oldTree newTree = FSStatus nt dt ut
     where
       mt = mergeTree newTree oldTree
       nt = fmap leftTree  . newInLeft  $ mt
