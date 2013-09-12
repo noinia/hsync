@@ -24,10 +24,10 @@ module HSync.Common.FSTree( FSTree(..)
                           ) where
 
 
-import Control.Arrow
+import Control.Arrow((&&&))
 import Control.Applicative((<$>))
 import Control.Monad.IO.Class(liftIO, MonadIO(..))
-
+import Control.Monad((>=>))
 
 import Data.Aeson.TH
 
@@ -138,14 +138,16 @@ data FSType = F | D
             deriving (Show,Eq,Read)
 
 
-data FSItemData l = Item l FSType [FSTree l]
+data FSItemData l = Item { label'          :: l
+                         , type'           :: FSType
+                         , uniqueChildren' :: [FSTree l]
+                         }
                     deriving (Show,Eq,Read)
 
-
-label' (Item l _ _) = l
-
-fromItemData n []  (Item l F [])  = File n l
-fromItemData n _   (Item _ F _)   = error "fromItemData: Files cannot have children!"
+-- | Given a name, a list of extra children and a FSItemData, construct an FSTree
+fromItemData                       :: Name -> [FSTree l] -> FSItemData l -> FSTree l
+fromItemData n []  (Item l F [])   = File n l
+fromItemData n _   (Item _ F _)    = error "fromItemData: Files cannot have children!"
 fromItemData n chs (Item l D chs') = Directory n l (chs <> chs')
 
 
@@ -155,7 +157,12 @@ data Merge l r = Merge { name'         :: Name
                        }
                  deriving (Eq,Show,Read)
 
-
+-- | Construct a merge node
+merge                             :: Name
+                                  -> l -> FSType -> [FSTree l]
+                                  -> r -> FSType -> [FSTree r]
+                                  -> Forest (Merge l r)
+                                  -> Tree (Merge l r)
 merge n ll lt lchs rl rt rchs chs = Node (Merge n
                                                 (Item ll lt lchs)
                                                 (Item rl rt rchs)
@@ -221,8 +228,6 @@ labels m = let (l,r) = items m in (label' l, label' r)
 
 -- | Filter the merge tree, retaining only those nodes (and their ancestors) whose
 -- left label is smaller than their right label.
--- | TODO: Redo this function, since its behaviour is weird in combination with
--- the onlyLeft's
 smallerInLeft' :: Ord l => Tree (Merge l l) -> Maybe (Tree (Merge l l))
 smallerInLeft' = filterNonEmpty (uncurry (<) . labels . rootLabel)
 
@@ -230,99 +235,64 @@ smallerInLeft' = filterNonEmpty (uncurry (<) . labels . rootLabel)
 smallerInLeft l r = smallerInLeft' $ mergeTrees l r
 
 
+-- Find everyting that is in only left, and not in right. Note that if both lt and rt
+-- have an element, but l's label is newer than r's. This is *NOT* reported.
+newInLeft     :: FSTree l -> FSTree r -> Maybe (FSTree l)
+newInLeft l r = projectLeftWith newInLeft' l r
+
+newInLeft' :: Tree (Merge l r) -> Maybe (Tree (Merge l r))
+newInLeft' = filterNonEmpty (not . null . uniqueChildren' . left . rootLabel)
 
 
--- data Diff l r = F l (FSTree r)
---               | D { labelL        :: l
---                   , leftChildren  :: [FSTree l]
---                   , labelR        :: r
---                   , rightChildren :: [FSTree r]
---                   }
---                 deriving (Eq,Show,Read)
+-- | Throws away all subtrees that only occur in the left subtree
+ignoreOnlyLeft' = adaptBottomUp (Just . withRootLabel f)
+    where
+      f      = updateMerge g id
+      g item = item { uniqueChildren' = [] }
 
--- -- | This function assumes that the names of the root of the left tree and the
--- -- right tree are equal
--- diffTrees :: Eq l => FSTree l -> FSTree l -> Maybe (FSTree (Diff l l))
--- diffTrees (File n l)          r@(File _ l')
---                                         | l == l'   = Nothing
---                                         | otherwise = Just . File n $ F l r
--- diffTrees (File n l)          r                     = Just . File n $ F l r
--- diffTrees (Directory n l chs) (File _ r)            = Just $
---                                                       Directory n (D l chs r []) []
--- diffTrees (Directory n l chs) (Directory _ l' chs')
---                                        | null chs'' = Nothing
---                                        | otherwise  = Just $
---                                                       Directory n (D l ll l' rr) chs''
+
+
+
+-- | Everything that occurs in *both* subtrees, but is newer in the left subtree
+newerInLeft' :: Ord l => Tree (Merge l l) -> Maybe (Tree (Merge l l))
+newerInLeft' = filterNonEmpty (uncurry (>) . labels . rootLabel) >=> ignoreOnlyLeft'
+
+
+newerInLeft l r = projectLeftWith newerInLeft' l r
+
+
+-- | Shorthand to merge to the two trees, run f on the result, and then project
+--  the left subtree
+projectLeftWith       :: Functor f => (Tree (Merge l r) -> f (Tree (Merge l' r'))) ->
+                         FSTree l -> FSTree r -> f (FSTree l')
+projectLeftWith f l r = fmap leftTree . f $ mergeTrees l r
+
+
+
+-- | updateMerge f g m  applies f on the left item and g on the right item
+updateMerge                   :: (FSItemData l -> FSItemData l')  ->
+                                 (FSItemData r -> FSItemData r') ->
+                                 Merge l r -> Merge l' r'
+updateMerge f g (Merge n l r) = Merge n (f l) (g r)
+
+
+-- | Applies a function on the root label
+withRootLabel                :: (a -> a) -> Tree a -> Tree a
+withRootLabel f (Node m chs) = Node (f m) chs
+
+
+
+
+
+
+-- toDownload'   :: Tree (Merge l l) -> Maybe (Tree (Merge l l))
+-- toDownload' t = filterNonEmpty p
 --     where
---       lm              = withNames chs
---       rm              = withNames chs'
---       fromMap         = map snd . M.toList
---       f               = M.mergeWithKey combine only1 only2
---       combine _ lt rt = diffTrees lt rt
---       only1           = const M.empty
---       only2           = const M.empty
---       chs''           = fromMap $ f lm rm
---       ll              = fromMap $ M.difference lm rm
---       rr              = fromMap $ M.difference rm lm
+--       p n =
 
 
-
--- -- | Recursively filter a tree.
--- filterTree :: (FSTree l -> Bool) -> FSTree l -> Maybe (FSTree l)
--- filterTree f t
---              | f t      = Just $ case t of
---                                    File      _ _     -> t
---                                    Directory n l chs ->
---                                        Directory n l $ mapMaybe (filterTree f) chs
---              | otherwise = Nothing
-
-
--- filterTreeOnLabel   :: (l -> Bool) -> FSTree l -> Maybe (FSTree l)
--- filterTreeOnLabel f = filterTree (f . label)
-
-
--- missingInLeft lt rt = fmap f <$> (filterTree isDirectory =<< diffTrees lt rt)
---     where
---       f (D _ _ _ rs) = rs
---       f _            = []
-
--- missingInRight lt rt = missingInLeft rt lt
-
-
--- biggerInLeft lt rt = filterTreeOnLabel f =<< diffTrees lt rt
---     where
---       f (F l rt) = l > label rt
---       f _        = True
-
-
-
-
-
-
-dirIsEmtpy t = children t == [] && isDirectory t
-
-
-
--- conflictingFiles lt rt = diffTrees lt rt
-
-
--- replaceWith :: (FStree l -> Maybe (FSTree m)) -> FSTree l -> Maybe (FSTree m)
--- replaceWith f t = f t >>= \t' -> case t' of
---                                    File      _ _     -> return t'
---                                    Directory n l chs ->
-
-
-
-
-
---              | f t      = Just $ case t of
---                                    File      _ _     -> Just t
---                                    Directory n l chs ->
---                                        Directory n l $ mapMaybe (filterTree f) chs
---              | otherwise = Nothing
-
-
-
+--------------------------------------------------------------------------------
+-- | Running actions on FSTrees
 
 -- | Runs all actions in the tree, bottom up
 sequenceBottomUp                       :: Monad m => FSTree (m a) -> m (FSTree a)
