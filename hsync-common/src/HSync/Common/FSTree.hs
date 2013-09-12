@@ -212,7 +212,7 @@ rightTree (Node (Merge n _ r) chs) = fromItemData n (map rightTree chs) r
 
 -- | Throws away all subtrees that only occur in the left subtree
 ignoreOnlyLeft' :: MergeTree l r -> Maybe (MergeTree l r)
-ignoreOnlyLeft' = adaptBottomUp (Just . withRootLabel f)
+ignoreOnlyLeft' = adjustBottomUp (Just . withRootLabel f)
     where
       f      = updateMerge g id
       g item = item { uniqueChildren' = [] }
@@ -224,13 +224,13 @@ ignoreOnlies' = ignoreOnlyLeft'
                >=> ignoreOnlyLeft' >=> return . fmap swapMerge
 
 
--- | Adapt the tree using function f in a bottom up fashion. If f n returns Nothing
+-- | Adjust the tree using function f in a bottom up fashion. If f n returns Nothing
 -- we remove the node from the tree. If f n returns Just n' we replace n by n'. Note
 -- that we run this function bottom up. So we replace the children of n *before*
 -- running f n
-adaptBottomUp                 :: (Tree a -> Maybe (Tree a)) ->
+adjustBottomUp                 :: (Tree a -> Maybe (Tree a)) ->
                                  Tree a -> Maybe (Tree a)
-adaptBottomUp f (Node l chs) = let chs' = mapMaybe (adaptBottomUp f) chs in
+adjustBottomUp f (Node l chs) = let chs' = mapMaybe (adjustBottomUp f) chs in
                                f $ Node l chs'
 
 -- | Filter the tree in a bottom up fashion. So we filter the children of a node n
@@ -240,7 +240,7 @@ adaptBottomUp f (Node l chs) = let chs' = mapMaybe (adaptBottomUp f) chs in
 -- the node (together with all its children) from the tree. If this is undesirable,
 -- use `filterNonEmpty`.
 filterBottomUp   :: (Tree a -> Bool) -> Tree a -> Maybe (Tree a)
-filterBottomUp p = adaptBottomUp (\n -> if p n then Just n else Nothing)
+filterBottomUp p = adjustBottomUp (\n -> if p n then Just n else Nothing)
 
 -- | Filters the tree bottom up in the same way as `filterBottomUp`. However, if a node
 -- n has children that satisfy the predicate, we will keep n (with only the children that
@@ -288,8 +288,8 @@ typeChanged' = ignoreOnlies' >=> filterNonEmpty (uncurry (/=) . gather type' . r
 
 -- | Shorthand to merge to the two trees, run f on the result, and then project
 --  the left subtree
-projectLeftWith       :: Functor f => (MergeTree l r -> f (MergeTree l' r')) ->
-                         FSTree l -> FSTree r -> f (FSTree l')
+projectLeftWith       :: Functor c => (MergeTree l r -> c (MergeTree l' r')) ->
+                         FSTree l -> FSTree r -> c (FSTree l')
 projectLeftWith f l r = fmap leftTree . f $ mergeTree l r
 
 
