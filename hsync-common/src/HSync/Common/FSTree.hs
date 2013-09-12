@@ -27,7 +27,7 @@ module HSync.Common.FSTree( FSTree(..)
 import Control.Arrow((&&&))
 import Control.Applicative((<$>))
 import Control.Monad.IO.Class(liftIO, MonadIO(..))
-import Control.Monad((>=>))
+import Control.Monad((>=>),(<=<))
 
 import Data.Aeson.TH
 
@@ -211,17 +211,17 @@ rightTree (Node (Merge n _ r) chs) = fromItemData n (map rightTree chs) r
 
 
 -- | Throws away all subtrees that only occur in the left subtree
-ignoreOnlyLeft' :: MergeTree l r -> Maybe (MergeTree l r)
-ignoreOnlyLeft' = adjustBottomUp (Just . withRootLabel f)
+ignoreOnlyLeft :: MergeTree l r -> Maybe (MergeTree l r)
+ignoreOnlyLeft = adjustBottomUp (Just . withRootLabel f)
     where
       f      = updateMerge g id
       g item = item { uniqueChildren' = [] }
 
 -- | Throws away all subtrees that occur in only one tree
-ignoreOnlies' :: MergeTree l r -> Maybe (MergeTree l r)
-ignoreOnlies' = ignoreOnlyLeft'
+ignoreOnlies :: MergeTree l r -> Maybe (MergeTree l r)
+ignoreOnlies = ignoreOnlyLeft
                >=> return . fmap swapMerge
-               >=> ignoreOnlyLeft' >=> return . fmap swapMerge
+               >=> ignoreOnlyLeft >=> return . fmap swapMerge
 
 
 -- | Adjust the tree using function f in a bottom up fashion. If f n returns Nothing
@@ -252,35 +252,30 @@ filterNonEmpty p = filterBottomUp (\n -> p n || hasChildren n)
 
 -- | Filter the merge tree, retaining only those nodes (and their ancestors) whose
 -- left label is smaller than their right label
-smallerInLeft     :: Ord l => FSTree l -> FSTree l -> Maybe (FSTree l)
-smallerInLeft l r = projectLeftWith smallerInLeft' l r
-
-smallerInLeft' :: Ord l => MergeTree l l -> Maybe (MergeTree l l)
-smallerInLeft' = filterNonEmpty (uncurry (<) . gather label' . rootLabel)
+smallerInLeft :: Ord l => MergeTree l l -> Maybe (MergeTree l l)
+smallerInLeft = filterNonEmpty (uncurry (<) . gather label' . rootLabel)
 
 
 -- Find everyting that is in only left, and not in right. Note that if both lt and rt
 -- have an element, but l's label is newer than r's. This is *NOT* reported.
-newInLeft     :: FSTree l -> FSTree r -> Maybe (FSTree l)
-newInLeft l r = projectLeftWith newInLeft' l r
+newInLeft :: MergeTree l r -> Maybe (MergeTree l r)
+newInLeft = filterNonEmpty (not . null . uniqueChildren' . left . rootLabel)
 
-newInLeft' :: MergeTree l r -> Maybe (MergeTree l r)
-newInLeft' = filterNonEmpty (not . null . uniqueChildren' . left . rootLabel)
+-- | Symmetric to 'newInLeft
+newInRight :: MergeTree l r -> Maybe (MergeTree l r)
+newInRight = fmap (fmap swapMerge) . newInLeft . fmap swapMerge
 
 
 -- | Extract everything that occurs in *both* subtrees, but is newer in the
 -- left subtree.  Note that this removes all trees that occur in only a single
 -- tree.
-newerInLeft     :: Ord l => FSTree l -> FSTree l -> Maybe (FSTree l)
-newerInLeft l r = projectLeftWith newerInLeft' l r
-
-newerInLeft' :: Ord l => MergeTree l l -> Maybe (MergeTree l l)
-newerInLeft' = ignoreOnlies' >=> filterNonEmpty (uncurry (>) . gather label' . rootLabel)
+newerInLeft :: Ord l => MergeTree l l -> Maybe (MergeTree l l)
+newerInLeft = ignoreOnlies >=> filterNonEmpty (uncurry (>) . gather label' . rootLabel)
 
 -- | Report those items whose type has changed. Note that this removes all
 -- subtrees that occur in only one tree.
-typeChanged' :: MergeTree l l -> Maybe (MergeTree l l)
-typeChanged' = ignoreOnlies' >=> filterNonEmpty (uncurry (/=) . gather type' . rootLabel)
+typeChanged :: MergeTree l l -> Maybe (MergeTree l l)
+typeChanged = ignoreOnlies >=> filterNonEmpty (uncurry (/=) . gather type' . rootLabel)
 -- FIXME: If the type has changed, then one of the types is a directory, which is the
 -- only item of the two that has children. We throw away this information by the
 -- ignoreOnlies'
@@ -307,8 +302,8 @@ withRootLabel f (Node m chs) = Node (f m) chs
 
 
 
-data FSStatus l = FSStatus { added        :: Maybe (MergeTree l l)
-                           , deleted      :: Maybe (MergeTree l l)
+data FSStatus l = FSStatus { added        :: Maybe (FSTree l)
+                           , deleted      :: Maybe (FSTree l)
                            , updated      :: Maybe (MergeTree l l)
                            }
                   deriving (Show,Read,Eq)
@@ -333,9 +328,19 @@ fsStatus                 :: Ord l => FSTree l -> FSTree l -> FSStatus l
 fsStatus newTree oldTree = FSStatus nt dt ut
     where
       mt = mergeTree newTree oldTree
-      nt = newInLeft' mt
-      dt = newInLeft' . fmap swapMerge $ mt
-      ut = newerInLeft' mt
+      nt = fmap leftTree  . newInLeft  $ mt
+      dt = fmap rightTree . newInRight $ mt
+      ut = newerInLeft mt
+
+
+-- conflicts :: FSTree l l -> FSTree l l -> FSTree l l -> FSStatus l
+-- conflicts oldRemote newLocal newRemote =
+--     where
+--       localFSStatus   = fsStatus oldRemote newLocal
+--       remoteFSStatuss = fsStatus oldRemote newRemote
+
+
+
 
 
 --------------------------------------------------------------------------------
