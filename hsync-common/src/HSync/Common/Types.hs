@@ -8,6 +8,10 @@ module HSync.Common.Types( UserIdent
                          , Path(..)
                          , toFilePath
                          , isSubPathOf
+
+                         , SubPath
+                         , FileName
+
                          -- Events
                          , EventKind(..)
                          , affectedPaths
@@ -51,7 +55,12 @@ type ClientIdent = Text
 
 --------------------------------------------------------------------------------
 
-data Path = Path UserIdent [Text]
+type FileName = Text
+
+type SubPath = [FileName]
+
+
+data Path = Path UserIdent SubPath
     deriving (Show,Read,Eq,Ord)
 
 instance PathMultiPiece Path where

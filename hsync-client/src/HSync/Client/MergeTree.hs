@@ -1,4 +1,4 @@
-module HSync.Common.MergeTree( MergeTree
+module HSync.Client.MergeTree( MergeTree
                              , mergeTree
                              , leftTree
                              , rightTree
@@ -21,17 +21,13 @@ module HSync.Common.MergeTree( MergeTree
                              , ignoreOnlyLeft
 
                              , typeChanged
-
-                             , FSStatus(..)
-                             , fsStatus
-
                              ) where
 
 import Data.Monoid((<>))
 import Data.Maybe(mapMaybe)
 import Data.Tree
 
-
+import HSync.Common.Types(FileName)
 import HSync.Common.FSTree
 
 import Control.Monad((>=>),(<=<))
@@ -53,7 +49,7 @@ data FSItemData l = Item { label'          :: l
                     deriving (Show,Eq,Read)
 
 -- | Given a name, a list of extra children and a FSItemData, construct an FSTree
-fromItemData                       :: Name -> [FSTree l] -> FSItemData l -> FSTree l
+fromItemData                       :: FileName -> [FSTree l] -> FSItemData l -> FSTree l
 fromItemData n []  (Item l F [])   = File n l
 fromItemData n _   (Item _ F _)    = error "fromItemData: Files cannot have children!"
 fromItemData n chs (Item l D chs') = Directory n l (chs <> chs')
@@ -62,14 +58,14 @@ fromItemData n chs (Item l D chs') = Directory n l (chs <> chs')
 --------------------------------------------------------------------------------
 
 -- | Data type to hold the information of two files
-data Merge l r = Merge { name'         :: Name
+data Merge l r = Merge { name'         :: FileName
                        , left          :: FSItemData l
                        , right         :: FSItemData r
                        }
                  deriving (Eq,Show,Read)
 
 -- | Construct a merge node
-merge                             :: Name
+merge                             :: FileName
                                   -> l -> FSType -> [FSTree l]
                                   -> r -> FSType -> [FSTree r]
                                   -> Forest (Merge l r)
@@ -202,51 +198,6 @@ typeChanged = ignoreOnlies >=> filterNonEmpty (uncurry (/=) . gather type' . roo
 projectLeftWith       :: Functor c => (MergeTree l r -> c (MergeTree l' r')) ->
                          FSTree l -> FSTree r -> c (FSTree l')
 projectLeftWith f l r = fmap leftTree . f $ mergeTree l r
-
---------------------------------------------------------------------------------
--- | A data type to represent the status of the file system. I..e which files
--- have been added, deleted, and which files have been updated.
-
-
-data FSStatus l = FSStatus { added        :: Maybe (FSTree l)
-                           , deleted      :: Maybe (FSTree l)
-                           , updated      :: Maybe (MergeTree l l)
-                           }
-                  deriving (Show,Read,Eq)
-
-
--- | fsStatus oldTree newTree computes the changes in the filesystem between
--- newTree and oldTree. It reports:
-
---  * which files have been added in the new tree (i.e. the ones that were not
---    there yet in oldTree),
---  * which files have been removed (i.e. the in oldTree
---    no longer in newTree), and
---  * the files that have been updated (i.e. the files that are in both trees,
---    but are newer in newTree than in oldTree).
---
---  Note: we assume that whenever files change, their labels change.
---  Note2: There is one type of change that we do not capture, namely when
---         the type of a file changes from a file to a directory or vice versa
---         without the label changing. However, by the previous note/assumption
---         such changes should not happen!
-fsStatus                 :: Ord l => FSTree l -> FSTree l -> FSStatus l
-fsStatus oldTree newTree = FSStatus nt dt ut
-    where
-      mt = mergeTree newTree oldTree
-      nt = fmap leftTree  . newInLeft  $ mt
-      dt = fmap rightTree . newInRight $ mt
-      ut = newerInLeft mt
-
-
---------------------------------------------------------------------------------
--- | A data type representing conflicts
-
--- conflicts :: FSTree l l -> FSTree l l -> FSTree l l -> FSStatus l
--- conflicts oldRemote newLocal newRemote =
---     where
---       localFSStatus   = fsStatus oldRemote newLocal
---       remoteFSStatuss = fsStatus oldRemote newRemote
 
 --------------------------------------------------------------------------------
 -- | Helper functions

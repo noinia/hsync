@@ -1,6 +1,5 @@
 {-# Language TemplateHaskell #-}
 module HSync.Common.FSTree( FSTree(..)
-                          , Name
                           , name
                           , isRegularFile
                           , isDirectory
@@ -23,21 +22,25 @@ module HSync.Common.FSTree( FSTree(..)
                           ) where
 
 
+import Prelude hiding (foldl,foldr)
+
 import Control.Arrow((&&&))
 import Control.Applicative((<$>))
 import Control.Monad.IO.Class(liftIO, MonadIO(..))
 
 import Data.Aeson.TH
 
-import Data.Foldable hiding (elem)
-import Data.Monoid((<>))
-
 import Data.List(isPrefixOf)
+
+import Data.Maybe(listToMaybe)
+import Data.Monoid((<>))
+import Data.Foldable hiding (elem)
+
 import Data.Text(Text)
 
 import HSync.Common.AtomicIO
 import HSync.Common.DateTime(DateTime, modificationTime)
-
+import HSync.Common.Types(FileName, SubPath)
 
 
 import System.Directory
@@ -49,10 +52,8 @@ import qualified HSync.Common.FileIdent as FI
 import qualified Data.Map               as M
 --------------------------------------------------------------------------------
 
-type Name = Text
-
-data FSTree l = Directory Name l [FSTree l]
-              | File      Name l
+data FSTree l = Directory FileName l [FSTree l]
+              | File      FileName l
                 deriving (Show,Read,Eq)
 
 
@@ -68,7 +69,7 @@ instance Foldable FSTree where
 $(deriveJSON id ''FSTree)
 
 
-name                   :: FSTree l -> Name
+name                   :: FSTree l -> FileName
 name (Directory n _ _) = n
 name (File      n _)   = n
 
@@ -91,12 +92,24 @@ children (Directory _ _ chs) = chs
 children _                   = []
 
 
-childrenWithNames :: FSTree l -> M.Map Name (FSTree l)
+childrenWithNames :: FSTree l -> M.Map FileName (FSTree l)
 childrenWithNames = withNames . children
 
 
-withNames :: [FSTree l] -> M.Map Name (FSTree l)
+withNames :: [FSTree l] -> M.Map FileName (FSTree l)
 withNames = M.fromList . map (name &&& id)
+
+
+subTree   :: FSTree l -> SubPath-> Maybe (FSTree l)
+subTree t = foldl (\mt n -> mt >>= findChild n) (Just t)
+
+
+findChild   :: FileName -> FSTree l -> Maybe (FSTree l)
+findChild n = listToMaybe . filter ((n ==) . name) . children
+
+
+
+
 
 
 

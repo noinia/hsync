@@ -46,6 +46,7 @@ executable hsync-client
                  , wai                           >= 1.4.0.1    && < 1.5
                  , aeson                         >= 0.6.1.0    && < 0.7
                  , attoparsec-conduit            >= 1.0.1.2    && < 1.1
+                 , containers                    >= 0.5.0.0    && < 0.6
 
     extensions: OverloadedStrings
                 MultiParamTypeClasses
