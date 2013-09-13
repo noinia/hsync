@@ -21,7 +21,6 @@ library
                        HSync.Common.FileIdent
                        HSync.Common.AtomicIO
                        HSync.Common.FSTree
-                       HSync.Common.MergeTree
                        HSync.Common.DateTime
 
   -- other-modules:
