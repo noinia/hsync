@@ -9,6 +9,12 @@ module HSync.Common.FSTree( FSTree(..)
                           , childrenWithNames
                           , withNames
 
+
+                          , subTree
+                          , findChild
+
+                          , labelWithSubPaths
+
                           , readFSTree'
 
 
@@ -69,6 +75,7 @@ instance Foldable FSTree where
 $(deriveJSON id ''FSTree)
 
 
+
 name                   :: FSTree l -> FileName
 name (Directory n _ _) = n
 name (File      n _)   = n
@@ -95,21 +102,30 @@ children _                   = []
 childrenWithNames :: FSTree l -> M.Map FileName (FSTree l)
 childrenWithNames = withNames . children
 
-
+-- | Given a list of FSTrees, create a map with their names as keys, and the
+-- subtrees themselves as the values
 withNames :: [FSTree l] -> M.Map FileName (FSTree l)
 withNames = M.fromList . map (name &&& id)
 
-
+-- | Given a tree and a subPath, get the filetree rooted at
+-- the node specified by the subPath
 subTree   :: FSTree l -> SubPath-> Maybe (FSTree l)
 subTree t = foldl (\mt n -> mt >>= findChild n) (Just t)
 
-
+-- | Given a name n and a FSTree v, get the child of v with name n (if it
+-- exists)
 findChild   :: FileName -> FSTree l -> Maybe (FSTree l)
 findChild n = listToMaybe . filter ((n ==) . name) . children
 
-
-
-
+-- | Add the full subpath in the label of each node
+-- (i.e. the path from the root of the tree to the current node)
+labelWithSubPaths  :: FSTree l -> FSTree (l,SubPath)
+labelWithSubPaths = labelWithSubPaths' []
+    where
+      labelWithSubPaths' ps (File      n l)     = File n (l,mkSP n ps)
+      labelWithSubPaths' ps (Directory n l chs) =
+          Directory n (l,mkSP n ps) $ map (labelWithSubPaths' (n:ps)) chs
+      mkSP n ps = reverse (n:ps)
 
 
 
