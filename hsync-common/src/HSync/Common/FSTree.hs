@@ -9,6 +9,7 @@ module HSync.Common.FSTree( FSTree(..)
                           , childrenWithNames
                           , withNames
 
+                          , gmap
 
                           , subTree
                           , findChild
@@ -64,8 +65,13 @@ data FSTree l = Directory FileName l [FSTree l]
 
 
 instance Functor FSTree where
-    fmap f (Directory n l chs) = Directory n (f l) $ map (fmap f) chs
-    fmap f (File      n l)     = File      n (f l)
+    fmap f = gmap f f
+
+-- | A slightly more generic fmap: gmap dirF fileF t runs dirF on all
+-- directories, and fileF on all files
+gmap :: (l -> l') -> (l -> l') -> FSTree l -> FSTree l'
+gmap df ff (Directory n l chs) = Directory n (df l) $ map (gmap df ff) chs
+gmap _  ff (File      n l)     = File      n (ff l)
 
 
 instance Foldable FSTree where

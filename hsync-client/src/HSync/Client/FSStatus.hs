@@ -1,12 +1,18 @@
 module HSync.Client.FSStatus( FSStatus(..)
                             , fsStatus
+                            , fsStatus'
                             ) where
 
 
 import Data.Default
 
+import HSync.Common.DateTime(DateTime)
+import HSync.Common.FileIdent(FileIdent)
 import HSync.Common.FSTree
 import HSync.Client.MergeTree
+
+
+import qualified HSync.Common.FileIdent as FI
 
 
 --------------------------------------------------------------------------------
@@ -51,3 +57,114 @@ fsStatus oldTree newTree = FSStatus nt dt ut
 -- | In case there is no old tree everyting is added
 fsStatus'          :: Ord l => Maybe (FSTree l) -> FSTree l -> FSStatus l
 fsStatus' mOld new = maybe (def { added = Just new }) (flip fsStatus new) mOld
+
+
+--------------------------------------------------------------------------------
+
+data Change = Change { oldFileIdent :: FileIdent
+                     , newFileIdent :: FileIdent
+                     }
+            deriving (Show,Read,Eq)
+
+
+
+type LocalTree = FSTree DateTime
+
+type RemoteTree = FSTree Change
+
+
+data Changes = Changes { toDownload        :: Maybe LocalTree
+                       , toDeleteLocal     :: Maybe LocalTree
+                       , toPatchLocal      :: Maybe LocalTree
+
+                       , toUpload          :: Maybe RemoteTree
+                       , toDeleteRemote    :: Maybe RemoteTree
+                       , toPatchRemote     :: Maybe RemoteTree
+
+                       , toHandleConflicts :: Maybe RemoteTree
+                       }
+             deriving (Show,Read,Eq)
+
+
+
+
+detectChanges oldRemote newRemote newLocal = Changes
+    { toDownload        = added remoteStatus                 `notIn` newLocal
+    , toDeleteLocal     = deleted remoteStatus               `notIn` newLocal
+    , toPatchLocal      = undefined --- (rightTree $ updated remoteStatus) `notInS` localStatus
+
+
+    , toUpload          = added localStatus    `notInR` newRemote
+
+    , toPatchRemote     = undefined -- TODO: we need the remote FI here
+--                                  updated localStatus  `notInS` remoteStatus
+    , toDeleteRemote    = deleted localStatus  `notIn` newRemote
+    , toHandleConflicts = undefined
+    }
+    where
+      remoteStatus = fsStatus' oldRemote newRemote
+      localStatus  = fsStatus' oldRemote newLocal
+
+
+
+
+-- mkLocal    :: Maybe (MergeTree DateTime DateTime) -> Maybe LocalTree
+-- mkLocal mt = fmap leftTree
+
+
+
+
+notIn :: Maybe (FSTree l) -> FSTree l -> Maybe (FSTree l)
+notIn = notInWithF id
+
+notInR :: Maybe (FSTree DateTime) -> FSTree DateTime -> Maybe RemoteTree
+notInR = notInWithF toChange
+
+
+
+notInWithF        :: (Merge l l -> Merge l' r') ->
+                     Maybe (FSTree l) -> FSTree l -> Maybe (FSTree l')
+notInWithF f ml r = ml >>= \l -> projectLeftWith (fmap (fmap f) . difference) l r
+
+
+
+toChange               :: Merge DateTime DateTime -> Merge Change DateTime
+toChange (Merge n l r) = Merge n l' r
+    where
+      l' = mkChange l r
+
+
+-- | The Left tree is considered the NEW tree, the right tree the Old tree
+mkChange :: FSItemData DateTime -> FSItemData DateTime -> FSItemData Change
+mkChange l@(Item _ t chs) r = Item change t chs'
+    where
+      change = Change (toFI r) (toFI l)
+      chs'   = map f chs
+
+      f :: FSTree DateTime -> FSTree Change
+      f = fmap (Change FI.NonExistent) . gmap FI.Directory FI.File
+      -- First we set the labels to be FileIdents instead of just the
+      -- date time. Then, since these items occur only in this Item
+      -- we set the label to a Change value, where the old FI is set to
+      -- Nothing
+
+ -- = Item (toFi t l) t $ map (gmap FI.Directory FI.File) chs
+
+
+
+
+toFI(Item l t _) = toFi' t l
+    where
+      toFi'   :: FSType -> DateTime -> FileIdent
+      toFi' F = FI.File
+      toFi' D = FI.Directory
+
+
+
+
+-- withFileIdent                :: FSItemData DateTime -> FSItemData FileIdent
+-- withFileIdent (Item l t chs) = Item (toFi t l) t $ map (gmap FI.Directory FI.File) chs
+
+
+
+notins = undefined
