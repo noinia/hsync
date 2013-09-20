@@ -48,12 +48,12 @@ data FSType = F | D
 -- | The information/data corresponding to a single item in the filesystem
 data FSItemData l = Item { label'          :: l
                          , type'           :: FSType
-                         , uniqueChildren' :: [FSTree l]
+                         , uniqueChildren' :: [FSTree' l]
                          }
                     deriving (Show,Eq,Read)
 
 -- | Given a name, a list of extra children and a FSItemData, construct an FSTree
-fromItemData                       :: FileName -> [FSTree l] -> FSItemData l -> FSTree l
+fromItemData                       :: FileName -> [FSTree' l] -> FSItemData l -> FSTree' l
 fromItemData n []  (Item l F [])   = File n l
 fromItemData n _   (Item _ F _)    = error "fromItemData: Files cannot have children!"
 fromItemData n chs (Item l D chs') = Directory n l (chs <> chs')
@@ -70,10 +70,10 @@ data Merge l r = Merge { name'         :: FileName
 
 -- | Construct a merge node
 merge                             :: FileName
-                                  -> l -> FSType -> [FSTree l]
-                                  -> r -> FSType -> [FSTree r]
+                                  -> l -> FSType -> [FSTree' l]
+                                  -> r -> FSType -> [FSTree' r]
                                   -> Forest (Merge l r)
-                                  -> Tree (Merge l r)
+                                  -> NonEmptyMergeTree l r
 merge n ll lt lchs rl rt rchs chs = Node (Merge n
                                                 (Item ll lt lchs)
                                                 (Item rl rt rchs)
@@ -96,21 +96,50 @@ updateMerge f g (Merge n l r) = Merge n (f l) (g r)
 
 --------------------------------------------------------------------------------
 
--- | Represents two related FSTrees
-type MergeTree l r = Tree (Merge l r)
+-- | A potentially empty Tree
+data GTree a = EmptyTree
+             | NonEmptyTree (Tree a)
+             deriving (Show,Eq)
 
+-- | the alternative for maybe
+onTree                      :: b -> (Tree a -> b) -> GTree a -> b
+onTree z _ EmptyTree        = z
+onTree _ f (NonEmptyTree t) = f t
+
+
+-- | Shortcut for building FSTrees
+withEmpty   :: (Tree a -> FSTree' l) -> GTree a -> FSTree l
+withEmpty f = onTree NoFiles (FSTree . f)
+
+instance Functor GTree where
+    fmap f = onTree EmptyTree (NonEmptyTree . fmap f)
+
+
+-- | A mergeTree is a potentially empty tree
+type MergeTree l r = GTree (Merge l r)
+
+-- | A non empty MergeTree
+type NonEmptyMergeTree l r = Tree (Merge l r)
+
+
+mergeTree                       :: FSTree l -> FSTree r -> MergeTree l r
+mergeTree NoFiles    NoFiles    = EmptyTree
+mergeTree (FSTree l) (FSTree r)
+          | name l == name r    = NonEmptyTree $ mergeTree' l r
+          | otherwise           = EmptyTree
+mergeTree _          _          = error "mergeTree: Merging NoFiles with an FSTree. Not implemented yet"
 
 -- | Assumes the names of the initial trees are identical so it only stores the left name
-mergeTree                                             :: FSTree l -> FSTree r ->
-                                                          MergeTree l r
-mergeTree (File n ll)           (File      _ rl)      = merge n ll F []   rl F []   []
-mergeTree (File n ll)           (Directory _ rl rchs) = merge n ll F []   rl D rchs []
-mergeTree (Directory n ll lchs) (File      _ rl)      = merge n ll D lchs rl F []   []
-mergeTree (Directory n ll lchs) (Directory _ rl rchs) = merge n ll D lch' rl D rch' chs'
+mergeTree'                                             :: FSTree' l -> FSTree' r ->
+                                                          NonEmptyMergeTree l r
+mergeTree' (File n ll)           (File      _ rl)      = merge n ll F []   rl F []   []
+mergeTree' (File n ll)           (Directory _ rl rchs) = merge n ll F []   rl D rchs []
+mergeTree' (Directory n ll lchs) (File      _ rl)      = merge n ll D lchs rl F []   []
+mergeTree' (Directory n ll lchs) (Directory _ rl rchs) = merge n ll D lch' rl D rch' chs'
     where
       lch'    = fromMap $ M.difference lm rm
       rch'    = fromMap $ M.difference rm lm
-      chs'    = fromMap $ M.intersectionWith mergeTree lm rm
+      chs'    = fromMap $ M.intersectionWith mergeTree' lm rm
       fromMap = map snd . M.toList
       lm      = withNames lchs
       rm      = withNames rchs
@@ -119,37 +148,48 @@ mergeTree (Directory n ll lchs) (Directory _ rl rchs) = merge n ll D lch' rl D r
 -- | extracts the left tree out of a MergeTree l r. Note that
 -- leftTree (mergeTree l r) should have the same elements as l, but not
 -- neccesarily in the same order.
-leftTree                          :: MergeTree l r -> FSTree l
-leftTree (Node (Merge n l _) chs) = fromItemData n (map leftTree chs) l
+leftTree :: MergeTree l r -> FSTree l
+leftTree = withEmpty leftTree'
+    where
+      leftTree'                          :: NonEmptyMergeTree l r -> FSTree' l
+      leftTree' (Node (Merge n l _) chs) = fromItemData n (map leftTree' chs) l
+
 
 -- | Extracts the right tree out of MergeTree l r. See 'LeftTree' for more
 -- details.
-rightTree                          :: MergeTree l r -> FSTree r
-rightTree (Node (Merge n _ r) chs) = fromItemData n (map rightTree chs) r
+rightTree :: MergeTree l r -> FSTree r
+rightTree = withEmpty rightTree'
+    where
+      rightTree'                          :: NonEmptyMergeTree l r -> FSTree' r
+      rightTree' (Node (Merge n _ r) chs) = fromItemData n (map rightTree' chs) r
 
 
 -- | Throws away all subtrees that only occur in the left subtree
-ignoreOnlyLeft :: MergeTree l r -> Maybe (MergeTree l r)
+ignoreOnlyLeft :: MergeTree l r -> MergeTree l r
 ignoreOnlyLeft = adjustBottomUp (Just . withRootLabel f)
     where
       f      = updateMerge g id
       g item = item { uniqueChildren' = [] }
 
 -- | Throws away all subtrees that occur in only one tree
-ignoreOnlies :: MergeTree l r -> Maybe (MergeTree l r)
-ignoreOnlies = ignoreOnlyLeft
-               >=> return . fmap swapMerge
-               >=> ignoreOnlyLeft >=> return . fmap swapMerge
+ignoreOnlies :: MergeTree l r -> MergeTree l r
+ignoreOnlies = fmap swapMerge . ignoreOnlyLeft
+             . fmap swapMerge . ignoreOnlyLeft
 
 
 -- | Adjust the tree using function f in a bottom up fashion. If f n returns Nothing
 -- we remove the node from the tree. If f n returns Just n' we replace n by n'. Note
 -- that we run this function bottom up. So we replace the children of n *before*
 -- running f n
-adjustBottomUp                 :: (Tree a -> Maybe (Tree a)) ->
-                                 Tree a -> Maybe (Tree a)
-adjustBottomUp f (Node l chs) = let chs' = mapMaybe (adjustBottomUp f) chs in
-                               f $ Node l chs'
+adjustBottomUp                    :: (Tree a -> Maybe (Tree a)) ->
+                                     GTree a -> GTree a
+adjustBottomUp _ EmptyTree        = EmptyTree
+adjustBottomUp f (NonEmptyTree t) = maybe EmptyTree NonEmptyTree . adjustBottomUp' f $ t
+    where
+      adjustBottomUp'                :: (Tree a -> Maybe (Tree a)) ->
+                                        Tree a -> Maybe (Tree a)
+      adjustBottomUp' f (Node l chs) = let chs' = mapMaybe (adjustBottomUp' f) chs in
+                                       f $ Node l chs'
 
 -- | Filter the tree in a bottom up fashion. So we filter the children of a node n
 -- *before* we apply predicate p on node n itself.
@@ -157,43 +197,42 @@ adjustBottomUp f (Node l chs) = let chs' = mapMaybe (adjustBottomUp f) chs in
 -- Note that when the children of n satisfy p, but n itself does not, we still remove
 -- the node (together with all its children) from the tree. If this is undesirable,
 -- use `filterNonEmpty`.
-filterBottomUp   :: (Tree a -> Bool) -> Tree a -> Maybe (Tree a)
+filterBottomUp   :: (Tree a -> Bool) -> GTree a -> GTree a
 filterBottomUp p = adjustBottomUp (\n -> if p n then Just n else Nothing)
 
 
 -- | Filters the tree bottom up in the same way as `filterBottomUp`. However, if a node
 -- n has children that satisfy the predicate, we will keep n (with only the children that
 -- satisfy p), even though n itself may not satisfy the predicate.
-filterNonEmpty   :: (Tree a -> Bool) -> Tree a -> Maybe (Tree a)
+filterNonEmpty   :: (Tree a -> Bool) -> GTree a -> GTree a
 filterNonEmpty p = filterBottomUp (\n -> p n || hasChildren n)
     where
       hasChildren = not . null . subForest
 
 -- | Filter the merge tree, retaining only those nodes (and their ancestors) whose
 -- left label is smaller than their right label
-smallerInLeft :: Ord l => MergeTree l l -> Maybe (MergeTree l l)
+smallerInLeft :: Ord l => MergeTree l l -> MergeTree l l
 smallerInLeft = filterNonEmpty (uncurry (<) . gather label' . rootLabel)
-
 
 -- Find everyting that is in only left, and not in right. Note that if both lt and rt
 -- have an element, but l's label is newer than r's. This is *NOT* reported.
-newInLeft :: MergeTree l r -> Maybe (MergeTree l r)
+newInLeft :: MergeTree l r -> MergeTree l r
 newInLeft = filterNonEmpty (not . null . uniqueChildren' . left . rootLabel)
 
 -- | Symmetric to 'newInLeft'
-newInRight :: MergeTree l r -> Maybe (MergeTree l r)
-newInRight = fmap (fmap swapMerge) . newInLeft . fmap swapMerge
+newInRight :: MergeTree l r -> MergeTree l r
+newInRight = fmap swapMerge . newInLeft . fmap swapMerge
 
 -- | Extract everything that occurs in *both* subtrees, but is newer in the
 -- left subtree.  Note that this removes all trees that occur in only a single
 -- tree.
-newerInLeft :: Ord l => MergeTree l l -> Maybe (MergeTree l l)
-newerInLeft = ignoreOnlies >=> filterNonEmpty (uncurry (>) . gather label' . rootLabel)
+newerInLeft :: Ord l => MergeTree l l -> MergeTree l l
+newerInLeft = filterNonEmpty (uncurry (>) . gather label' . rootLabel) . ignoreOnlies
 
 -- | Report those items whose type has changed. Note that this removes all
 -- subtrees that occur in only one tree.
-typeChanged :: MergeTree l l -> Maybe (MergeTree l l)
-typeChanged = ignoreOnlies >=> filterNonEmpty (uncurry (/=) . gather type' . rootLabel)
+typeChanged :: MergeTree l l -> MergeTree l l
+typeChanged = filterNonEmpty (uncurry (/=) . gather type' . rootLabel) . ignoreOnlies
 -- FIXME: If the type has changed, then one of the types is a directory, which is the
 -- only item of the two that has children. We throw away this information by the
 -- ignoreOnlies'
@@ -205,12 +244,13 @@ projectLeftWith       :: Functor c => (MergeTree l r -> c (MergeTree l' r')) ->
 projectLeftWith f l r = fmap leftTree . f $ mergeTree l r
 
 
-
-
+-- | All nodes that occur in the left subtree but not in the right one
+difference :: MergeTree l r -> MergeTree l r
 difference = newInLeft
 
+-- | All nodes that occur in both subtrees
+intersection :: MergeTree l r -> MergeTree l r
 intersection = ignoreOnlies
-
 
 
 --------------------------------------------------------------------------------
