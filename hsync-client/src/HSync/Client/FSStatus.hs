@@ -89,8 +89,8 @@ data Changes = Changes { toDownload        :: Maybe LocalTree
 
 
 detectChanges oldRemote newRemote newLocal = Changes
-    { toDownload        = added remoteStatus                 `notIn` newLocal
-    , toDeleteLocal     = deleted remoteStatus               `notIn` newLocal
+    { toDownload        = undefined
+    , toDeleteLocal     = undefined --deleted remoteStatus               `notIn` newLocal
     , toPatchLocal      = undefined --- (rightTree $ updated remoteStatus) `notInS` localStatus
 
 
@@ -98,57 +98,103 @@ detectChanges oldRemote newRemote newLocal = Changes
 
     , toPatchRemote     = undefined -- TODO: we need the remote FI here
 --                                  updated localStatus  `notInS` remoteStatus
-    , toDeleteRemote    = deleted localStatus  `notIn` newRemote
+    , toDeleteRemote    = undefined -- deleted localStatus  `notIn` newRemote
     , toHandleConflicts = undefined
     }
     where
       remoteStatus = fsStatus' oldRemote newRemote
       localStatus  = fsStatus' oldRemote newLocal
 
+      dl = mkLocal $ added remoteStatus `notIn` newLocal
 
 
 
--- mkLocal    :: Maybe (MergeTree DateTime DateTime) -> Maybe LocalTree
--- mkLocal mt = fmap leftTree
+notIn      :: Maybe (FSTree l) -> FSTree l -> Maybe (MergeTree l l)
+notIn ml r = ml >>= difference . flip mergeTree r
 
 
 
 
-notIn :: Maybe (FSTree l) -> FSTree l -> Maybe (FSTree l)
-notIn = notInWithF id
+mkLocal :: Maybe (MergeTree DateTime DateTime) -> Maybe LocalTree
+mkLocal = fmap leftTree
+
+mkRemote :: Maybe (MergeTree DateTime DateTime) -> Maybe RemoteTree
+mkRemote = fmap (leftTree . withChanges)
+
+
+
+
+
+withChanges :: MergeTree DateTime DateTime -> MergeTree Change Change
+withChanges = withChanges' . withFileIdents
+
+
+withFileIdents :: MergeTree DateTime DateTime -> MergeTree FileIdent FileIdent
+withFileIdents = fmap (updateMerge f f)
+    where
+      f i@(Item dt t chs) = Item (toFI i) t (map withFileIdents' chs)
+
+withFileIdents' :: FSTree DateTime -> FSTree FileIdent
+withFileIdents' = gmap FI.Directory FI.File
+
+
+
+
+withChanges'  :: MergeTree FileIdent FileIdent -> MergeTree Change Change
+withChanges' = fmap fromMerge
+
+fromMerge               :: Merge FileIdent FileIdent -> Merge Change Change
+fromMerge (Merge n l r) = Merge n l' r'
+    where
+      l' = mkChange l (label' r)
+      r' = mkChange r (label' l)
+
+
+mkChange                          :: FSItemData FileIdent ->
+                                     FileIdent -> FSItemData Change
+mkChange (Item newFi t chs) oldFi = Item (Change oldFi newFi) t chs'
+    where
+      chs' = map (fmap (Change FI.NonExistent)) chs
+
+
+
+--------------------------------------------------------------------------------
+
+
+
 
 notInR :: Maybe (FSTree DateTime) -> FSTree DateTime -> Maybe RemoteTree
-notInR = notInWithF toChange
+notInR = undefined -- notInWithF toChange
 
 
 
-notInWithF        :: (Merge l l -> Merge l' r') ->
-                     Maybe (FSTree l) -> FSTree l -> Maybe (FSTree l')
-notInWithF f ml r = ml >>= \l -> projectLeftWith (fmap (fmap f) . difference) l r
+-- notInWithF        :: (Merge l l -> Merge l' r') ->
+--                      Maybe (FSTree l) -> FSTree l -> Maybe (FSTree l')
+-- notInWithF f ml r = ml >>= \l -> projectLeftWith (fmap (fmap f) . difference) l r
 
 
 
-toChange               :: Merge DateTime DateTime -> Merge Change DateTime
-toChange (Merge n l r) = Merge n l' r
-    where
-      l' = mkChange l r
+-- toChange               :: Merge DateTime DateTime -> Merge Change DateTime
+-- toChange (Merge n l r) = Merge n l' r
+--     where
+--       l' = mkChange l r
 
 
--- | The Left tree is considered the NEW tree, the right tree the Old tree
-mkChange :: FSItemData DateTime -> FSItemData DateTime -> FSItemData Change
-mkChange l@(Item _ t chs) r = Item change t chs'
-    where
-      change = Change (toFI r) (toFI l)
-      chs'   = map f chs
+-- -- | The Left tree is considered the NEW tree, the right tree the Old tree
+-- mkChange :: FSItemData DateTime -> FSItemData DateTime -> FSItemData Change
+-- mkChange l@(Item _ t chs) r = Item change t chs'
+--     where
+--       change = Change (toFI r) (toFI l)
+--       chs'   = map f chs
 
-      f :: FSTree DateTime -> FSTree Change
-      f = fmap (Change FI.NonExistent) . gmap FI.Directory FI.File
-      -- First we set the labels to be FileIdents instead of just the
-      -- date time. Then, since these items occur only in this Item
-      -- we set the label to a Change value, where the old FI is set to
-      -- Nothing
+--       f :: FSTree DateTime -> FSTree Change
+--       f = fmap (Change FI.NonExistent) . gmap FI.Directory FI.File
+--       -- First we set the labels to be FileIdents instead of just the
+--       -- date time. Then, since these items occur only in this Item
+--       -- we set the label to a Change value, where the old FI is set to
+--       -- Nothing
 
- -- = Item (toFi t l) t $ map (gmap FI.Directory FI.File) chs
+--  -- = Item (toFi t l) t $ map (gmap FI.Directory FI.File) chs
 
 
 

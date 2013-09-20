@@ -6,6 +6,7 @@ module HSync.Client.MergeTree( MergeTree
                              , FSItemData(..)
                              , FSType(..)
                              , Merge(..)
+                             , updateMerge
 
                              , projectLeftWith
 
@@ -21,6 +22,9 @@ module HSync.Client.MergeTree( MergeTree
                              , ignoreOnlyLeft
 
                              , typeChanged
+
+                             , difference
+                             , intersection
                              ) where
 
 import Data.Monoid((<>))
@@ -156,13 +160,14 @@ adjustBottomUp f (Node l chs) = let chs' = mapMaybe (adjustBottomUp f) chs in
 filterBottomUp   :: (Tree a -> Bool) -> Tree a -> Maybe (Tree a)
 filterBottomUp p = adjustBottomUp (\n -> if p n then Just n else Nothing)
 
+
 -- | Filters the tree bottom up in the same way as `filterBottomUp`. However, if a node
 -- n has children that satisfy the predicate, we will keep n (with only the children that
 -- satisfy p), even though n itself may not satisfy the predicate.
 filterNonEmpty   :: (Tree a -> Bool) -> Tree a -> Maybe (Tree a)
 filterNonEmpty p = filterBottomUp (\n -> p n || hasChildren n)
-                   where
-                     hasChildren = not . null . subForest
+    where
+      hasChildren = not . null . subForest
 
 -- | Filter the merge tree, retaining only those nodes (and their ancestors) whose
 -- left label is smaller than their right label
@@ -198,6 +203,15 @@ typeChanged = ignoreOnlies >=> filterNonEmpty (uncurry (/=) . gather type' . roo
 projectLeftWith       :: Functor c => (MergeTree l r -> c (MergeTree l' r')) ->
                          FSTree l -> FSTree r -> c (FSTree l')
 projectLeftWith f l r = fmap leftTree . f $ mergeTree l r
+
+
+
+
+difference = newInLeft
+
+intersection = ignoreOnlies
+
+
 
 --------------------------------------------------------------------------------
 -- | Helper functions
