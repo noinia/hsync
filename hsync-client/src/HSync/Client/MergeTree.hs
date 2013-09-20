@@ -27,6 +27,9 @@ module HSync.Client.MergeTree( MergeTree
                              , intersection
                              ) where
 
+
+import Data.Default
+
 import Data.Monoid((<>))
 import Data.Maybe(mapMaybe)
 import Data.Tree
@@ -113,6 +116,11 @@ withEmpty f = onTree NoFiles (FSTree . f)
 
 instance Functor GTree where
     fmap f = onTree EmptyTree (NonEmptyTree . fmap f)
+
+
+instance Default (GTree a) where
+    def = EmptyTree
+
 
 
 -- | A mergeTree is a potentially empty tree
