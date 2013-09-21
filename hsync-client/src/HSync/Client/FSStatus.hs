@@ -3,7 +3,6 @@ module HSync.Client.FSStatus( FSStatus(..)
                             ) where
 
 
-import Data.Monoid
 import Data.Maybe
 
 import Data.Default
@@ -41,14 +40,16 @@ newFromChange :: FSTree (Change l) -> FSTree l
 newFromChange = fmap (fromJust . new)
 
 
-
+-- | Functon to adjust the FSTrees that we store
 tmap                          :: (FSTree a -> FSTree b) ->
                                  (FSTree (Change a) -> FSTree (Change b)) ->
                                  FSStatus a -> FSStatus b
 tmap f g (FSStatus a d up un) = FSStatus (f a) (f d) (g up) (f un)
 
 
+
 instance Default (FSStatus l) where
+    -- | The default represents a FSStatus in which everything is empty
     def = FSStatus NoFiles NoFiles NoFiles NoFiles
 
 
@@ -81,7 +82,7 @@ fsStatus oldTree newTree = FSStatus nt dt upt unt
 --------------------------------------------------------------------------------
 
 
-
+-- | Data type representing a changed label
 data Change l = Change { old :: Maybe l
                        , new :: Maybe l
                        }
@@ -91,9 +92,13 @@ instance Functor Change where
     fmap f (Change o n) = Change (fmap f o) (fmap f n)
 
 
+
+change     :: l -> l -> Change l
 change o n = Change (Just o) (Just n)
 
 
+-- | Represent the changed that occured, partitioned according to what we have
+-- to do to synchronize everything again
 data Changes c l = Changes { toDownload        :: FSTree l
                            , toDeleteLocal     :: FSTree l
                            , toPatchLocal      :: FSTree l
@@ -164,10 +169,8 @@ detectChanges oldRemote newRemote newLocal = Changes
       remoteStatus = fsStatus oldRemote newRemote
       localStatus  = fsStatus oldRemote newLocal
 
-      leftChanges  = leftTree . withChanges
+      leftChanges  = leftTree  . withChanges
       rightChanges = rightTree . withChanges
-
-
 
       -- leftChanges' = leftTree . map fromMerge id
       leftTree'    = newFromChange . leftTree
@@ -203,6 +206,8 @@ notInS l (FSStatus add del chs same) = leftTree $ l'' `notIn` chs
 --------------------------------------------------------------------------------
 -- | FSChanges
 
+
+
 type FSChanges = Changes FSChange FileIdent
 
 data FSChange = FSChange { oldFileIdent :: FileIdent
@@ -229,7 +234,8 @@ fromChanges :: Changes (Change DateTime) DateTime -> FSChanges
 fromChanges = cmap withFileIdents (fmap fromChange . withFileIdents')
 
 
-
+-- | Detect the changes, and everything that we need in order to synchronize
+-- everything again.
 detectFSChanges                              :: FSTree DateTime ->
                                                 FSTree DateTime ->
                                                 FSTree DateTime ->
