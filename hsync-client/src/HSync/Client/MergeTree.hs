@@ -237,6 +237,13 @@ newInRight = fmap swapMerge . newInLeft . fmap swapMerge
 newerInLeft :: Ord l => MergeTree l l -> MergeTree l l
 newerInLeft = filterNonEmpty (uncurry (>) . gather label' . rootLabel) . ignoreOnlies
 
+
+-- | Filter the tree, removing all entities that have a different type. This operation
+-- *KEEPS* the subtrees that occur in only one subtree though.
+sameType :: MergeTree l l -> MergeTree l l
+sameType = filterNonEmpty (uncurry (==) . gather type' . rootLabel)
+
+
 -- | Report those items whose type has changed. Note that this removes all
 -- subtrees that occur in only one tree.
 typeChanged :: MergeTree l l -> MergeTree l l

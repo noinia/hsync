@@ -3,6 +3,9 @@ module HSync.Client.FSStatus( FSStatus(..)
                             ) where
 
 
+import Data.Monoid
+import Data.Maybe
+
 import Data.Default
 
 import HSync.Common.DateTime(DateTime)
@@ -21,13 +24,13 @@ import qualified HSync.Common.FileIdent as FI
 
 data FSStatus l = FSStatus { added        :: FSTree l
                            , deleted      :: FSTree l
-                           , updated      :: MergeTree l l
+                           , updated      :: FSTree (Change l)
                            }
                   deriving (Show,Eq)
 
 
 instance Default (FSStatus l) where
-    def = FSStatus NoFiles NoFiles def
+    def = FSStatus NoFiles NoFiles NoFiles
 
 
 -- | fsStatus oldTree newTree computes the changes in the filesystem between
@@ -51,104 +54,144 @@ fsStatus oldTree NoFiles = def { deleted = oldTree }
 fsStatus oldTree newTree = FSStatus nt dt ut
     where
       mt = mergeTree newTree oldTree
-      nt = leftTree  . newInLeft  $ mt
-      dt = rightTree . newInRight $ mt
-      ut = newerInLeft mt
+      nt = leftTree  . newInLeft                          $ mt
+      dt = rightTree . newInRight                         $ mt
+      ut = undefined
+      -- ut = leftTree  . fmap (gather label') . newerInLeft $ mt
 
 --------------------------------------------------------------------------------
 
-data Change = Change { oldFileIdent :: FileIdent
-                     , newFileIdent :: FileIdent
-                     }
-            deriving (Show,Read,Eq)
 
 
-
-type LocalTree = FSTree DateTime
-
-type RemoteTree = FSTree Change
-
-
-data Changes = Changes { toDownload        :: LocalTree
-                       , toDeleteLocal     :: LocalTree
-                       , toPatchLocal      :: LocalTree
-
-                       , toUpload          :: RemoteTree
-                       , toDeleteRemote    :: RemoteTree
-                       , toPatchRemote     :: RemoteTree
-
-                       , toHandleConflicts :: RemoteTree
+data Change l = Change { old :: Maybe l
+                       , new :: Maybe l
                        }
+                deriving (Show,Read,Eq)
+
+
+change o n = Change (Just o) (Just n)
+
+
+data Changes c l = Changes { toDownload        :: FSTree l
+                           , toDeleteLocal     :: FSTree l
+                           , toPatchLocal      :: FSTree l
+
+                           , toUpload          :: FSTree c
+                           , toDeleteRemote    :: FSTree c
+                           , toPatchRemote     :: FSTree c
+
+                           , toHandleConflicts :: FSTree c
+                           }
              deriving (Show,Eq)
 
+--------------------------------------------------------------------------------
 
-
-
+detectChanges                              :: Ord l =>
+                                              FSTree l -> FSTree l -> FSTree l ->
+                                              Changes (Change l) l
 detectChanges oldRemote newRemote newLocal = Changes
-    { toDownload        = leftTree $ added   remoteStatus `notIn`  newLocal
-    , toDeleteLocal     = leftTree $ deleted remoteStatus `inTree` newLocal
-    , toPatchLocal      = leftTree $ updated remoteStatus `notInS` localStatus
+    { toDownload        = leftTree  $ added   remoteStatus `notIn`  newLocal
+    , toDeleteLocal     = leftTree  $ deleted remoteStatus `inTree` newLocal
+    , toPatchLocal      = leftTree' $ updated remoteStatus `notInS` localStatus
 
+    , toUpload          = leftChanges $ added   localStatus  `notIn`  newRemote
+    , toPatchRemote     = leftTree    $ updated localStatus  `notInS` remoteStatus
+    , toDeleteRemote    = leftChanges $ deleted localStatus  `notIn`  newRemote
 
-    , toUpload          = undefined --added localStatus    `notInR` newRemote
-
-    , toPatchRemote     = undefined -- TODO: we need the remote FI here
---                                  updated localStatus  `notInS` remoteStatus
-    , toDeleteRemote    = undefined -- deleted localStatus  `notIn` newRemote
     , toHandleConflicts = undefined
     }
     where
       remoteStatus = fsStatus oldRemote newRemote
       localStatus  = fsStatus oldRemote newLocal
 
+      leftChanges  = leftTree . withChanges
+      leftTree'    = fromChange' . leftTree
+
+      fromChange' :: FSTree (Change l) -> FSTree l
+      fromChange' = fmap (fromJust . new)
+
 
 inTree     :: FSTree l -> FSTree r -> MergeTree l r
 inTree l r = intersection $ mergeTree l r
 
-notIn      :: FSTree l -> FSTree l -> MergeTree l l
+notIn      :: FSTree l -> FSTree r -> MergeTree l r
 notIn l r = difference $ mergeTree l r
 
-notInS = undefined
 
-
-
-mkLocal :: MergeTree DateTime DateTime -> LocalTree
-mkLocal = leftTree
-
-mkRemote :: MergeTree DateTime DateTime -> RemoteTree
-mkRemote = leftTree . withChanges
-
-
-
-
-
-withChanges :: MergeTree DateTime DateTime -> MergeTree Change Change
-withChanges = withChanges' . withFileIdents
-
-
-withFileIdents :: MergeTree DateTime DateTime -> MergeTree FileIdent FileIdent
-withFileIdents = fmap (updateMerge f f)
+notInS      :: FSTree a -> FSStatus l -> MergeTree a (Change l)
+notInS l (FSStatus add del chs) = l'' `notIn` chs
     where
-      f i@(Item dt t chs) = Item (toFI i) t (map withFileIdents' chs)
+      l'   = leftTree $ l  `notIn` add
+      l''  = leftTree $ l' `notIn` del
 
+--------------------------------------------------------------------------------
+-- | FSChanges
+
+type FSChanges = Changes FSChange FileIdent
+
+data FSChange = FSChange { oldFileIdent :: FileIdent
+                         , newFileIdent :: FileIdent
+                         }
+
+
+fromChange              :: Change FileIdent -> FSChange
+fromChange (Change o n) = FSChange (f o) (f n)
+    where
+      f = fromMaybe FI.NonExistent
+
+
+-- inFStatus :: FileName ->
+-- n `inFStatus` `
+
+
+
+--------------------------------------------------------------------------------
+-- |
+
+
+-- mkLocal :: MergeTree DateTime DateTime -> LocalTree
+-- mkLocal = leftTree
+
+
+
+-- withFileIdents :: MergeTree DateTime DateTime -> MergeTree FileIdent FileIdent
+-- withFileIdents = fmap (updateMerge f f)
+--     where
+--       f (Item dt t chs) = Item (toFi t dt) t (map withFileIdents' chs)
+
+--       toFi   :: FSType -> DateTime -> FileIdent
+--       toFi F = FI.File
+--       toFi D = FI.Directory
+
+
+
+
+-- | convert a FSTree of DateTimes to a FSTRee of FileIdents
 withFileIdents' :: FSTree' DateTime -> FSTree' FileIdent
 withFileIdents' = gmap' FI.Directory FI.File
 
+-- | Convert the label type to a `(Change l)`. The items in the right tree have
+-- *their* label set as the new label!. So which one is true the right one
+-- should be chosen by selecting either the left or the right tree.
+withChanges :: MergeTree l l -> MergeTree (Change l) (Change l)
+withChanges = fmap fromMerge
 
-
-
-withChanges'  :: MergeTree FileIdent FileIdent -> MergeTree Change Change
-withChanges' = fmap fromMerge
-
-fromMerge               :: Merge FileIdent FileIdent -> Merge Change Change
+-- | Update a Merge l l to a Merge (Change l) (Change l). The items in the left
+-- tree have *their* label set as the new label, the items in the right tree
+-- have *their* label set as the new label!. So which one is true the right one
+-- should be chosen by selecting either the left or the right tree.
+fromMerge               :: Merge l l -> Merge (Change l) (Change l)
 fromMerge (Merge n l r) = Merge n l' r'
     where
       l' = mkChange l (label' r)
       r' = mkChange r (label' l)
 
 
-mkChange                          :: FSItemData FileIdent ->
-                                     FileIdent -> FSItemData Change
-mkChange (Item newFi t chs) oldFi = Item (Change oldFi newFi) t chs'
+-- | create a Change object from a FSItem and an oldLabel. In particular,
+-- the new label in `mkChange item oldLabel` is the label in item, the
+-- old label is the one specified.
+mkChange                          :: FSItemData l ->
+                                     l -> FSItemData (Change l)
+mkChange (Item new' t chs) old' = Item (change old' new') t chs'
     where
-      chs' = map (fmap (Change FI.NonExistent)) chs
+      chs' = map (fmap (Change Nothing . Just)) chs
