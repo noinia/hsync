@@ -57,18 +57,25 @@ data FSItemData l = Item { label'          :: l
                     deriving (Show,Eq,Read)
 
 -- | Given a name, a list of extra children and a FSItemData, construct an FSTree
-fromItemData                       :: FileName -> [FSTree' l] -> FSItemData l -> FSTree' l
+fromItemData                       :: FileName -> [FSTree l] -> FSItemData l -> FSTree' l
 fromItemData n []  (Item l F [])   = File n l
 fromItemData n _   (Item _ F _)    = error "fromItemData: Files cannot have children!"
-fromItemData n chs (Item l D chs') = Directory n l (chs <> chs')
+fromItemData n chs (Item l D chs') = Directory n l (map getTree chs <> chs')
 
+
+uniqueChildren :: Maybe (FSItemData l) -> [FSTree' l]
+uniqueChildren = maybe [] uniqueChildren'
+
+onlyTree                     :: FSTree' l -> Maybe (FSItemData l)
+onlyTree (File _ l)          = Just $ Item l F []
+onlyTree (Directory _ l chs) = Just $ Item l D chs
 
 --------------------------------------------------------------------------------
 
 -- | Data type to hold the information of two files
 data Merge l r = Merge { name'         :: FileName
-                       , left          :: FSItemData l
-                       , right         :: FSItemData r
+                       , left          :: Maybe (FSItemData l)
+                       , right         :: Maybe (FSItemData r)
                        }
                  deriving (Eq,Show,Read)
 
@@ -79,13 +86,13 @@ merge                             :: FileName
                                   -> Forest (Merge l r)
                                   -> NonEmptyMergeTree l r
 merge n ll lt lchs rl rt rchs chs = Node (Merge n
-                                                (Item ll lt lchs)
-                                                (Item rl rt rchs)
+                                                (Just $ Item ll lt lchs)
+                                                (Just $ Item rl rt rchs)
                                          ) chs
 
 -- | Given a merge node, collect the FSItem data of both the left and the right file
-gather                 :: (FSItemData a -> b) -> Merge a a -> (b, b)
-gather f (Merge _ l r) = (f l,f r)
+gather                 :: (FSItemData a -> b) -> Merge a a -> (Maybe b, Maybe b)
+gather f (Merge _ l r) = (fmap f l,fmap f r)
 
 
 swapMerge               :: Merge r l -> Merge l r
@@ -96,7 +103,7 @@ swapMerge (Merge n l r) = Merge n r l
 updateMerge                   :: (FSItemData l -> FSItemData l')  ->
                                  (FSItemData r -> FSItemData r') ->
                                  Merge l r -> Merge l' r'
-updateMerge f g (Merge n l r) = Merge n (f l) (g r)
+updateMerge f g (Merge n l r) = Merge n (fmap f l) (fmap g r)
 
 --------------------------------------------------------------------------------
 
@@ -110,10 +117,6 @@ onTree                      :: b -> (Tree a -> b) -> GTree a -> b
 onTree z _ EmptyTree        = z
 onTree _ f (NonEmptyTree t) = f t
 
-
--- | Shortcut for building FSTrees
-withEmpty   :: (Tree a -> FSTree' l) -> GTree a -> FSTree l
-withEmpty f = onTree NoFiles (FSTree . f)
 
 instance Functor GTree where
     fmap f = onTree EmptyTree (NonEmptyTree . fmap f)
@@ -130,13 +133,14 @@ type MergeTree l r = GTree (Merge l r)
 -- | A non empty MergeTree
 type NonEmptyMergeTree l r = Tree (Merge l r)
 
-
 mergeTree                       :: FSTree l -> FSTree r -> MergeTree l r
 mergeTree NoFiles    NoFiles    = EmptyTree
-mergeTree (FSTree l) (FSTree r)
-          | name l == name r    = NonEmptyTree $ mergeTree' l r
-          | otherwise           = EmptyTree
-mergeTree _          _          = error "mergeTree: Merging NoFiles with an FSTree. Not implemented yet"
+mergeTree NoFiles    (FSTree r) = let m = Merge (name r) Nothing      (onlyTree r)
+                                  in NonEmptyTree $ Node m []
+mergeTree (FSTree l) NoFiles    = let m = Merge (name l) (onlyTree l) Nothing
+                                  in NonEmptyTree $ Node m []
+mergeTree (FSTree l) (FSTree r) = NonEmptyTree $ mergeTree' l r
+
 
 -- | Assumes the names of the initial trees are identical so it only stores the left name
 mergeTree'                                             :: FSTree' l -> FSTree' r ->
@@ -158,19 +162,20 @@ mergeTree' (Directory n ll lchs) (Directory _ rl rchs) = merge n ll D lch' rl D 
 -- leftTree (mergeTree l r) should have the same elements as l, but not
 -- neccesarily in the same order.
 leftTree :: MergeTree l r -> FSTree l
-leftTree = withEmpty leftTree'
+leftTree = onTree NoFiles leftTree'
     where
-      leftTree'                          :: NonEmptyMergeTree l r -> FSTree' l
-      leftTree' (Node (Merge n l _) chs) = fromItemData n (map leftTree' chs) l
-
+      leftTree'                           :: NonEmptyMergeTree l r -> FSTree l
+      leftTree' (Node (Merge n ml _) chs) =
+          maybe NoFiles (FSTree . fromItemData n (map leftTree' chs)) ml
 
 -- | Extracts the right tree out of MergeTree l r. See 'LeftTree' for more
 -- details.
 rightTree :: MergeTree l r -> FSTree r
-rightTree = withEmpty rightTree'
+rightTree = onTree NoFiles rightTree'
     where
-      rightTree'                          :: NonEmptyMergeTree l r -> FSTree' r
-      rightTree' (Node (Merge n _ r) chs) = fromItemData n (map rightTree' chs) r
+      rightTree'                           :: NonEmptyMergeTree l r -> FSTree r
+      rightTree' (Node (Merge n _ mr) chs) =
+          maybe NoFiles (FSTree . fromItemData n (map rightTree' chs)) mr
 
 
 -- | Throws away all subtrees that only occur in the left subtree
@@ -226,7 +231,7 @@ smallerInLeft = filterNonEmpty (uncurry (<) . gather label' . rootLabel)
 -- Find everyting that is in only left, and not in right. Note that if both lt and rt
 -- have an element, but l's label is newer than r's. This is *NOT* reported.
 newInLeft :: MergeTree l r -> MergeTree l r
-newInLeft = filterNonEmpty (not . null . uniqueChildren' . left . rootLabel)
+newInLeft = filterNonEmpty (not . null . uniqueChildren . left . rootLabel)
 
 -- | Symmetric to 'newInLeft'
 newInRight :: MergeTree l r -> MergeTree l r
@@ -264,10 +269,9 @@ projectLeftWith f l r = fmap leftTree . f $ mergeTree l r
 difference :: MergeTree l r -> MergeTree l r
 difference = newInLeft
 
--- | All nodes that occur in both subtrees
-intersection :: MergeTree l r -> MergeTree l r
-intersection = ignoreOnlies
-
+-- | All nodes that occur in both subtrees and have the same label and filetype
+intersection :: Eq l => MergeTree l l -> MergeTree l l
+intersection = filterNonEmpty (uncurry (==) . gather id . rootLabel) . ignoreOnlies
 
 --------------------------------------------------------------------------------
 -- | Helper functions
@@ -279,14 +283,16 @@ withRootLabel f (Node m chs) = Node (f m) chs
 --------------------------------------------------------------------------------
 -- | Testing stuff
 
-leftT = Directory "root" 0 [ File "onlyLeft"    1
+leftT = FSTree $
+        Directory "root" 0 [ File "onlyLeft"    1
                            , File "both"        2
                            , Directory "subdir" 3 [ File "foo" 4
                                                   ]
                            , Directory "baz" 100 []
                            ]
 
-rightT = Directory "root" 0 [ File "onlyRight"   10
+rightT = FSTree $
+         Directory "root" 0 [ File "onlyRight"   10
                             , File "both"        2
                             , Directory "subdir" 3 [ File "foo" 5
                                                    , File "bar" 6

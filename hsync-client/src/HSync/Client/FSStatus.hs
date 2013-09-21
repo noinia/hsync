@@ -25,6 +25,7 @@ import qualified HSync.Common.FileIdent as FI
 data FSStatus l = FSStatus { added        :: FSTree l
                            , deleted      :: FSTree l
                            , updated      :: FSTree (Change l)
+                           , unchanged    :: FSTree l
                            }
                   deriving (Show,Eq)
 
@@ -32,14 +33,14 @@ instance Functor FSStatus where
     fmap f = tmap (fmap f) (fmap (fmap f))
 
 
-tmap                      :: (FSTree a -> FSTree b) ->
-                             (FSTree (Change a) -> FSTree (Change b)) ->
-                             FSStatus a -> FSStatus b
-tmap f g (FSStatus a d u) = FSStatus (f a) (f d) (g u)
+tmap                          :: (FSTree a -> FSTree b) ->
+                                 (FSTree (Change a) -> FSTree (Change b)) ->
+                                 FSStatus a -> FSStatus b
+tmap f g (FSStatus a d up un) = FSStatus (f a) (f d) (g up) (f un)
 
 
 instance Default (FSStatus l) where
-    def = FSStatus NoFiles NoFiles NoFiles
+    def = FSStatus NoFiles NoFiles NoFiles NoFiles
 
 
 -- | fsStatus oldTree newTree computes the changes in the filesystem between
@@ -60,12 +61,13 @@ instance Default (FSStatus l) where
 fsStatus                 :: Ord l => FSTree l -> FSTree l -> FSStatus l
 fsStatus NoFiles newTree = def { added   = newTree }
 fsStatus oldTree NoFiles = def { deleted = oldTree }
-fsStatus oldTree newTree = FSStatus nt dt ut
+fsStatus oldTree newTree = FSStatus nt dt upt unt
     where
-      mt = mergeTree newTree oldTree
-      nt = leftTree  . newInLeft                 $ mt
-      dt = rightTree . newInRight                $ mt
-      ut = leftTree  . withChanges . newerInLeft $ mt
+      mt  = mergeTree newTree oldTree
+      nt  = leftTree  . newInLeft                 $ mt
+      dt  = rightTree . newInRight                $ mt
+      upt = leftTree  . withChanges . newerInLeft $ mt
+      unt = leftTree  . intersection              $ mt
 
 --------------------------------------------------------------------------------
 
@@ -109,13 +111,13 @@ detectChanges                              :: Ord l =>
                                               FSTree l -> FSTree l -> FSTree l ->
                                               Changes (Change l) l
 detectChanges oldRemote newRemote newLocal = Changes
-    { toDownload        = leftTree  $ added   remoteStatus `notIn`  newLocal
-    , toDeleteLocal     = leftTree  $ deleted remoteStatus `inTree` newLocal
-    , toPatchLocal      = leftTree' $ updated remoteStatus `notInS` localStatus
+    { toDownload        = leftTree    $ added   remoteStatus `notIn`  newLocal
+    , toDeleteLocal     =               deleted remoteStatus `notInS` localStatus
+    , toPatchLocal      = fromChange' $ updated remoteStatus `notInS` localStatus
 
-    , toUpload          = leftChanges $ added   localStatus  `notIn`  newRemote
-    , toPatchRemote     = leftTree    $ updated localStatus  `notInS` remoteStatus
-    , toDeleteRemote    = leftChanges $ deleted localStatus  `notIn`  newRemote
+    , toUpload          = leftChanges  $ added   localStatus  `notIn`  newRemote
+    , toDeleteRemote    = rightChanges $ unchanged remoteStatus  `inTree` deleted localStatus
+    , toPatchRemote     =                updated localStatus  `notInS` remoteStatus
 
     , toHandleConflicts = undefined
     }
@@ -124,21 +126,34 @@ detectChanges oldRemote newRemote newLocal = Changes
       localStatus  = fsStatus oldRemote newLocal
 
       leftChanges  = leftTree . withChanges
+      rightChanges = rightTree . withChanges
+
+
+
+      -- leftChanges' = leftTree . map fromMerge id
       leftTree'    = fromChange' . leftTree
 
       fromChange' :: FSTree (Change l) -> FSTree l
       fromChange' = fmap (fromJust . new)
 
 
-inTree     :: FSTree l -> FSTree r -> MergeTree l r
+
+
+
+
+
+inTree     :: Eq l => FSTree l -> FSTree l -> MergeTree l l
 inTree l r = intersection $ mergeTree l r
+
+
+
 
 notIn      :: FSTree l -> FSTree r -> MergeTree l r
 notIn l r = difference $ mergeTree l r
 
 
-notInS      :: FSTree a -> FSStatus l -> MergeTree a (Change l)
-notInS l (FSStatus add del chs) = l'' `notIn` chs
+notInS                               :: FSTree a -> FSStatus l -> FSTree a
+notInS l (FSStatus add del chs same) = leftTree $ l'' `notIn` chs
     where
       l'   = leftTree $ l  `notIn` add
       l''  = leftTree $ l' `notIn` del
@@ -212,11 +227,12 @@ withChanges = fmap fromMerge
 -- tree have *their* label set as the new label, the items in the right tree
 -- have *their* label set as the new label!. So which one is true the right one
 -- should be chosen by selecting either the left or the right tree.
-fromMerge               :: Merge l l -> Merge (Change l) (Change l)
-fromMerge (Merge n l r) = Merge n l' r'
+fromMerge                             :: Merge l l -> Merge (Change l) (Change l)
+fromMerge (Merge n (Just l) (Just r)) = Merge n (Just l') (Just r')
     where
       l' = mkChange l (label' r)
       r' = mkChange r (label' l)
+fromMerge (Merge n _ _)               = Merge n Nothing Nothing
 
 
 -- | create a Change object from a FSItem and an oldLabel. In particular,
@@ -240,6 +256,7 @@ oldT = FSTree $
                            , Directory "subdir" 3 [ File "foo" 4
                                                   ]
                            , Directory "baz" 100 []
+                           , File "deletedInRemote" 1
                            ]
 
 remoteT = FSTree $
@@ -260,6 +277,7 @@ localT = FSTree $
                             , Directory "baz" 100 [ ]
                             , Directory "localbaz" 200 [ File "X" 201
                                                        ]
+                            , File "deletedInRemote" 1
                             ]
 
 test = detectChanges oldT remoteT localT
