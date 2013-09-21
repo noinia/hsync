@@ -63,10 +63,9 @@ fsStatus oldTree NoFiles = def { deleted = oldTree }
 fsStatus oldTree newTree = FSStatus nt dt ut
     where
       mt = mergeTree newTree oldTree
-      nt = leftTree  . newInLeft                          $ mt
-      dt = rightTree . newInRight                         $ mt
-      ut = undefined
-      -- ut = leftTree  . fmap (gather label') . newerInLeft $ mt
+      nt = leftTree  . newInLeft                 $ mt
+      dt = rightTree . newInRight                $ mt
+      ut = leftTree  . withChanges . newerInLeft $ mt
 
 --------------------------------------------------------------------------------
 
@@ -228,3 +227,39 @@ mkChange                          :: FSItemData l ->
 mkChange (Item new' t chs) old' = Item (change old' new') t chs'
     where
       chs' = map (fmap (Change Nothing . Just)) chs
+
+
+
+
+--------------------------------------------------------------------------------
+-- | Testing stuff
+
+oldT = FSTree $
+        Directory "root" 0 [ File "onlyOld"    1
+                           , File "both"        2
+                           , Directory "subdir" 3 [ File "foo" 4
+                                                  ]
+                           , Directory "baz" 100 []
+                           ]
+
+remoteT = FSTree $
+          Directory "root" 0 [ File "onlyNewRemote"   10
+                             , File "both"        2
+                             , Directory "subdir" 3 [ File "foo" 5
+                                                    , File "bar" 6
+                                                    ]
+                             , File "baz" 101
+                             ]
+
+localT = FSTree $
+         Directory "root" 0 [ File "newLocal"    50
+                            , File "both"        2
+                            , Directory "subdir" 3 [ File "foo" 4
+                                                   , File "localNewSub" 6
+                                                   ]
+                            , Directory "baz" 100 [ ]
+                            , Directory "localbaz" 200 [ File "X" 201
+                                                       ]
+                            ]
+
+test = detectChanges oldT remoteT localT

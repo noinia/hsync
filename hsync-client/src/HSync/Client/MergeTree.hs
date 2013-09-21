@@ -7,6 +7,7 @@ module HSync.Client.MergeTree( MergeTree
                              , FSType(..)
                              , Merge(..)
                              , updateMerge
+                             , gather
 
                              , projectLeftWith
 
