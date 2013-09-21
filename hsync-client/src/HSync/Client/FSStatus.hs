@@ -33,6 +33,15 @@ instance Functor FSStatus where
     fmap f = tmap (fmap f) (fmap (fmap f))
 
 
+-- | Get the files with their new labels that have been updated
+updated' :: FSStatus l -> FSTree l
+updated' = newFromChange . updated
+
+newFromChange :: FSTree (Change l) -> FSTree l
+newFromChange = fmap (fromJust . new)
+
+
+
 tmap                          :: (FSTree a -> FSTree b) ->
                                  (FSTree (Change a) -> FSTree (Change b)) ->
                                  FSStatus a -> FSStatus b
@@ -107,18 +116,48 @@ cmap f g (Changes d dl pl u dr pr c) = Changes (f d) (f dl) (f pl)
 
 --------------------------------------------------------------------------------
 
+-- | Given the oldRemote tree, the new remote tree, and the newLocal tree,
+-- determine what we have to do to synchronize everything.
+--
+-- FIXME:  The toDeletes are not enitrely ok yet. Fix that
 detectChanges                              :: Ord l =>
                                               FSTree l -> FSTree l -> FSTree l ->
                                               Changes (Change l) l
 detectChanges oldRemote newRemote newLocal = Changes
-    { toDownload        = leftTree    $ added   remoteStatus `notIn`  newLocal
-    , toDeleteLocal     =               deleted remoteStatus `notInS` localStatus
-    , toPatchLocal      = fromChange' $ updated remoteStatus `notInS` localStatus
+    { toDownload        = leftTree     $ added remoteStatus
+                                         `notIn`
+                                         newLocal
+                          -- we download everything that is newly added in the remote
+                          -- tree
+    , toDeleteLocal     = leftTree     $ deleted remoteStatus
+                                         `identicalIn`
+                                         unchanged localStatus
+                          -- We can only safely delete files that we have not touched
+                          -- ourselves
+    , toPatchLocal      = leftTree'    $ updated remoteStatus
+                                         `inTree`
+                                         unchanged localStatus
+                          -- Everything that has changed remotely, and we have not touched
+                          -- locally
+    , toUpload          = leftChanges  $ added localStatus
+                                         `notIn`
+                                         newRemote
+                          -- We upload everything that is new in the local tree
+                          -- and does not exist in the remote tree.
+    , toDeleteRemote    = rightChanges $ unchanged remoteStatus
+                                         `identicalIn`
+                                         deleted localStatus
+                          -- We remotely delete stuff that we have deleted. More precicely
+                          -- we only delete it, if the file that we deleted is identical
+                          -- to the one still in the remote tree.
 
-    , toUpload          = leftChanges  $ added   localStatus  `notIn`  newRemote
-    , toDeleteRemote    = rightChanges $ unchanged remoteStatus  `inTree` deleted localStatus
-    , toPatchRemote     =                updated localStatus  `notInS` remoteStatus
-
+                          -- TODO: Fix the issue with directories that did not match
+                          -- themselves, but some child matched.
+    , toPatchRemote     = rightChanges $ updated' localStatus
+                                         `inTree`
+                                         unchanged remoteStatus
+                          -- We remotely patch stuff if we changed it locally, and nobody
+                          -- else changed the file in the meantime
     , toHandleConflicts = undefined
     }
     where
@@ -131,34 +170,34 @@ detectChanges oldRemote newRemote newLocal = Changes
 
 
       -- leftChanges' = leftTree . map fromMerge id
-      leftTree'    = fromChange' . leftTree
-
-      fromChange' :: FSTree (Change l) -> FSTree l
-      fromChange' = fmap (fromJust . new)
+      leftTree'    = newFromChange . leftTree
 
 
+-- | Get a mergetree representing the items that are identical in both trees
+identicalIn     :: Eq l => FSTree l -> FSTree l -> MergeTree l l
+identicalIn l r = identical $  mergeTree l r
 
 
-
-
-
-inTree     :: Eq l => FSTree l -> FSTree l -> MergeTree l l
+-- | Get a mergetree representing the items that simply *occur* in both subtrees
+-- (but may differ)
+inTree     :: FSTree l -> FSTree r -> MergeTree l r
 inTree l r = intersection $ mergeTree l r
 
 
-
-
+-- | Get a mergetree representing everything that *does* occur in the left subtree
+-- but does *not* occur in the right subtree.
 notIn      :: FSTree l -> FSTree r -> MergeTree l r
 notIn l r = difference $ mergeTree l r
 
 
+
+
+-- | this should be identical to uncahnged (and thus we should be able to remove it)
 notInS                               :: FSTree a -> FSStatus l -> FSTree a
 notInS l (FSStatus add del chs same) = leftTree $ l'' `notIn` chs
     where
       l'   = leftTree $ l  `notIn` add
       l''  = leftTree $ l' `notIn` del
-
-
 
 
 --------------------------------------------------------------------------------
@@ -170,7 +209,7 @@ data FSChange = FSChange { oldFileIdent :: FileIdent
                          , newFileIdent :: FileIdent
                          }
 
-
+-- | convert a ChangeFileIdent to a FSChange
 fromChange              :: Change FileIdent -> FSChange
 fromChange (Change o n) = FSChange (f o) (f n)
     where
@@ -277,7 +316,7 @@ localT = FSTree $
                             , Directory "baz" 100 [ ]
                             , Directory "localbaz" 200 [ File "X" 201
                                                        ]
-                            , File "deletedInRemote" 1
+                            -- , File "deletedInRemote" 1
                             ]
 
 test = detectChanges oldT remoteT localT

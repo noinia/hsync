@@ -26,6 +26,7 @@ module HSync.Client.MergeTree( MergeTree
 
                              , difference
                              , intersection
+                             , identical
                              ) where
 
 
@@ -269,9 +270,13 @@ projectLeftWith f l r = fmap leftTree . f $ mergeTree l r
 difference :: MergeTree l r -> MergeTree l r
 difference = newInLeft
 
+-- | stuff that occurs in both subtrees
+intersection = ignoreOnlies
+
+
 -- | All nodes that occur in both subtrees and have the same label and filetype
-intersection :: Eq l => MergeTree l l -> MergeTree l l
-intersection = filterNonEmpty (uncurry (==) . gather id . rootLabel) . ignoreOnlies
+identical :: Eq l => MergeTree l l -> MergeTree l l
+identical = filterNonEmpty (uncurry (==) . gather id . rootLabel) . intersection
 
 --------------------------------------------------------------------------------
 -- | Helper functions
