@@ -28,6 +28,15 @@ data FSStatus l = FSStatus { added        :: FSTree l
                            }
                   deriving (Show,Eq)
 
+instance Functor FSStatus where
+    fmap f = tmap (fmap f) (fmap (fmap f))
+
+
+tmap                      :: (FSTree a -> FSTree b) ->
+                             (FSTree (Change a) -> FSTree (Change b)) ->
+                             FSStatus a -> FSStatus b
+tmap f g (FSStatus a d u) = FSStatus (f a) (f d) (g u)
+
 
 instance Default (FSStatus l) where
     def = FSStatus NoFiles NoFiles NoFiles
@@ -68,6 +77,9 @@ data Change l = Change { old :: Maybe l
                        }
                 deriving (Show,Read,Eq)
 
+instance Functor Change where
+    fmap f (Change o n) = Change (fmap f o) (fmap f n)
+
 
 change o n = Change (Just o) (Just n)
 
@@ -83,6 +95,14 @@ data Changes c l = Changes { toDownload        :: FSTree l
                            , toHandleConflicts :: FSTree c
                            }
              deriving (Show,Eq)
+
+-- | fmap like but with functions on FSTrees instead of the items themselves
+cmap                                 :: (FSTree a -> FSTree b) ->
+                                        (FSTree c -> FSTree d) ->
+                                        Changes c a -> Changes d b
+cmap f g (Changes d dl pl u dr pr c) = Changes (f d) (f dl) (f pl)
+                                               (g u) (g dr) (g pr)
+                                               (g c)
 
 --------------------------------------------------------------------------------
 
@@ -124,6 +144,9 @@ notInS l (FSStatus add del chs) = l'' `notIn` chs
       l'   = leftTree $ l  `notIn` add
       l''  = leftTree $ l' `notIn` del
 
+
+
+
 --------------------------------------------------------------------------------
 -- | FSChanges
 
@@ -140,18 +163,29 @@ fromChange (Change o n) = FSChange (f o) (f n)
       f = fromMaybe FI.NonExistent
 
 
--- inFStatus :: FileName ->
--- n `inFStatus` `
+-- | convert a FSTree of DateTimes to a FSTRee of FileIdents
+withFileIdents :: FSTree DateTime -> FSTree FileIdent
+withFileIdents = gmap FI.Directory FI.File
 
 
+withFileIdents' :: FSTree (Change DateTime) -> FSTree (Change FileIdent)
+withFileIdents' = gmap (fmap FI.Directory) (fmap FI.File)
+
+
+fromChanges :: Changes (Change DateTime) DateTime -> FSChanges
+fromChanges = cmap withFileIdents (fmap fromChange . withFileIdents')
+
+
+
+detectFSChanges                              :: FSTree DateTime ->
+                                                FSTree DateTime ->
+                                                FSTree DateTime ->
+                                                FSChanges
+detectFSChanges oldRemote newRemote newLocal =
+    fromChanges $ detectChanges oldRemote newRemote newLocal
 
 --------------------------------------------------------------------------------
 -- |
-
-
--- mkLocal :: MergeTree DateTime DateTime -> LocalTree
--- mkLocal = leftTree
-
 
 
 -- withFileIdents :: MergeTree DateTime DateTime -> MergeTree FileIdent FileIdent
@@ -166,9 +200,8 @@ fromChange (Change o n) = FSChange (f o) (f n)
 
 
 
--- | convert a FSTree of DateTimes to a FSTRee of FileIdents
-withFileIdents' :: FSTree' DateTime -> FSTree' FileIdent
-withFileIdents' = gmap' FI.Directory FI.File
+
+
 
 -- | Convert the label type to a `(Change l)`. The items in the right tree have
 -- *their* label set as the new label!. So which one is true the right one
