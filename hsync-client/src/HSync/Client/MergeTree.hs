@@ -61,7 +61,7 @@ data FSItemData l = Item { label'          :: l
 fromItemData                       :: FileName -> [FSTree l] -> FSItemData l -> FSTree' l
 fromItemData n []  (Item l F [])   = File n l
 fromItemData n _   (Item _ F _)    = error "fromItemData: Files cannot have children!"
-fromItemData n chs (Item l D chs') = Directory n l (map getTree chs <> chs')
+fromItemData n chs (Item l D chs') = Directory n l (map getNonEmptyTree chs <> chs')
 
 
 uniqueChildren :: Maybe (FSItemData l) -> [FSTree' l]
@@ -79,6 +79,7 @@ data Merge l r = Merge { name'         :: FileName
                        , right         :: Maybe (FSItemData r)
                        }
                  deriving (Eq,Show,Read)
+
 
 -- | Construct a merge node
 merge                             :: FileName
@@ -110,7 +111,7 @@ updateMerge f g (Merge n l r) = Merge n (fmap f l) (fmap g r)
 
 -- | A potentially empty Tree
 data GTree a = EmptyTree
-             | NonEmptyTree (Tree a)
+             | NonEmptyTree { nonEmptyTree :: Tree a }
              deriving (Show,Eq)
 
 -- | the alternative for maybe

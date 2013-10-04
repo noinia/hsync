@@ -1,5 +1,14 @@
 module HSync.Client.FSStatus( FSStatus(..)
                             , fsStatus
+
+                            , Conflict(..)
+
+                            , Changes(..)
+                            , detectChanges
+
+                            , FSChanges
+                            , FSChange
+                            , detectFSChanges
                             ) where
 
 
@@ -163,7 +172,7 @@ detectChanges oldRemote newRemote newLocal = Changes
                                          unchanged remoteStatus
                           -- We remotely patch stuff if we changed it locally, and nobody
                           -- else changed the file in the meantime
-    , toHandleConflicts = undefined
+    , toHandleConflicts = NoFiles -- FIXME implement this !!!
     }
     where
       remoteStatus = fsStatus oldRemote newRemote
@@ -288,6 +297,41 @@ mkChange                          :: FSItemData l ->
 mkChange (Item new' t chs) old' = Item (change old' new') t chs'
     where
       chs' = map (fmap (Change Nothing . Just)) chs
+
+
+--------------------------------------------------------------------------------
+
+
+data ChangeKind = Added | Deleted | Updated
+                deriving (Eq,Show)
+
+data ExtendedChange l = EChange ChangeKind (Change l)
+                      deriving (Show,Eq)
+
+data Conflict l = Conflict { local  :: ExtendedChange l
+                           , remote :: ExtendedChange l
+                           }
+                deriving (Show,Eq)
+
+
+conflict             :: ChangeKind -> ChangeKind -> Change l -> Change l -> Conflict l
+conflict lK rK lC rC = Conflict (EChange lK lC) (EChange rK rC)
+
+
+-- fromCMerge         :: ChangeKind -> ChangeKind ->
+--                       Merge (Change l) (Change l) -> Merge (Conflict l) (Conflict l)
+-- fromCMerge lK rK m =
+
+
+
+
+toConflictTree :: MergeTree l l -> FSTree (Conflict l)
+toConflictTree = undefined
+
+toConflictTree' :: MergeTree (Change l) (Change l) -> FSTree (Conflict l)
+toConflictTree' = undefined
+
+
 
 
 

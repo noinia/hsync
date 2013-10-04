@@ -21,7 +21,11 @@ import Data.Conduit
 import Data.Conduit.Binary
 
 
-import HSync.Client.Sync
+
+import HSync.Client.Sync(Sync, user, hashedPassword)
+import HSync.Client.ActionT
+import HSync.Client.FSStatus
+
 import HSync.Common.DateTime(DateTime)
 import HSync.Common.FSTree
 
@@ -84,16 +88,20 @@ remoteFileInfo    :: ( MonadResource m, MonadThrow m, MonadIO m
                      , MonadBaseControl IO m, Failure HttpException m
                      ) => FilePath -> ActionT m (FileIdent,Path)
 remoteFileInfo fp = do
-                      p  <- flip toRemotePath fp <$> getSync
-                      fi <- toFileIdent          <$> getTree p
+                      p  <- toRemotePath fp
+                      fi <- toFileIdent <$> getRemoteTree p
                       return (fi,p)
 
-getTree   :: ( MonadResource m, MonadThrow m
-             , MonadBaseControl IO m, Failure HttpException m) =>
-             Path -> ActionT m (Maybe (FSTree DateTime))
-getTree p = do
-              resp <- runGetRoute $ TreeR p
-              lift $ responseBody resp C.$$+- parseFromJSONSink
+
+-- | Runs the getTree Handler
+getRemoteTree   :: ( MonadResource m, MonadThrow m
+                   , MonadBaseControl IO m, Failure HttpException m) =>
+                   Path -> ActionT m (FSTree DateTime)
+getRemoteTree p = do
+                    resp <- runGetRoute $ TreeR p
+                    lift $ responseBody resp C.$$+- parseFromJSONSink
+
+
 
 parseFromJSONSink :: (MonadThrow m, FromJSON a) => Sink ByteString m a
 parseFromJSONSink = sinkParser jsonParser
@@ -106,26 +114,94 @@ parseFromJSONSink = sinkParser jsonParser
 
 -- | Run a getFile
 getFile   :: ( MonadResource m, Failure HttpException m
-         , MonadBaseControl IO m) => Path -> ActionT m ()
+             , MonadBaseControl IO m) => Path -> ActionT m ()
 getFile p = do
-  sync <- getSync
   resp <- runGetRoute $ FileR p
-  let fp     = toLocalPath sync p
-      status = responseStatus resp
-  when (status == ok200) $ lift (responseBody resp C.$$+- sinkFile fp)
+  lp   <- toLocalPath p
+  let status = responseStatus resp
+  when (status == ok200) $ lift (responseBody resp C.$$+- sinkFile lp)
+
+
+downloadFile :: ( MonadResource m, Failure HttpException m
+                , MonadBaseControl IO m) =>
+               (FileIdent, SubPath) -> ActionT m ()
+downloadFile (_,sp) = toRemotePath' sp >>= getFile
+
+
+-- downloadFile :: ( MonadResource m, Failure HttpException m
+--                 , MonadBaseControl IO m) =>
+--                (Change FileIdent, SubPath) -> ActionT m ()
+patchFile = undefined
 
 --------------------------------------------------------------------------------
+
+
 
 
 
 -- | Run a postPut action
 putFile    :: ( MonadResource m, Failure HttpException m
               , MonadIO m, MonadBaseControl IO m) => FilePath -> ActionT m ()
-putFile fp = do
-  (fi,p) <- remoteFileInfo fp
-  let h = PutFileR fi p
-      s = sourceFile fp
-  sync <- getSync
-  liftIO $ print $ toUrl sync h
-  resp <- runPostRoute h s
-  liftIO $ print "woei"
+putFile fp = remoteFileInfo fp >>= uncurry (putFile' fp)
+
+
+putFile'         :: ( MonadResource m, Failure HttpException m
+                    , MonadIO m, MonadBaseControl IO m) =>
+                    FilePath -> FileIdent -> Path -> ActionT m ()
+putFile' fp fi p = do
+                     let h = PutFileR fi p
+                         s = sourceFile fp
+                     sync <- getSync
+                     liftIO $ print $ toUrl sync h
+                     resp <- runPostRoute h s
+                     liftIO $ print "woei"
+
+
+uploadFile :: ( MonadResource m, Failure HttpException m
+              , MonadIO m, MonadBaseControl IO m) =>
+             (FileIdent, SubPath) -> ActionT m ()
+uploadFile (fi,sp) = do
+                       rp <- toRemotePath' sp
+                       lp <- toLocalPath'  sp
+                       putFile' lp fi rp
+
+--------------------------------------------------------------------------------
+-- | Deletes
+
+deleteFile :: MonadIO m => (FileIdent, SubPath) -> ActionT m ()
+deleteFile _ = return () -- TODO, fix this
+
+--------------------------------------------------------------------------------
+
+-- handleConflict                         :: Monad m =>
+--                                           (Conflict FileIdent,SubPath) -> ActionT m ()
+-- handleConflict ((Conflict loc rem),sp) = return () -- TODO
+
+handleConflict _ = return ()
+
+--------------------------------------------------------------------------------
+
+
+syncTree               :: ( MonadResource m, Failure HttpException m
+                          , MonadIO m, MonadBaseControl IO m) =>
+                          Path -> ActionT m ()
+syncTree p@(Path _ sp) = do
+  Just oldRemote <- subTree sp <$> remoteTree -- TODO: fix the just
+  newRemote <- getRemoteTree p
+  newLocal  <- readFSTree =<< toLocalPath p
+  handleChanges $ detectFSChanges oldRemote newRemote newLocal
+
+
+runTree   :: (Monad m, Functor m) => ((l,SubPath) -> m b) -> FSTree l -> m (FSTree b)
+runTree f = runBottomUp f . labelWithSubPaths
+
+
+handleChanges         :: ( MonadResource m, Failure HttpException m
+                         , MonadIO m, MonadBaseControl IO m) =>
+                        FSChanges -> ActionT m ()
+handleChanges changes = do
+  runTree handleConflict . toHandleConflicts $ changes
+  runTree deleteFile     . toDeleteLocal     $ changes
+  runTree downloadFile   . toDownload        $ changes
+  runTree patchFile      . toPatchLocal      $ changes
+  return ()

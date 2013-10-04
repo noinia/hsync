@@ -7,6 +7,12 @@ module HSync.Common.Conflict where
 
 
 
+
+
+
+
+
+
 -- conflicts :: FSTree l l -> FSTree l l -> FSTree l l -> FSStatus l
 -- conflicts oldRemote newLocal newRemote =
 --     where

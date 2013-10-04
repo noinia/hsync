@@ -13,7 +13,7 @@ import Data.Default(def)
 import HSync.Client.Actions
 import HSync.Client.Import
 import HSync.Client.Sync
-
+import HSync.Client.ActionT
 
 import Control.Concurrent(forkIO)
 import Control.Failure
@@ -61,7 +61,7 @@ main = withSocketsDo $ withManager $ \mgr -> do
                 loggedIn <- login
                 -- when loggedIn $ putFile "/Users/frank/tmp/synced/test_put.jpg"
                 -- when loggedIn $ getFile $ Path (user sync) ["test.jpg"]
-                t <- getTree $ Path (user sync) []
+                t <- getRemoteTree $ Path (user sync) []
                 return t
          liftIO $ print x
 
