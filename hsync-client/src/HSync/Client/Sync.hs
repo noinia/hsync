@@ -8,9 +8,10 @@ import Data.List(intercalate)
 
 import HSync.Client.Import
 
-import Network.HTTP.Conduit(Manager)
+import HSync.Common.DateTime(DateTime)
+import HSync.Common.FSTree
 
-import Yesod.Client
+import Network.HTTP.Conduit(Manager)
 
 import qualified Data.Text as T
 import qualified Data.List
@@ -19,7 +20,7 @@ import qualified Data.List
 --------------------------------------------------------------------------------
 
 type ServerAddress = Text
-type PersistentState = ()
+type PersistentState = FSTree DateTime
 type PartialPath = Text
 
 
@@ -30,7 +31,7 @@ data Sync = Sync { httpManager     :: Manager
                  , user            :: UserIdent
                  , hashedPassword  :: HashedPassword
                  , remoteBaseDir   :: PartialPath
-                 , presistentState :: PersistentState
+                 , persistentState :: PersistentState
                  , clientIdent     :: ClientIdent
                  -- Database
                  }
@@ -43,15 +44,20 @@ instance Default Sync where
                , user            = "nobody"
                , hashedPassword  = "hashed-secret"
                , remoteBaseDir   = ""
-               , presistentState = ()
+               , persistentState = NoFiles
                , clientIdent     = "client-ident"
                -- Database
                }
 
 
-toLocalPath               :: Sync -> Path -> FilePath
-toLocalPath s (Path _ ps) = intercalate "/" . (localBaseDir s :) . map T.unpack $ ps
+remoteTree :: Sync -> FSTree DateTime
+remoteTree = persistentState
 
+toLocalPath               :: Sync -> Path -> FilePath
+toLocalPath s (Path _ ps) = toLocalPath' s ps
+
+toLocalPath'   :: Sync -> SubPath -> FilePath
+toLocalPath' s = intercalate "/" . (localBaseDir s :) . map T.unpack
 
 
 -- | given a local file path, create a (remote) Path corresponding to it
@@ -62,27 +68,8 @@ toRemotePath        :: Sync -> FilePath -> Path
 toRemotePath cli fp = let n   = length . localBaseDir $ cli
                           fp' = Data.List.drop (n+1) fp
                           p   = T.split (== '/') . T.pack $ fp'
-                      in Path (user cli) p
+                      in toRemotePath' cli p
 
 
-
---------------------------------------------------------------------------------
--- | A sync is YesodClient
-
-type ActionT = YesodClientMonadT Sync
-
-
-getSync :: Monad m => ActionT m Sync
-getSync = clientInstance
-
-
-
-runActionT          :: Functor m => ActionT m a -> Sync -> m a
-runActionT act sync = evalYesodClientT act sync def
-
-
-instance IsYesodClient Sync where
-    type YesodServer Sync = HSyncServer
-    serverAppRoot = serverAddress
-    server   _    = def
-    manager       = httpManager
+toRemotePath'   :: Sync -> SubPath -> Path
+toRemotePath' s = Path (user s)
