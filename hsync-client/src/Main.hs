@@ -61,8 +61,11 @@ main = withSocketsDo $ withManager $ \mgr -> do
                 loggedIn <- login
                 -- when loggedIn $ putFile "/Users/frank/tmp/synced/test_put.jpg"
                 -- when loggedIn $ getFile $ Path (user sync) ["test.jpg"]
-                t <- getRemoteTree $ Path (user sync) []
-                return t
+                -- t <- getRemoteTree $ Path (user sync) []
+
+                syncTree $ Path (user sync) []
+
+                return ()
          liftIO $ print x
 
 --          case parseUrl urlString of
