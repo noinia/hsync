@@ -12,7 +12,7 @@ import System.IO(writeFile)
 import System.IO.Error(isDoesNotExistErrorType, ioeGetErrorType)
 import System.Posix.Files(fileSize, getFileStatus)
 
-
+import GHC.IO.Exception(IOErrorType(..))
 
 import System.Lock.FLock
 
@@ -23,8 +23,16 @@ atomicallyWriteIO fp act = catchJust doesNotExistException
     where
 
 
-atomicallyIO    :: FilePath -> IO a -> IO a
-atomicallyIO fp = withLock fp Exclusive Block
+-- | Get an lock on the file so we can work on it. If the fp points to a directory
+-- this will be a shared lock, otherwise a Exclusive lock
+atomicallyIO        :: FilePath -> IO a -> IO a
+atomicallyIO fp act = catchJust inAppropriateTypeException
+                      (withLock fp Exclusive Block act)
+                      (\_ -> withLock fp Shared Block act)
+    where
+      inAppropriateTypeException e
+          | ioeGetErrorType e == InappropriateType = Just ()
+          | otherwise                              = Nothing
 
 
 doesNotExistException  e = if isDoesNotExistErrorType (ioeGetErrorType e)
