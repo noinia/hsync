@@ -158,8 +158,9 @@ withNames :: [FSTree' l] -> M.Map FileName (FSTree' l)
 withNames = M.fromList . map (name &&& id)
 
 
-subTree    :: SubPath -> FSTree l -> Maybe (FSTree l)
-subTree sp = nonEmpty Nothing (fmap FSTree . subTree' sp)
+subTree               :: SubPath -> FSTree l -> FSTree l
+subTree _  NoFiles    = NoFiles
+subTree sp (FSTree t) = maybe NoFiles FSTree $ subTree' sp t
 
 
 -- | Given a tree and a subPath, get the filetree rooted at

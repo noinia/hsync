@@ -23,7 +23,6 @@ import qualified Data.Conduit.List as C
 import qualified Data.Text as T
 
 
-
 --------------------------------------------------------------------------------
 -- | Handles related to notifications
 
@@ -51,6 +50,7 @@ getTreeR p = protectRead p "tree" $
 
 getTreeOf   :: Path -> Handler (FSTree DateTime)
 getTreeOf p = let fp = toFilePath filesDir p in
+              liftIO (print fp) >>
               protect (liftIO . atomicallyIO fp $ isPropperFile fp)
                       (liftIO $ readFSTree fp)
                       (invalidArgs ["getTreeOf: Error?"])
