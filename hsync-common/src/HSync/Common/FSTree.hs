@@ -1,7 +1,7 @@
 {-# Language TemplateHaskell #-}
 module HSync.Common.FSTree( FSTree(..)
                           , nonEmpty
-                          , getTree
+                          , getNonEmptyTree
                           , toMaybe
 
 
@@ -84,8 +84,8 @@ nonEmpty _ f (FSTree t) = f t
 toMaybe :: FSTree l -> Maybe (FSTree' l)
 toMaybe = nonEmpty Nothing Just
 
-getTree            :: FSTree l -> FSTree' l
-getTree (FSTree t) = t
+getNonEmptyTree            :: FSTree l -> FSTree' l
+getNonEmptyTree (FSTree t) = t
 
 
 data FSTree' l = Directory FileName l [FSTree' l]
@@ -157,10 +157,15 @@ childrenWithNames' = withNames . children'
 withNames :: [FSTree' l] -> M.Map FileName (FSTree' l)
 withNames = M.fromList . map (name &&& id)
 
+
+subTree    :: SubPath -> FSTree l -> Maybe (FSTree l)
+subTree sp = nonEmpty Nothing (fmap FSTree . subTree' sp)
+
+
 -- | Given a tree and a subPath, get the filetree rooted at
 -- the node specified by the subPath
-subTree   :: FSTree' l -> SubPath-> Maybe (FSTree' l)
-subTree t = foldl (\mt n -> mt >>= findChild' n) (Just t)
+subTree'      :: SubPath -> FSTree' l -> Maybe (FSTree' l)
+subTree' sp t = foldl (\mt n -> mt >>= findChild' n) (Just t) $ sp
 
 
 -- | Given a name n and a FSTree v, get the child of v with name n (if it
@@ -231,8 +236,11 @@ sequenceBottomUp (Directory n act chs) = do
                                            return $ Directory n x chs'
 
 -- | runs all functions in the tree bottom up
-runBottomUp   :: Monad m => (l -> m a) -> FSTree' l -> m (FSTree' a)
-runBottomUp f = sequenceBottomUp . fmap f
+runBottomUp   :: (Functor m, Monad m) => (l -> m a) -> FSTree l -> m (FSTree a)
+runBottomUp f = nonEmpty (return NoFiles) (fmap FSTree . runBottomUp' f)
+
+runBottomUp'   :: Monad m => (l -> m a) -> FSTree' l -> m (FSTree' a)
+runBottomUp' f = sequenceBottomUp . fmap f
 
 --------------------------------------------------------------------------------
 

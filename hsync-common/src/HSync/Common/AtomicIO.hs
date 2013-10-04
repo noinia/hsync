@@ -4,7 +4,7 @@ import Control.Exception.Base(catchJust)
 
 
 import Control.Applicative(pure, (<$>), (<*>))
-import Control.Monad.IO.Class
+import Control.Monad.IO.Class(liftIO, MonadIO(..))
 
 import System.Directory( doesDirectoryExist)
 
