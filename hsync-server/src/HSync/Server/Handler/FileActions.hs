@@ -49,11 +49,11 @@ getTreeR   :: Path -> Handler Value
 getTreeR p = protectRead p "tree" $
                toJSON <$> getTreeOf p
 
-getTreeOf   :: Path -> Handler (Maybe (FSTree DateTime))
+getTreeOf   :: Path -> Handler (FSTree DateTime)
 getTreeOf p = let fp = toFilePath filesDir p in
               protect (liftIO . atomicallyIO fp $ isPropperFile fp)
-                      ((liftIO $ readFSTree fp) >>= return . Just)
-                      (return Nothing)
+                      (liftIO $ readFSTree fp)
+                      (invalidArgs ["getTreeOf: Error?"])
 
 --------------------------------------------------------------------------------
 -- | Handles related to file events
