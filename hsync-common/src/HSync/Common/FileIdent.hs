@@ -2,6 +2,11 @@
   #-}
 module HSync.Common.FileIdent( FileIdent(..)
                              , fileIdent
+
+                             , isDirectory
+                             , isFile
+                             , isNonExistent
+
                              , checkFileIdent
                              , ErrorDescription
 
@@ -34,6 +39,21 @@ data FileIdent = NonExistent
                | Directory DateTime
                | File      DateTime
                deriving (Show,Read,Eq)
+
+
+isDirectory               :: FileIdent -> Bool
+isDirectory (Directory _) = True
+isDirectory _             = False
+
+isFile          :: FileIdent -> Bool
+isFile (File _) = True
+isFile _        = False
+
+isNonExistent             :: FileIdent -> Bool
+isNonExistent NonExistent = True
+isNonExistent _           = False
+
+
 
 dirPrefix :: Text
 dirPrefix = "directory_"
