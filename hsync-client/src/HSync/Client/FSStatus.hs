@@ -7,7 +7,7 @@ module HSync.Client.FSStatus( FSStatus(..)
                             , detectChanges
 
                             , FSChanges
-                            , FSChange
+                            , FSChange(..)
                             , detectFSChanges
                             ) where
 

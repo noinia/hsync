@@ -62,7 +62,7 @@ import qualified Data.ByteString.Lazy.Char8 as LB
 import qualified Data.Conduit               as C
 import qualified Network.HTTP.Conduit       as HC
 import qualified Data.Text                  as T
-
+import qualified HSync.Common.FileIdent     as FI
 
 
 
@@ -143,7 +143,7 @@ patchRemote _ = return ()
 
 --------------------------------------------------------------------------------
 
-
+createRemoteDirectory fi rp = return ()
 
 
 
@@ -168,11 +168,14 @@ putFile' fp fi p = do
 uploadFile :: ( MonadResource m, Failure HttpException m
               , MonadIO m, MonadBaseControl IO m) =>
              (FSChange, SubPath) -> ActionT m ()
-uploadFile (c,sp) = let fi = remote c in
-                    do
-                       rp <- toRemotePath' sp
-                       lp <- toLocalPath'  sp
-                       putFile' lp fi rp
+uploadFile (c,sp)
+    | FI.isDirectory . newFileIdent $ c = toRemotePath' sp >>= createRemoteDirectory fi
+    | otherwise                         = do
+                                            rp <- toRemotePath' sp
+                                            lp <- toLocalPath'  sp
+                                            putFile' lp fi rp
+        where
+          fi = oldFileIdent c
 
 --------------------------------------------------------------------------------
 -- | Deletes
@@ -199,7 +202,7 @@ syncTree               :: ( MonadResource m, Failure HttpException m
                           , MonadIO m, MonadBaseControl IO m) =>
                           Path -> ActionT m ()
 syncTree p@(Path _ sp) = do
-  oldRemote <- subTree sp <$> remoteTree -- TODO: fix the just
+  oldRemote <- subTree sp <$> remoteTree
   liftIO $ print "getting remote tree"
   newRemote <- getRemoteTree p
   liftIO $ print "reading local tree"
