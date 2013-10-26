@@ -8,7 +8,7 @@
   #-}
 module Yesod.Client where
 
-import Control.Applicative -- (Applicative((<$>))
+import Control.Applicative((<$>),(<*>),Applicative(..))
 
 import Blaze.ByteString.Builder( Builder
                                , fromByteString
@@ -28,7 +28,7 @@ import Control.Monad.State( MonadState(..)
 import Control.Failure
 
 
-import Data.ByteString(ByteString)
+import Data.ByteString(ByteString, empty)
 import Data.Conduit(Source, ResumableSource,mapOutput)
 import Data.Default
 import Data.Monoid((<>))
@@ -219,7 +219,14 @@ runPostRoute r s = runRouteWith r $ \req ->
 
 
 
-
+runDeleteRoute :: ( client `IsYesodClientFor` server
+                  , MonadResource m, MonadBaseControl IO m
+                  , Failure HttpException m) =>
+                  Route server -> YesodClientMonadT client m (Response (ResumableSource m ByteString))
+runDeleteRoute r = runRouteWith r $ \req ->
+                     req { method      = methodDelete
+                         , requestBody = RequestBodyBS empty
+                         }
 
 
 class ToBuilder a where

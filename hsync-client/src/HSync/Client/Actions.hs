@@ -124,28 +124,15 @@ getFile p = do
   let status = responseStatus resp
   when (status == ok200) $ lift (responseBody resp C.$$+- sinkFile lp)
 
-
-downloadFile                 :: ( MonadResource m, Failure HttpException m
-                                , MonadBaseControl IO m) =>
-                               (FileIdent, SubPath) -> ActionT m ()
-downloadFile (fi,sp)
-             | traceShow (fi,sp) False = undefined
-             | isFile fi = toRemotePath' sp >>= getFile
-             | otherwise = return ()
-
-
--- downloadFile :: ( MonadResource m, Failure HttpException m
---                 , MonadBaseControl IO m) =>
---                (Change FileIdent, SubPath) -> ActionT m ()
-patchFile _ = return ()
-
-patchRemote _ = return ()
-
 --------------------------------------------------------------------------------
 
-createRemoteDirectory fi rp = return ()
 
-
+putDir   :: ( MonadResource m, Failure HttpException m
+            , MonadIO m, MonadBaseControl IO m) =>
+            Path -> ActionT m ()
+putDir p = runPostRoute (PutDirR NonExistent p) noData >> return ()
+    where
+      noData = sourceLbs LB.empty
 
 -- | Run a postPut action
 putFile    :: ( MonadResource m, Failure HttpException m
@@ -164,75 +151,17 @@ putFile' fp fi p = do
                      resp <- runPostRoute h s
                      liftIO $ print "woei"
 
-
-uploadFile :: ( MonadResource m, Failure HttpException m
-              , MonadIO m, MonadBaseControl IO m) =>
-             (FSChange, SubPath) -> ActionT m ()
-uploadFile (c,sp)
-    | FI.isDirectory . newFileIdent $ c = toRemotePath' sp >>= createRemoteDirectory fi
-    | otherwise                         = do
-                                            rp <- toRemotePath' sp
-                                            lp <- toLocalPath'  sp
-                                            putFile' lp fi rp
-        where
-          fi = oldFileIdent c
-
 --------------------------------------------------------------------------------
 -- | Deletes
 
-deleteFile :: MonadIO m => (FileIdent, SubPath) -> ActionT m ()
-deleteFile _ = return () -- TODO, fix this
+
+deleteFile      :: ( MonadResource m, Failure HttpException m
+                   , MonadIO m, MonadBaseControl IO m) =>
+                   FileIdent -> Path -> ActionT m ()
+deleteFile fi p = runDeleteRoute (DeleteR fi p) >> return ()
 
 
-deleteRemote _ = return ()
-
-
---------------------------------------------------------------------------------
-
--- handleConflict                         :: Monad m =>
---                                           (Conflict FileIdent,SubPath) -> ActionT m ()
--- handleConflict ((Conflict loc rem),sp) = return () -- TODO
-
-handleConflict _ = return ()
-
---------------------------------------------------------------------------------
-
-
-syncTree               :: ( MonadResource m, Failure HttpException m
-                          , MonadIO m, MonadBaseControl IO m) =>
-                          Path -> ActionT m ()
-syncTree p@(Path _ sp) = do
-  oldRemote <- subTree sp <$> remoteTree
-  liftIO $ print "getting remote tree"
-  newRemote <- getRemoteTree p
-  liftIO $ print "reading local tree"
-  newLocal  <- readFSTree =<< toLocalPath p
-  liftIO $ print "handling changes"
-  handleChanges $ detectFSChanges oldRemote newRemote newLocal
-
-
-runTree   :: (Monad m, Functor m) => ((l,SubPath) -> m b) -> FSTree l -> m (FSTree b)
-runTree f = runBottomUp f . fmap dropRootName . labelWithSubPaths
-    where
-      dropRootName (l,(_:sp)) = (l,sp)
-      -- Drop the name of the root directory from our FSTree (since in the remoteTree
-      -- this name of the user                          )
-
-
-handleChanges         :: ( MonadResource m, Failure HttpException m
-                         , MonadIO m, MonadBaseControl IO m) =>
-                        FSChanges -> ActionT m ()
-handleChanges changes = do
-  runTree handleConflict . toHandleConflicts $ changes
-  liftIO $ print "Deleting stuff"
-  runTree deleteFile     . toDeleteLocal     $ changes
-  liftIO $ print "Downloading stuff:"
-  liftIO $ print $ toDownload changes
-  runTree downloadFile   . toDownload        $ changes
-  liftIO $ print "patching stuff "
-  runTree patchFile      . toPatchLocal      $ changes
-
-  runTree deleteRemote   . toDeleteRemote    $ changes
-  runTree uploadFile     . toUpload          $ changes
-  runTree patchRemote    . toPatchRemote     $ changes
-  return ()
+deleteDir      :: ( MonadResource m, Failure HttpException m
+                   , MonadIO m, MonadBaseControl IO m) =>
+                   FileIdent -> Path -> ActionT m ()
+deleteDir = deleteFile
