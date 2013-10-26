@@ -7,6 +7,7 @@ module HSync.Common.FileIdent( FileIdent(..)
                              , isFile
                              , isNonExistent
 
+                             , protectedByFI
                              , checkFileIdent
                              , ErrorDescription
 
@@ -85,6 +86,26 @@ fileIdent fp = exists fp >>= \t -> case t of
       mT = liftIO . modificationTime
 
 type ErrorDescription = [Text]
+
+
+-- Run a handler/computation on the input, if the file idents
+-- match. Specifically: protectedByFI fi fp hName h runs the computation h, if
+-- the file ident of fp is fi. If this is not the case, an error message is
+-- generated that includes the name hName of the action/computation that we
+-- wanted to run.
+protectedByFI               :: MonadIO m => FileIdent -> FilePath -> Text -> m a ->
+                               m (Either ErrorDescription a)
+protectedByFI fi fp hName h = do
+  me <- checkFileIdent fi fp
+  case me of
+    Nothing -> h >>= return . Right
+    Just e  -> return . Left . insertHName hName $ e
+
+
+insertHName   :: Text -> [Text] -> [Text]
+insertHName n = map ((n <> ": ") <>)
+
+
 
 -- | Check the fileId. If the result is 'Nothing' then there were no errors found
 -- otherwise, we give a description of the error

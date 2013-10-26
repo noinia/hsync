@@ -22,6 +22,7 @@ library
                        HSync.Common.AtomicIO
                        HSync.Common.FSTree
                        HSync.Common.DateTime
+                       HSync.Common.Notification
 
   -- other-modules:
   build-depends:
