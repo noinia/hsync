@@ -12,6 +12,7 @@ import Control.Concurrent.STM(atomically)
 import HSync.Common.DateTime(DateTime)
 import HSync.Common.Types
 import HSync.Common.FileIdent(FileIdent)
+import HSync.Common.Notification
 
 import Data.Text(Text)
 import Data.Default

@@ -23,3 +23,5 @@
 /delete/#FileIdent/*Path          DeleteR         DELETE
 /patch/#FileIdent/*Path           PatchR          POST
 /putFile/#FileIdent/*Path         PutFileR        POST
+
+/putDir/#FileIdent/*Path          PutDirR         POST

@@ -16,7 +16,7 @@ import HSync.Common.FSTree(FSTree, readFSTree)
 
 import HSync.Server.Handler.Auth(requireRead,requireWrite)
 
-import System.Directory( removeFile )
+import System.Directory( removeFile , createDirectory )
 
 
 import qualified Data.Conduit.List as C
@@ -73,7 +73,7 @@ deleteDeleteR fi p = atomicallyWriteR p "delete" delete'
     where
       delete' ci fp = protectedByFI fi fp "delete" $ do
                         removeFile fp
-                        notification (FileRemoved p) ci
+                        notification (FileRemoved p fi) ci
 
 postPatchR                :: FileIdent -> Path -> Handler Text
 postPatchR NonExistent _ = invalidArgs ["postPatch: cannot patch a nonexistent file."]
@@ -91,7 +91,7 @@ postPutFileR fi            p = do
                            runResourceT $ s $$ sinkFile fp
                            notification (determineEvent fi p) ci
       determineEvent NonExistent = FileAdded
-      determineEvent (File _)    = FileUpdated
+      determineEvent (File _)    = flip FileUpdated fi
       determineEvent _           = error "putFile: unknown event."
 
 clientId :: Handler ClientIdent
@@ -100,6 +100,14 @@ clientId = return "clientId"
 
 --------------------------------------------------------------------------------
 -- | Handles related to directoryevents
+
+postPutDirR     :: FileIdent -> Path -> Handler Text
+postPutDirR fi p = atomicallyWriteR p "putDir" putDir'
+    where
+      putDir' ci fp = protectedByFI fi fp "" $ do
+                        liftIO $ createDirectory fp
+                        notification (DirectoryAdded p) ci
+
 
 -- TODO: Handle Directories!!!
 
@@ -113,19 +121,6 @@ serveSource s = respondSource typeOctet (s $= awaitForever sendChunkBS)
 
 serveFile   :: MonadHandler m => Path -> m a
 serveFile p = sendFile typeOctet (toFilePath filesDir p)
-
-
-protectedByFI               :: MonadIO m => FileIdent -> FilePath -> Text -> m a ->
-                               m (Either ErrorDescription a)
-protectedByFI fi fp hName h = do
-  me <- checkFileIdent fi fp
-  case me of
-    Nothing -> h >>= return . Right
-    Just e  -> return . Left . insertHName hName $ e
-
-
-insertHName   :: Text -> [Text] -> [Text]
-insertHName n = map ((n <> ": ") <>)
 
 protectRead         :: Path -> Text -> Handler a -> Handler a
 protectRead p err h = protect (requireRead p) h (permissionDenied err)
