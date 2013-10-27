@@ -104,10 +104,9 @@ protectedByFI fi fp hName h = do
     Nothing -> h >>= return . Right
     Just e  -> return . Left . insertHName hName $ e
 
-
-insertHName   :: Text -> [Text] -> [Text]
-insertHName n = map ((n <> ": ") <>)
-
+    where
+      insertHName   :: Text -> [Text] -> [Text]
+      insertHName n = map ((n <> ": ") <>)
 
 
 -- | Check the fileId. If the result is 'Nothing' then there were no errors found
