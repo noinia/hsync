@@ -23,7 +23,7 @@ import Data.Conduit.Internal(ResumableSource(..))
 
 
 
-import HSync.Client.Sync(Sync, user, hashedPassword)
+import HSync.Client.Sync(Sync, user, hashedPassword, clientIdent)
 import HSync.Client.ActionT
 
 import HSync.Common.DateTime(DateTime)
@@ -86,11 +86,26 @@ setSessionCreds = updateCookieJar
 
 --------------------------------------------------------------------------------
 
--- | run the ListenR handler and get a source of Notifications.
+-- | run the ListenR handler and get a source with all the
+-- notifications. Filter out the ones that I triggered myself.
 changes     :: ( MonadResource m, MonadThrow m
                , MonadBaseControl IO m, Failure HttpException m) =>
                DateTime -> Path -> ActionT m (ResumableSource m Notification)
 changes dt p = do
+                 myCi <- clientIdent <$> getSync
+                 filterChanges myCi <$> changes' dt p
+
+    where
+      isMyAction    myCi (Notification _ ci _) = ci == myCi
+      filterChanges myCi (ResumableSource s final) =
+          ResumableSource (s $= CL.filter (isMyAction myCi)) final
+
+
+-- | run the ListenR handler and get a source of Notifications.
+changes'     :: ( MonadResource m, MonadThrow m
+                , MonadBaseControl IO m, Failure HttpException m) =>
+                DateTime -> Path -> ActionT m (ResumableSource m Notification)
+changes' dt p = do
                  resp <- runGetRoute $ ListenR dt p
                  return . toJSONSource . responseBody $ resp
     where
