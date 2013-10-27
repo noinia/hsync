@@ -1,5 +1,5 @@
-{-# Language  OverloadedStrings
-  #-}
+{-# LANGUAGE TemplateHaskell    #-}
+{-# Language  OverloadedStrings #-}
 module HSync.Common.Notification(-- Events
                                   EventKind(..)
                                 , affectedPaths
@@ -10,6 +10,8 @@ module HSync.Common.Notification(-- Events
                                 ) where
 
 import Data.ByteString(ByteString)
+
+import Data.Aeson.TH
 
 import Data.List(intercalate)
 
@@ -31,6 +33,8 @@ data EventKind = FileAdded        Path
                | DirectoryMoved   Path Path
                deriving (Show,Read,Eq)
 
+$(deriveJSON id ''EventKind)
+
 affectedPaths                        :: EventKind -> [Path]
 affectedPaths (FileAdded p)          = [p]
 affectedPaths (FileRemoved p _)      = [p]
@@ -42,6 +46,13 @@ affectedPaths (DirectoryUpdated p)   = [p]
 affectedPaths (DirectoryMoved f t)   = [f,t]
 
 
+affectedFileIdent (FileRemoved _ fi)      = Just fi
+affectedFileIdent (FileUpdated _ fi)      = Just fi
+affectedFileIdent (FileMoved _ fi _)      = Just fi
+affectedFileIdent (DirectoryRemoved _ fi) = Just fi
+affectedFileIdent _                       = Nothing
+
+
 data Notification = Notification { event     :: EventKind
                                  , changee   :: ClientIdent
                                  , timestamp :: DateTime
@@ -51,6 +62,8 @@ data Notification = Notification { event     :: EventKind
 
 instance Show Notification where
     show (Notification evt ci ti) = intercalate ":" $ [show ti, show ci, show evt]
+
+$(deriveJSON id ''Notification)
 
 toLog :: Notification -> String
 toLog = show

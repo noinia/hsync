@@ -1,5 +1,5 @@
-{-# Language  OverloadedStrings
-  #-}
+{-# LANGUAGE TemplateHaskell    #-}
+{-# Language  OverloadedStrings #-}
 module HSync.Common.FileIdent( FileIdent(..)
                              , fileIdent
 
@@ -15,6 +15,7 @@ module HSync.Common.FileIdent( FileIdent(..)
                              ) where
 
 
+import Data.Aeson.TH
 
 import Control.Applicative((<$>),(<*>))
 import Data.Monoid
@@ -40,6 +41,8 @@ data FileIdent = NonExistent
                | Directory DateTime
                | File      DateTime
                deriving (Show,Read,Eq)
+
+$(deriveJSON id ''FileIdent)
 
 
 isDirectory               :: FileIdent -> Bool

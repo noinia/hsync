@@ -1,5 +1,5 @@
-{-# Language  OverloadedStrings
-  #-}
+{-# LANGUAGE TemplateHaskell    #-}
+{-# Language  OverloadedStrings #-}
 module HSync.Common.Types( UserIdent
                          , Password
                          , HashedPassword
@@ -17,6 +17,8 @@ module HSync.Common.Types( UserIdent
 
 
 import Prelude
+
+import Data.Aeson.TH
 
 import Data.Text(Text)
 import Yesod.Core
@@ -50,6 +52,8 @@ data Path = Path { owner   :: UserIdent
                  , subPath :: SubPath
                  }
             deriving (Show,Read,Eq,Ord)
+
+$(deriveJSON id ''Path)
 
 instance PathMultiPiece Path where
     toPathMultiPiece (Path u ps) = u : ps -- map T.pack ps
