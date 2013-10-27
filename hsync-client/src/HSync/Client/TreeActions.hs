@@ -1,8 +1,32 @@
+{-# Language  FlexibleContexts #-}
+{-# Language  OverloadedStrings #-}
 module HSync.Client.TreeActions where
 
+import Prelude
+
+import Control.Failure
+
+import Control.Monad.IO.Class (liftIO)
+
+import Data.Either
+
+import HSync.Client.FSStatus
+
+import HSync.Client.ActionT
+import HSync.Client.Actions
+import HSync.Client.Import
+
+import HSync.Common.AtomicIO
+import HSync.Common.FSTree
+
+import Network.HTTP.Conduit( HttpException(..) )
+
+import System.Directory(removeFile , createDirectory )
+
+import qualified HSync.Common.FileIdent     as FI
 
 
-
+--------------------------------------------------------------------------------
 
 syncTree               :: ( MonadResource m, Failure HttpException m
                           , MonadIO m, MonadBaseControl IO m) =>
@@ -31,7 +55,7 @@ handleChanges         :: ( MonadResource m, Failure HttpException m
 handleChanges changes = do
   runTree handleConflict . toHandleConflicts $ changes
   liftIO $ print "Deleting stuff"
-  runTree deleteFile     . toDeleteLocal     $ changes
+  runTree deleteLocalFile' . toDeleteLocal    $ changes
   liftIO $ print "Downloading stuff:"
   liftIO $ print $ toDownload changes
   runTree downloadFile   . toDownload        $ changes
@@ -48,10 +72,12 @@ handleChanges changes = do
 
 downloadFile                 :: ( MonadResource m, Failure HttpException m
                                 , MonadBaseControl IO m) =>
-                               FileIdent -> Path -> ActionT m ()
+                               (FileIdent,SubPath) -> ActionT m ()
 downloadFile (fi,sp)
              | isFile fi = toRemotePath' sp >>= getFile
              | otherwise = return ()
+
+
 
 
 
@@ -91,8 +117,38 @@ handleConflict _ = return ()
 --------------------------------------------------------------------------------
 
 
-deleteFile :: MonadIO m => Path -> ActionT m ()
-deleteFile _ = return () -- TODO, fix this
+deleteLocalFile      :: (Functor m, MonadIO m) => FileIdent -> Path -> ActionT m ()
+deleteLocalFile fi p = atomicallyWrite p $
+                       \fp -> protectedByFI fi fp "deleteLocalFile" (removeFile fp)
+
+deleteLocalFile'         :: (Functor m, MonadIO m) => (FileIdent, SubPath) -> ActionT m ()
+deleteLocalFile' (fi,sp) = toRemotePath' sp >>= deleteLocalFile fi
+
+
+createLocalDirectory   :: (Functor m, MonadIO m) => Path -> ActionT m ()
+createLocalDirectory p = toLocalPath p >>= liftIO . createDirectory
+
+
+
 
 
 deleteRemote _ = return ()
+
+
+atomicallyWrite    :: (Functor m, MonadIO m) =>
+                           Path -> (FilePath -> IO (Either ErrorDescription a))
+                                -> ActionT m ()
+atomicallyWrite p h = do
+                        fp <- toLocalPath p
+                        mn <- liftIO $ atomicallyWriteIO fp (h fp)
+                        case mn of
+                          Left err -> liftIO $ print err
+                          Right _  -> return ()
+
+
+-- redownloadFile      :: ( MonadResource m, Failure HttpException m
+--                        , MonadBaseControl IO m) FileIdent -> Path -> ActionT m ()
+-- redownloadFile fi p = atomicallyWrite p $ do
+--                         \fp -> protectedByFI fi fp "redownloadFile" redownload'
+--     where
+--       redownload' = return ()
