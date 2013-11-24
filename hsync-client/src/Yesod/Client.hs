@@ -181,7 +181,9 @@ toReq r = do
   cli <- clientInstance
   mcj <- cookieJar
   req <- parseUrl . toUrl cli $ r
-  return $ req { HC.cookieJar = mcj }
+  return $ req { HC.cookieJar       = mcj
+               , HC.responseTimeout = Nothing
+               }
 
 
 runRouteWith   :: ( client `IsYesodClientFor` server
