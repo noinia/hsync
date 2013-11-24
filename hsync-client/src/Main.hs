@@ -9,8 +9,10 @@ import Creds
 
 import Data.Default(def)
 
+import Data.List
 
 import HSync.Client.Actions
+import HSync.Client.TreeActions
 import HSync.Client.Import
 import HSync.Client.Sync
 import HSync.Client.ActionT
@@ -30,6 +32,7 @@ import Network.HTTP.Conduit( withManager )
 
 import Network
 
+import System.Directory (getDirectoryContents)
 import System.Environment (getArgs)
 
 --------------------------------------------------------------------------------
@@ -47,12 +50,23 @@ data HSyncClient = HSyncClient { globalSettings :: GlobalSettings
 
 --------------------------------------------------------------------------------
 
+listenMain sync = printChanges $ Path (user sync) []
 
-
+putMain sync = do
+  fs' <- liftIO $ getDirectoryContents "/Users/frank/tmp/synced/tls"
+  let fs = map ("/Users/frank/tmp/synced/tls/" ++) . filter (not . isPrefixOf ".") $ fs'
+  liftIO $ mapM_ print fs
+  mapM_ putFile fs
 
 
 main :: IO ()
-main = withSocketsDo $ withManager $ \mgr -> do
+main = getArgs >>= \args -> mainWith $ case args of
+  "listen" : _ -> listenMain
+  "put"    : _ -> putMain
+
+
+
+mainWith act = withSocketsDo $ withManager $ \mgr -> do
          let sync = def { httpManager    = mgr
                         , user           = myUser
                         , hashedPassword = myHashedPass
@@ -62,8 +76,8 @@ main = withSocketsDo $ withManager $ \mgr -> do
                 -- when loggedIn $ putFile "/Users/frank/tmp/synced/test_put.jpg"
                 -- when loggedIn $ getFile $ Path (user sync) ["test.jpg"]
                 -- t <- getRemoteTree $ Path (user sync) []
-
-                syncTree $ Path (user sync) []
+                act sync
+--                syncTree $ Path (user sync) []
 
                 return ()
          liftIO $ print x
