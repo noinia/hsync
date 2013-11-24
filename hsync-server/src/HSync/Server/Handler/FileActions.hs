@@ -37,8 +37,9 @@ getListenNowR   :: Path -> Handler TypedContent
 getListenNowR p = protectRead p "listen" $ do
                    evtSource <- notifications
                    respondSource typePlain
-                                 (evtSource $= C.map show $= awaitForever sendChunk)
-
+                                 (evtSource $= C.map encode $= awaitForever sendChunk')
+    where
+      sendChunk' x = sendChunk x >> sendFlush
 
 --------------------------------------------------------------------------------
 -- | Handles related to listing files/trees
