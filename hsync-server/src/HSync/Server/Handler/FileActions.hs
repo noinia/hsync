@@ -12,7 +12,7 @@ import Data.ByteString(ByteString)
 
 import Network.Wai(requestBody)
 
-import HSync.Common.FSTree(FSTree, readFSTree)
+import HSync.Common.FSTree(FSTree(NoFiles), readFSTree)
 
 import HSync.Server.Handler.Auth(requireRead,requireWrite)
 
@@ -26,10 +26,10 @@ import qualified Data.Text as T
 --------------------------------------------------------------------------------
 -- | Handles related to notifications
 
-getListenR      :: DateTime -> Path -> Handler Text
-getListenR dt p = undefined
-                  -- TODO: merge this one with the one below, since they are
-                  -- essencially the same
+getListenR      :: DateTime -> Path -> Handler TypedContent
+getListenR dt p = getListenNowR p
+                  -- TODO:Fix this one, and merge it with the one with the one
+                  -- below, since they are essencially the same
 
 
 -- TODO: Filter the source so we only send the notifications matching pat h
@@ -50,10 +50,9 @@ getTreeR p = protectRead p "tree" $
 
 getTreeOf   :: Path -> Handler (FSTree DateTime)
 getTreeOf p = let fp = toFilePath filesDir p in
-              liftIO (print fp) >>
-              protect (liftIO . atomicallyIO fp $ isPropperFile fp)
-                      (liftIO $ readFSTree fp)
-                      (invalidArgs ["getTreeOf: Error?"])
+              liftIO $ protect (isPropperFile fp)
+                               (readFSTree fp) -- TODO: Should I create a lock here?
+                               (return NoFiles)
 
 --------------------------------------------------------------------------------
 -- | Handles related to file events
@@ -130,6 +129,7 @@ protectWrite p err h = protect (requireWrite p) h (permissionDenied err)
 
 type FINotification = Either ErrorDescription Notification
 
+-- TODO: Use the hName somewhere
 atomicallyWriteR              :: Path -> Text ->
                                  (ClientIdent -> FilePath -> IO FINotification) ->
                                      Handler Text
@@ -142,6 +142,7 @@ atomicallyWriteR p hName h = protectWrite p hName h'
              case mn of
                Left err -> invalidArgs err
                Right n  -> logNotification n >> return "OK"
+
 
 
 notification        :: EventKind -> ClientIdent -> IO Notification
