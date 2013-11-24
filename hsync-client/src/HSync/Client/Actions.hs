@@ -56,6 +56,8 @@ import System.Directory( removeFile )
 import Yesod.Client
 
 
+import qualified Data.ByteString.Char8 as B
+
 import qualified Data.Attoparsec.Types      as AP
 import qualified Data.ByteString.Lazy.Char8 as LB
 import qualified Data.Conduit               as C
@@ -117,6 +119,16 @@ changes' dt p = do
 jsonConduit :: (MonadThrow m, FromJSON a) => Conduit ByteString m a
 jsonConduit = conduitParser jsonParser C.=$= CL.map snd
 
+
+-- -- | Simply output the list of changes
+printChanges     :: ( MonadResource m, MonadThrow m
+                , MonadBaseControl IO m, Failure HttpException m) =>
+                Path -> ActionT m ()
+printChanges p = do
+  now <- liftIO $ currentTime
+  cs  <- changes' now p
+  lift $ cs C.$$+- CL.map (B.pack . show) =$ sinkFile "/tmp/notifications"
+
 --------------------------------------------------------------------------------
 
 -- | Get the fileident and the path for the file with local path fp
@@ -126,6 +138,8 @@ remoteFileInfo    :: ( MonadResource m, MonadThrow m, MonadIO m
 remoteFileInfo fp = do
                       p  <- toRemotePath fp
                       fi <- toFileIdent <$> getRemoteTree p
+                      liftIO $ print (p,fi)
+
                       return (fi,p)
 
 -- | Runs the getTree Handler: get the FSTree representing the Filestystem at p
@@ -177,7 +191,8 @@ putDir p = runPostRoute (PutDirR NonExistent p) noData >> return ()
     where
       noData = sourceLbs LB.empty
 
--- | Run a postPut action: i.e. upload the file at fp onto the server
+-- | Run a postPut action: i.e. upload the file at fp onto the server. We
+-- assume that fp is a global path to the file!
 putFile    :: ( MonadResource m, Failure HttpException m
               , MonadIO m, MonadBaseControl IO m) => FilePath -> ActionT m ()
 putFile fp = remoteFileInfo fp >>= uncurry (putFile' fp)
@@ -190,6 +205,7 @@ putFile' fp fi p = do
                      let h = PutFileR fi p
                          s = sourceFile fp
                      sync <- getSync
+                     liftIO $ print (fp,fi,p)
                      liftIO $ print $ toUrl sync h
                      resp <- runPostRoute h s
                      liftIO $ print "woei"
@@ -207,7 +223,7 @@ deleteFile fi p = runDeleteRoute (DeleteR fi p) >> return ()
 
 
 -- runs the delete handler to delete the directory with path p (and FileIdent fi)
-deleteDir      :: ( MonadResource m, Failure HttpException m
-                   , MonadIO m, MonadBaseControl IO m) =>
-                   FileIdent -> Path -> ActionT m ()
+deleteDir :: ( MonadResource m, Failure HttpException m
+             , MonadIO m, MonadBaseControl IO m) =>
+             FileIdent -> Path -> ActionT m ()
 deleteDir = deleteFile
