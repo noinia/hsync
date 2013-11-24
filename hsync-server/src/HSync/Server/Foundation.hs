@@ -227,6 +227,7 @@ notifications' = fmap chanToSource . dupChan . notificationChan
 logNotification   :: Notification -> Handler ()
 logNotification n = do
                     c <- notificationChan <$> getYesod
+                    liftIO . print $ "logging notification: " ++ show n
                     lift $ atomically (writeTChan c n)
 
 

@@ -112,7 +112,19 @@ changes' dt p = do
                  return . toJSONSource . responseBody $ resp
     where
       toJSONSource (ResumableSource s final) =
-          ResumableSource (s $= jsonConduit) final
+          ResumableSource (CL.mapM_ (liftIO . print) $= s $= jsonConduit) final
+
+-- changes''     :: ( MonadResource m, MonadThrow m
+--                 , MonadBaseControl IO m, Failure HttpException m) =>
+--                 DateTime -> Path -> ActionT m ()
+-- changes'' dt p = do
+--                    resp <- runGetRoute $ ListenR dt p
+--                    lift (responseBody resp C.$$+- sinkLbs
+
+--                          sinkFile "/tmp/changes")
+
+                   -- lift $ responseBody resp C.$$+- CL.mapM_ (liftIO . show) $= sinkFile "/tmp/changes"
+
 
 -- | Transform the incoming bytestring stream representing a's in the form of
 -- JSON into actual a's
@@ -127,7 +139,11 @@ printChanges     :: ( MonadResource m, MonadThrow m
 printChanges p = do
   now <- liftIO $ currentTime
   cs  <- changes' now p
-  lift $ cs C.$$+- CL.map (B.pack . show) =$ sinkFile "/tmp/notifications"
+  lift $ cs C.$$+- printItem =$ CL.map (B.pack . show) =$ sinkFile "/tmp/notifications"
+  where
+    printItem = awaitForever $ \x -> liftIO (print x) >> yield x
+
+
 
 --------------------------------------------------------------------------------
 
