@@ -98,9 +98,7 @@ startNotificationLogger     :: HSyncServer -> IO ThreadId
 startNotificationLogger hss = forkIO start
     where
       start :: IO ()
-      start = do
-                ns <- notifications' hss
-                runResourceT $ logNotificationsToFile dir ns
+      start = runResourceT $ notifications' hss >>= logNotificationsToFile dir
       dir   = extraNotificationLogDir . appExtra . settings $ hss
 
 

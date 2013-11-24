@@ -218,7 +218,7 @@ getExtra = fmap (appExtra . settings) getYesod
 notifications :: Handler (Source Handler Notification)
 notifications = getYesod >>= notifications'
 
--- notifications' :: (Functor m, MonadIO m) => HSyncServer -> m (Source m Notification)
+notifications' :: (Functor m, MonadIO m) => HSyncServer -> m (Source m Notification)
 notifications' = fmap chanToSource . dupChan . notificationChan
   where
     dupChan c = liftIO $ atomically (dupTChan c)
