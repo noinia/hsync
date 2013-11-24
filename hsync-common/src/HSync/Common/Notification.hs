@@ -57,16 +57,12 @@ data Notification = Notification { event     :: EventKind
                                  , changee   :: ClientIdent
                                  , timestamp :: DateTime
                                  }
-                  deriving (Read,Eq)
-
-
-instance Show Notification where
-    show (Notification evt ci ti) = intercalate ":" $ [show ti, show ci, show evt]
+                  deriving (Read,Eq,Show)
 
 $(deriveJSON id ''Notification)
 
-toLog :: Notification -> String
-toLog = show
+toLog                          :: Notification -> String
+toLog (Notification evt ci ti) = intercalate ":" $ [show ti, show ci, show evt]
 
 fromLog :: ByteString -> Maybe Notification
 fromLog = const Nothing --TODO: Implement this
