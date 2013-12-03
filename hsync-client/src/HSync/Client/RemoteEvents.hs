@@ -1,13 +1,18 @@
 {-# Language  FlexibleContexts #-}
 module HSync.Client.RemoteEvents where
 
+import Control.Concurrent(forkIO)
 import Control.Failure
+
+
+import Data.Conduit
 
 import HSync.Client.Import
 
 
 import HSync.Client.ActionT
 import HSync.Client.Actions
+import HSync.Client.Sync
 
 -- import HSync.Common.Types
 import HSync.Common.DateTime(DateTime)
@@ -18,11 +23,8 @@ import Network.HTTP.Conduit( HttpException(..) )
 
 
 
-
-
-
-
-
+--------------------------------------------------------------------------------
+-- | Handle Notifications
 
 handleNotification                        :: ( MonadResource m, Failure HttpException m
                                              , MonadBaseControl IO m) =>
@@ -47,6 +49,8 @@ handleEvent (DirectoryUpdated p)    = return () -- TODO: not sure what to do her
 handleEvent (DirectoryMoved f t)    = error "handleEvent: moveDir not implemented yet"
 
 
+--------------------------------------------------------------------------------
+-- | Conflict Checking
 
 noConflict e t = return True --TODO
 
@@ -58,7 +62,24 @@ conflictsLocal p mfi t = return False -- TODO!!
 
 
 
-
-
+--------------------------------------------------------------------------------
+-- | Conflict Handling
 
 handleIncomingConflict _ = return ()
+
+--------------------------------------------------------------------------------
+-- | Syncing
+
+syncDownstream     :: ( MonadResource m, Failure HttpException m
+                      , MonadBaseControl IO m) =>
+                      DateTime -> Path -> ActionT m ()
+syncDownstream dt p = do
+                        sync <- getSync
+                        chs  <- changes dt p
+                        lift $ chs $$+- notificationSink sync
+
+notificationSink      :: MonadIO m => Sync -> Sink Notification m ()
+notificationSink sync = awaitForever handleNotification'
+  where
+    handleNotification' n = liftIO . forkIO $ runResourceT $
+                              runActionT (handleNotification n) sync
