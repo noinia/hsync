@@ -70,6 +70,10 @@ handleIncomingConflict _ = return ()
 --------------------------------------------------------------------------------
 -- | Syncing
 
+-- | Start syncing the files in path p. To do this, get all notifications
+-- starting at dt. For each notification that we receive (and will receive in
+-- the future), we fork a thread and run a handler that updates our local file
+-- system.
 syncDownstream     :: ( MonadResource m, Failure HttpException m
                       , MonadBaseControl IO m) =>
                       DateTime -> Path -> ActionT m ()
@@ -78,6 +82,8 @@ syncDownstream dt p = do
                         chs  <- changes dt p
                         lift $ chs $$+- notificationSink sync
 
+-- | A sink that, for each incoming notification, forks a new thread, and in
+-- this thread runs an action to handle the incoming notification.
 notificationSink      :: MonadIO m => Sync -> Sink Notification m ()
 notificationSink sync = awaitForever handleNotification'
   where
