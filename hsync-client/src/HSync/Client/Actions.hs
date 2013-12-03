@@ -64,6 +64,7 @@ import qualified Data.Conduit               as C
 import qualified Data.Conduit.List          as CL
 import qualified Data.Text                  as T
 
+import qualified HSync.Common.FileIdent     as FI
 
 import Debug.Trace
 
@@ -113,17 +114,6 @@ changes' dt p = do
     where
       toJSONSource (ResumableSource s final) =
           ResumableSource (CL.mapM_ (liftIO . print) $= s $= jsonConduit) final
-
--- changes''     :: ( MonadResource m, MonadThrow m
---                 , MonadBaseControl IO m, Failure HttpException m) =>
---                 DateTime -> Path -> ActionT m ()
--- changes'' dt p = do
---                    resp <- runGetRoute $ ListenR dt p
---                    lift (responseBody resp C.$$+- sinkLbs
-
---                          sinkFile "/tmp/changes")
-
-                   -- lift $ responseBody resp C.$$+- CL.mapM_ (liftIO . show) $= sinkFile "/tmp/changes"
 
 
 -- | Transform the incoming bytestring stream representing a's in the form of
@@ -225,6 +215,15 @@ putFile' fp fi p = do
                      liftIO $ print $ toUrl sync h
                      resp <- runPostRoute h s
                      liftIO $ print "woei"
+
+
+putFileOrDir :: ( MonadResource m, Failure HttpException m
+                , MonadIO m, MonadBaseControl IO m) =>
+                FilePath -> ActionT m ()
+putFileOrDir fp = fileIdent fp >>= \fi -> case fi of
+                    FI.NonExistent -> error "putFileOrDir: nonexistent file"
+                    FI.Directory _ -> toRemotePath fp >>= putDir
+                    FI.File      _ -> toRemotePath fp >>= putFile' fp fi
 
 --------------------------------------------------------------------------------
 -- | Deletes
