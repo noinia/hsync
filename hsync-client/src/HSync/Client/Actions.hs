@@ -51,7 +51,8 @@ import Network.HTTP.Types
 import Network.Wai(requestBody)
 
 
-import System.Directory( removeFile )
+import System.Directory( createDirectory
+                       , removeFile , removeDirectoryRecursive )
 
 import Yesod.Client
 
@@ -123,9 +124,9 @@ jsonConduit = conduitParser jsonParser C.=$= CL.map snd
 
 
 -- -- | Simply output the list of changes
-printChanges     :: ( MonadResource m, MonadThrow m
-                , MonadBaseControl IO m, Failure HttpException m) =>
-                Path -> ActionT m ()
+printChanges   :: ( MonadResource m, MonadThrow m
+                  , MonadBaseControl IO m, Failure HttpException m) =>
+                  Path -> ActionT m ()
 printChanges p = do
   now <- liftIO $ currentTime
   cs  <- changes' now p
@@ -139,8 +140,8 @@ printChanges p = do
 
 -- | Get the fileident and the path for the file with local path fp
 remoteFileInfo    :: ( MonadResource m, MonadThrow m, MonadIO m
-                     , MonadBaseControl IO m, Failure HttpException m
-                     ) => FilePath -> ActionT m (FileIdent,Path)
+                     , MonadBaseControl IO m, Failure HttpException m) =>
+                     FilePath -> ActionT m (FileIdent,Path)
 remoteFileInfo fp = do
                       p  <- toRemotePath fp
                       fi <- toFileIdent <$> getRemoteTree p
@@ -174,14 +175,16 @@ jsonParser = json >>= \v -> case fromJSON v of
 -- | Run a getFile handler to download the file with path p. The file is stored
 -- at the `default' local path corresponding to p.
 getFile   :: ( MonadResource m, Failure HttpException m
-             , MonadBaseControl IO m) => Path -> ActionT m ()
+             , MonadBaseControl IO m) =>
+             Path -> ActionT m ()
 getFile p = toLocalPath p >>= getFile' p
 
 
 -- | run the getFile handler to download the file with path p. The contents of
 -- that file are written to the (local) file with path lp
 getFile'      :: ( MonadResource m, Failure HttpException m
-                 , MonadBaseControl IO m) => Path -> FilePath -> ActionT m ()
+                 , MonadBaseControl IO m) =>
+                 Path -> FilePath -> ActionT m ()
 getFile' p lp = do
   resp <- runGetRoute $ FileR p
   let status = responseStatus resp
@@ -225,6 +228,17 @@ putFileOrDir fp = fileIdent fp >>= \fi -> case fi of
                     FI.Directory _ -> toRemotePath fp >>= putDir
                     FI.File      _ -> toRemotePath fp >>= putFile' fp fi
 
+
+--------------------------------------------------------------------------------
+-- | Updates
+
+getUpdate      :: ( MonadResource m, Failure HttpException m
+                  , MonadBaseControl IO m) =>
+                  Path -> FileIdent -> ActionT m ()
+getUpdate p fi = getFile p
+
+
+
 --------------------------------------------------------------------------------
 -- | Deletes
 
@@ -242,3 +256,23 @@ deleteDir :: ( MonadResource m, Failure HttpException m
              , MonadIO m, MonadBaseControl IO m) =>
              FileIdent -> Path -> ActionT m ()
 deleteDir = deleteFile
+
+
+
+
+--------------------------------------------------------------------------------
+-- | Local actions
+
+deleteFileLocally               :: (MonadIO m, Functor m) =>
+                                   Path -> FileIdent -> ActionT m ()
+deleteFileLocally _ NonExistent = error "deleteFileLocally: non existent file"
+deleteFileLocally p fi          = toLocalPath p >>= liftIO . f
+  where
+    f = if FI.isDirectory fi then removeFile
+                             else removeDirectoryRecursive
+
+
+
+createDirectoryLocally   :: (MonadIO m, Functor m) =>
+                            Path -> ActionT m ()
+createDirectoryLocally p = toLocalPath p >>= liftIO . createDirectory
