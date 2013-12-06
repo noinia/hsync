@@ -1,7 +1,10 @@
+{-# LANGUAGE FlexibleContexts #-}
 module HSync.Common.AtomicIO where
 
-import Control.Exception.Base(catchJust)
 
+import Control.Exception.Lifted(catchJust)
+
+import Control.Monad.Trans.Control
 
 import Control.Applicative(pure, (<$>), (<*>))
 import Control.Monad.IO.Class(liftIO, MonadIO(..))
@@ -17,26 +20,41 @@ import GHC.IO.Exception(IOErrorType(..))
 import System.Lock.FLock
 
 
+-- | Gets an exclusive write lock on fp, and runs act. If the file d oes not exist
+-- this action creates an empty file, and then runs the action.
+atomicallyWriteIO        :: (MonadIO m, MonadBaseControl IO m) => FilePath -> m a -> m a
 atomicallyWriteIO fp act = catchJust doesNotExistException
                            (atomicallyIO fp act)
-                           (\_ -> writeFile fp "" >> atomicallyWriteIO fp act)
-    where
+                           (\_ -> liftIO (writeFile fp "") >> atomicallyWriteIO fp act)
+
+
+
+doesNotExistException    :: IOError -> Maybe ()
+doesNotExistException  e = if isDoesNotExistErrorType (ioeGetErrorType e)
+                           then Just () else Nothing
 
 
 -- | Get an lock on the file so we can work on it. If the fp points to a directory
 -- this will be a shared lock, otherwise a Exclusive lock
-atomicallyIO        :: FilePath -> IO a -> IO a
-atomicallyIO fp act = catchJust inAppropriateTypeException
-                      (withLock fp Exclusive Block act)
-                      (\_ -> withLock fp Shared Block act)
-    where
-      inAppropriateTypeException e
-          | ioeGetErrorType e == InappropriateType = Just ()
-          | otherwise                              = Nothing
+-- atomicallyIO          :: MonadIO m => FilePath -> IO a -> m a
+-- atomicallyIO fp act = liftIO $ catchJust inAppropriateTypeException
+--                       (withLock fp Exclusive Block act)
+--                       (\_ -> withLock fp Shared Block act)
+--     where
+--       inAppropriateTypeException e
+--           | ioeGetErrorType e == InappropriateType = Just ()
+--           | otherwise                              = Nothing
 
 
-doesNotExistException  e = if isDoesNotExistErrorType (ioeGetErrorType e)
-                           then Just () else Nothing
+-- | Get an (exclusive) lock on the file, and run act. If the file path pointed
+-- to does not exist, this throws an exception.
+atomicallyIO    :: (MonadIO m, MonadBaseControl IO m) => FilePath -> m a -> m a
+atomicallyIO fp = withLock fp Exclusive Block
+
+
+
+
+
 
 
 -- | Checks if the file exists and has filezize > 0B. We cannot just use
