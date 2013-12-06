@@ -3,6 +3,7 @@
 module HSync.Common.Notification(-- Events
                                   EventKind(..)
                                 , affectedPaths
+                                , affectedFromPath
                                 -- Notifications
                                 , Notification(..)
                                 , toLog
@@ -44,6 +45,11 @@ affectedPaths (DirectoryAdded p)     = [p]
 affectedPaths (DirectoryRemoved p _) = [p]
 affectedPaths (DirectoryUpdated p)   = [p]
 affectedPaths (DirectoryMoved f t)   = [f,t]
+
+
+affectedFromPath :: EventKind -> Path
+affectedFromPath = head . affectedPaths
+
 
 
 affectedFileIdent (FileRemoved _ fi)      = Just fi
