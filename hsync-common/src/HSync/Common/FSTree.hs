@@ -116,8 +116,8 @@ instance Foldable FSTree' where
     foldMap f (Directory _ l chs) = f l <> foldMap (foldMap f) chs
     foldMap f (File      _ l)     = f l
 
-$(deriveJSON id ''FSTree')
-$(deriveJSON id ''FSTree)
+$(deriveJSON defaultOptions ''FSTree')
+$(deriveJSON defaultOptions ''FSTree)
 
 name                   :: FSTree' l -> FileName
 name (Directory n _ _) = n

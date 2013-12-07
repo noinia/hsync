@@ -53,7 +53,7 @@ data Path = Path { owner   :: UserIdent
                  }
             deriving (Show,Read,Eq,Ord)
 
-$(deriveJSON id ''Path)
+$(deriveJSON defaultOptions ''Path)
 
 instance PathMultiPiece Path where
     toPathMultiPiece (Path u ps) = u : ps -- map T.pack ps

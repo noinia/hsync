@@ -42,7 +42,7 @@ data FileIdent = NonExistent
                | File      DateTime
                deriving (Show,Read,Eq)
 
-$(deriveJSON id ''FileIdent)
+$(deriveJSON defaultOptions ''FileIdent)
 
 
 isDirectory               :: FileIdent -> Bool

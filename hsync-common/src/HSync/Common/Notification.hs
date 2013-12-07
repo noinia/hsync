@@ -34,7 +34,7 @@ data EventKind = FileAdded        Path
                | DirectoryMoved   Path Path
                deriving (Show,Read,Eq)
 
-$(deriveJSON id ''EventKind)
+$(deriveJSON defaultOptions ''EventKind)
 
 affectedPaths                        :: EventKind -> [Path]
 affectedPaths (FileAdded p)          = [p]
@@ -65,7 +65,7 @@ data Notification = Notification { event     :: EventKind
                                  }
                   deriving (Read,Eq,Show)
 
-$(deriveJSON id ''Notification)
+$(deriveJSON defaultOptions ''Notification)
 
 toLog                          :: Notification -> String
 toLog (Notification evt ci ti) = intercalate ":" $ [show ti, show ci, show evt]
