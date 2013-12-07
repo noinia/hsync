@@ -24,7 +24,11 @@ import Yesod.Static
 import Yesod.Auth
 import Yesod.Default.Config
 import Yesod.Default.Util (addStaticContentExternal)
+
+import Yesod.Core.Types(Logger)
+
 import Network.HTTP.Conduit (Manager)
+
 
 import Database.Persist.Sql (SqlPersistT)
 
@@ -36,7 +40,6 @@ import HSync.Server.Model
 
 import Text.Jasmine (minifym)
 import Text.Hamlet (hamletFile)
-import System.Log.FastLogger (Logger)
 
 
 import qualified HSync.Server.Settings as Settings
@@ -192,8 +195,8 @@ instance YesodAuth HSyncServer where
 
     authHttpManager = httpManager
 
-credsKey :: Text
-credsKey = "_ID"
+-- credsKey :: Text
+-- credsKey = "_ID"
 
 -- This instance is required to use forms. You can modify renderMessage to
 -- achieve customized and internationalized form validation messages.
