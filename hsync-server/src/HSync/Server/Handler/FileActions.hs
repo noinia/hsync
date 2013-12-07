@@ -3,7 +3,7 @@ module HSync.Server.Handler.FileActions where
 import HSync.Server.Import
 
 
-import Data.Aeson(encode,Value)
+import Data.Aeson(encode)
 
 import Data.Conduit
 import Data.Conduit.Binary
@@ -20,7 +20,7 @@ import System.Directory( removeFile , createDirectory )
 
 
 import qualified Data.Conduit.List as C
-import qualified Data.Text as T
+--import qualified Data.Text as T
 
 
 --------------------------------------------------------------------------------
@@ -71,42 +71,58 @@ getSignatureR p = protectRead p "signature" $ serveSource dummy
 deleteDeleteR                :: FileIdent -> Path -> Handler Text
 deleteDeleteR fi p = atomicallyWriteR p "delete" delete'
     where
-      delete' ci fp = protectedByFI fi fp "delete" $ do
-                        removeFile fp
-                        notification (FileRemoved p fi) ci
+      delete' fp = protectedByFI fi fp "delete" $ do
+                        liftIO $ removeFile fp
+                        notification (FileRemoved p fi)
 
 postPatchR                :: FileIdent -> Path -> Handler Text
 postPatchR NonExistent _ = invalidArgs ["postPatch: cannot patch a nonexistent file."]
 postPatchR fi          p = atomicallyWriteR p "patch" patch'
     where
-      patch' ci = undefined
+      patch' = error "postPatch: unimplemented"
 
 postPutFileR                 :: FileIdent -> Path -> Handler Text
 postPutFileR (Directory _) _ = invalidArgs ["putFile: cannot replace directory by a file."]
 postPutFileR fi            p = do
-                                 wr <- waiRequest
-                                 atomicallyWriteR p "putFile" (putFile' (requestBody wr))
+                                 bodySource' <- requestBody <$> waiRequest
+                                 let bodySource = transPipe liftIO bodySource'
+                                 -- transPipe lifts the underlying monad of
+                                 -- bodySource' that is, the IO monad, into
+                                 -- something more general; i.e. MonadIO m
+                                 atomicallyWriteR p "putFile" $ putFile' bodySource
     where
-      putFile' s ci fp = protectedByFI fi fp "putFile" $ do
-                           runResourceT $ s $$ sinkFile fp
-                           notification (determineEvent fi p) ci
+      putFile' s fp = protectedByFI fi fp "putFile" $ do
+                           liftIO . runResourceT $ s $$ sinkFile fp
+                           notification (determineEvent fi p)
+
       determineEvent NonExistent = FileAdded
       determineEvent (File _)    = flip FileUpdated fi
       determineEvent _           = error "putFile: unknown event."
 
+
+
+
 clientId :: Handler ClientIdent
 clientId = return "clientId"
+
+
+
+
+
+
 
 
 --------------------------------------------------------------------------------
 -- | Handles related to directoryevents
 
 postPutDirR     :: FileIdent -> Path -> Handler Text
-postPutDirR fi p = atomicallyWriteR p "putDir" putDir'
+postPutDirR fi p = withNotification putDir'
+  --atomicallyWriteR p "putDir" putDir'
     where
-      putDir' ci fp = protectedByFI fi fp "" $ do
+      fp      = toFilePath filesDir p
+      putDir' = protectedByFI fi fp "putDir" $ do
                         liftIO $ createDirectory fp
-                        notification (DirectoryAdded p) ci
+                        notification (DirectoryAdded p)
 
 
 -- TODO: Handle Directories!!!
@@ -131,24 +147,27 @@ protectWrite p err h = protect (requireWrite p) h (permissionDenied err)
 type FINotification = Either ErrorDescription Notification
 
 -- TODO: Use the hName somewhere
+-- | Runs the given handler atomically.
 atomicallyWriteR              :: Path -> Text ->
-                                 (ClientIdent -> FilePath -> IO FINotification) ->
+                                 (FilePath -> Handler FINotification) ->
                                      Handler Text
-atomicallyWriteR p hName h = protectWrite p hName h'
+atomicallyWriteR p hName h = protectWrite p hName $ withNotification h'
     where
       fp = toFilePath filesDir p
-      h' = do
-             ci <- clientId
-             mn <- liftIO $ atomicallyWriteIO fp (h ci fp)
-             case mn of
-               Left err -> invalidArgs err
-               Right n  -> logNotification n >> return "OK"
+      h' = atomicallyWriteIO fp (h fp)
+
+-- | Runs a handler h that should proce a notification, and logs the
+-- notification.
+withNotification   :: Handler FINotification -> Handler Text
+withNotification h = h >>= \mn -> case mn of
+                       Left err -> invalidArgs err
+                       Right n  -> logNotification n >> return "OK"
 
 
-
-notification        :: EventKind -> ClientIdent -> IO Notification
-notification evt ci = currentTime >>= return . Notification evt ci
-
+-- | Produce a notification with the given arguments and the current data/time
+notification     :: EventKind -> Handler Notification
+notification evt = Notification evt <$> clientId
+                                    <*> liftIO currentTime
 
 --------------------------------------------------------------------------------
 -- | Testing functions
