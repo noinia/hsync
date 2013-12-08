@@ -3,8 +3,11 @@
   #-}
 module HSync.Client.Sync where
 
+import Control.Monad(mzero)
+
 import Data.Default
 import Data.List(intercalate)
+import Data.Yaml
 
 import HSync.Client.Import
 
@@ -73,3 +76,37 @@ toRemotePath cli fp = let n   = length . localBaseDir $ cli
 
 toRemotePath'   :: Sync -> SubPath -> Path
 toRemotePath' s = Path (user s)
+
+
+
+
+fromConfig lbd s u hp rbd ci = def { localBaseDir   = lbd
+                                   , serverAddress  = s
+                                   , user           = u
+                                   , hashedPassword = hp
+                                   , remoteBaseDir  = rbd
+                                   , clientIdent    = ci
+                                   }
+
+instance FromJSON Sync where
+  parseJSON (Object v) = fromConfig <$> v .: "localBaseDir"
+                                    <*> v .: "server"
+                                    <*> v .: "username"
+                                    <*> v .: "hashedPassword"
+                                    <*> v .: "remoteBaseDir"
+                                    <*> v .: "clientIdent"
+  parseJSON _          = mzero
+
+
+
+
+
+
+type ErrorMessage = String
+
+readConfig    :: FilePath -> IO (Either ErrorMessage Sync)
+readConfig fp = decodeFileEither fp >>= \es -> return $ case es of
+                  Left parseError -> Left . showError $ parseError
+                  Right s         -> Right s
+  where
+    showError pe = "Error parsing sync config file " ++ show fp ++ ":\n" ++ show pe

@@ -1,92 +1,14 @@
 module Main where
 
-
-
-
-
-import Creds
-
-
-import Data.Default(def)
-
-import Data.List
-
-import HSync.Client.Actions
-import HSync.Client.TreeActions
-import HSync.Client.Import
-import HSync.Client.Sync
-import HSync.Client.ActionT
-
-import Control.Concurrent(forkIO)
-import Control.Failure
-import Control.Monad(when)
-
-import Control.Monad.IO.Class (liftIO)
-
-
-import Network.HTTP.Conduit( withManager )
-
-
-
-
-
 import Network
-
-import System.Directory (getDirectoryContents)
 import System.Environment (getArgs)
 
---------------------------------------------------------------------------------
-
-type GlobalSettings = Text
-type InstanceSettings = Text
+import HSync.Client.SyncActions
 
 --------------------------------------------------------------------------------
-
--- | The global application
-data HSyncClient = HSyncClient { globalSettings :: GlobalSettings
-                               }
-
-
-
---------------------------------------------------------------------------------
-
-listenMain sync = printChanges $ Path (user sync) []
-
-putMain sync = do
-  fs' <- liftIO $ getDirectoryContents "/Users/frank/tmp/synced/tls"
-  let fs = map ("/Users/frank/tmp/synced/tls/" ++) . filter (not . isPrefixOf ".") $ fs'
-  liftIO $ mapM_ print fs
-  mapM_ putFile fs
-
 
 main :: IO ()
-main = getArgs >>= \args -> mainWith $ case args of
-  "listen" : _ -> listenMain
-  "put"    : _ -> putMain
+main = withSocketsDo $ getArgs >>= mainWith
 
-
-
-mainWith act = withSocketsDo $ withManager $ \mgr -> do
-         let sync = def { httpManager    = mgr
-                        , user           = myUser
-                        , hashedPassword = myHashedPass
-                        }
-         x <- flip runActionT sync $ do
-                loggedIn <- login
-                -- when loggedIn $ putFile "/Users/frank/tmp/synced/test_put.jpg"
-                -- when loggedIn $ getFile $ Path (user sync) ["test.jpg"]
-                -- t <- getRemoteTree $ Path (user sync) []
-                act sync
---                syncTree $ Path (user sync) []
-
-                return ()
-         liftIO $ print x
-
---          case parseUrl urlString of
---            Nothing  -> liftIO $ putStrLn "Invalid URL"
---            Just req -> do
---                          let reqHead = req { method = "GET" }
---                          resp <- http reqHead manager
---                          liftIO $ print $ responseStatus resp
---                          liftIO $ mapM_ print $ responseHeaders resp
---                          responseBody resp C.$$+- sinkFile "google.html"
+mainWith                :: [String] -> IO ()
+mainWith (configPath:_) = syncMain configPath

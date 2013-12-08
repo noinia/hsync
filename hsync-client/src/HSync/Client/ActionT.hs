@@ -1,6 +1,6 @@
 module HSync.Client.ActionT where
 
-
+import Data.Conduit(ResourceT)
 import Data.Default
 
 
@@ -14,12 +14,16 @@ import Yesod.Client
 
 
 
+
 import qualified HSync.Client.Sync as S
 
 --------------------------------------------------------------------------------
 -- | A sync is YesodClient
 
 type ActionT = YesodClientMonadT Sync
+
+
+type Action = ActionT (ResourceT IO)
 
 
 getSync :: Monad m => ActionT m Sync

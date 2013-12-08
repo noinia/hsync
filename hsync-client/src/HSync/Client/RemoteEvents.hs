@@ -9,12 +9,11 @@ import Data.Conduit
 
 import HSync.Client.Import
 
-
 import HSync.Client.ActionT
 import HSync.Client.Actions
-import HSync.Client.Sync
+import HSync.Client.Sync(Sync)
 
--- import HSync.Common.Types
+import HSync.Common.AtomicIO
 import HSync.Common.DateTime(DateTime)
 -- import HSync.Common.FileIdent
 import HSync.Common.Notification
@@ -26,14 +25,17 @@ import Network.HTTP.Conduit( HttpException(..) )
 --------------------------------------------------------------------------------
 -- | Handle Notifications
 
+
 handleNotification                        :: ( MonadResource m, Failure HttpException m
                                              , MonadBaseControl IO m) =>
                                              Notification -> ActionT m ()
-handleNotification n@(Notification e ci t) = protect (noConflict e t)
-                                                     (handleEvent e)
-                                                     (handleIncomingConflict n)
-
-
+handleNotification n@(Notification e ci t) = handle'
+  where
+    p       = affectedFromPath e
+    -- handle  = toLocalPath p >>= flip atomicallyWriteIO handle'
+    handle' = protect (noConflict e t)
+                      (handleEvent e)
+                      (handleIncomingConflict n)
 
 handleEvent                         :: (Failure HttpException m,
                                         MonadBaseControl IO m, MonadResource m) =>
