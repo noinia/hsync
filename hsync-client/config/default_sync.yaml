@@ -1,0 +1,6 @@
+localBaseDir: "/path/to/a/local/directory"
+server: "http://localhost:3000"
+username: "joe"
+hashedPassword: "hashedsecret"
+remoteBaseDir: ""
+clientIdent: "client-ident"
