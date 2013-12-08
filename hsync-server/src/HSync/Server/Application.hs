@@ -5,41 +5,40 @@ module HSync.Server.Application
     , makeFoundation
     ) where
 
+
 import HSync.Server.Import
 import qualified HSync.Server.Settings as Settings
 
 import Control.Concurrent(forkIO, ThreadId)
 import Control.Concurrent.STM.TChan
-import Control.Monad.Logger (runLoggingT)
 
 import Data.Conduit(runResourceT)
 
-import Database.Persist.Sql (runMigration)
-
-
-import Network.Wai.Middleware.RequestLogger
-import Network.HTTP.Conduit (newManager, def)
-
-import System.IO (stdout)
-import System.Log.FastLogger (mkLogger)
-
+import Yesod.Auth
 import Yesod.Default.Config
 import Yesod.Default.Main
 import Yesod.Default.Handlers
+import Network.Wai.Middleware.RequestLogger
+    ( mkRequestLogger, outputFormat, OutputFormat (..), IPAddrSource (..), destination
+    )
+import qualified Network.Wai.Middleware.RequestLogger as RequestLogger
+import qualified Database.Persist
+import Database.Persist.Sql (runMigration)
+import Network.HTTP.Conduit (newManager, conduitManagerSettings)
+import Control.Monad.Logger (runLoggingT)
+import qualified GHC.IO.FD
+import System.Log.FastLogger (newLoggerSet, defaultBufSize)
+import Network.Wai.Logger (clockDateCacher)
+import Data.Default (def)
+import Yesod.Core.Types (loggerSet, Logger (Logger))
 
-
-
+-- Import all relevant handler modules here.
+-- Don't forget to add new modules to your cabal file!
 import HSync.Server.Handler.Home
 import HSync.Server.Handler.Auth
 import HSync.Server.Handler.FileActions
 
-
 import HSync.Server.NotificationLog(logNotificationsToFile)
-
-import qualified Database.Persist
-
---------------------------------------------------------------------------------
-
 
 
 -- This line actually creates our YesodDispatch instance. It is the second half
@@ -61,11 +60,9 @@ makeApplication conf = do
             if development
                 then Detailed True
                 else Apache FromSocket
-        , destination = Logger $ appLogger foundation
+        , destination = RequestLogger.Logger $ loggerSet $ appLogger foundation
         }
 
-
-    -- Start the Notification logging component
     -- startNotificationLogger foundation
 
     -- Create the WAI application and apply middlewares
@@ -76,15 +73,19 @@ makeApplication conf = do
 -- performs some initialization.
 makeFoundation :: AppConfig DefaultEnv Extra -> IO HSyncServer
 makeFoundation conf = do
-    manager <- newManager def
+    manager <- newManager conduitManagerSettings
     s <- staticSite
     dbconf <- withYamlEnvironment "config/sqlite.yml" (appEnv conf)
               Database.Persist.loadConfig >>=
               Database.Persist.applyEnv
     p <- Database.Persist.createPoolConfig (dbconf :: Settings.PersistConf)
-    logger <- mkLogger True stdout
+
     nots <- newBroadcastTChanIO
-    let foundation = HSyncServer conf s p manager dbconf logger nots
+    loggerSet' <- newLoggerSet defaultBufSize GHC.IO.FD.stdout
+    (getter, _) <- clockDateCacher
+
+    let logger = Yesod.Core.Types.Logger loggerSet' getter
+        foundation = HSyncServer conf s p manager dbconf logger nots
 
     -- Perform database migration using our application's logging settings.
     runLoggingT
@@ -92,15 +93,6 @@ makeFoundation conf = do
         (messageLoggerSource foundation logger)
 
     return foundation
-
-
-startNotificationLogger     :: HSyncServer -> IO ThreadId
-startNotificationLogger hss = forkIO start
-    where
-      start :: IO ()
-      start = runResourceT $ notifications' hss >>= logNotificationsToFile dir
-      dir   = extraNotificationLogDir . appExtra . settings $ hss
-
 
 -- for yesod devel
 getApplicationDev :: IO (Int, Application)
@@ -110,3 +102,10 @@ getApplicationDev =
     loader = Yesod.Default.Config.loadConfig (configSettings Development)
         { csParseExtra = parseExtra
         }
+
+startNotificationLogger     :: HSyncServer -> IO ThreadId
+startNotificationLogger hss = forkIO start
+    where
+      start :: IO ()
+      start = runResourceT $ notifications' hss >>= logNotificationsToFile dir
+      dir   = extraNotificationLogDir . appExtra . settings $ hss
