@@ -9,6 +9,7 @@ import Control.Monad.IO.Class (liftIO, MonadIO )
 import Data.Conduit(ResourceT, runResourceT, MonadThrow, MonadUnsafeIO, MonadBaseControl)
 import Data.Either
 
+import HSync.Client.Actions(login, putFile)
 import HSync.Client.ActionT(ActionT, runActionT, getSync)
 import HSync.Client.Sync
 import HSync.Client.RemoteEvents
@@ -18,6 +19,11 @@ import HSync.Common.DateTime
 import HSync.Common.Types
 
 import Network.HTTP.Conduit( withManager)
+
+
+
+import System.Directory
+import Data.List(isPrefixOf)
 
 --------------------------------------------------------------------------------
 
@@ -37,9 +43,20 @@ listenMain   :: FilePath -> IO ()
 listenMain fp = withSync fp $ do
                                 u <- user <$> getSync
                                 now <- liftIO $ currentTime
+                                liftIO $ print "ok!"
+                                login
                                 syncDownstream now $ Path u []
 
 
 -- -- | The main method for the sync with config fp
 syncMain    :: FilePath -> IO ()
-syncMain fp = withSync fp $ return ()
+syncMain fp = listenMain fp
+
+
+putMain fp = withSync fp $ do
+  sync <- getSync
+  fs' <- liftIO $ getDirectoryContents "/Users/frank/tmp/synced/tls"
+  let fs = map ("/Users/frank/tmp/synced/tls/" ++) . filter (not . isPrefixOf ".") $ fs'
+  login
+  liftIO $ mapM_ print fs
+  mapM_ putFile fs
