@@ -29,7 +29,7 @@ import Control.Failure
 
 
 import Data.ByteString(ByteString, empty)
-import Data.Conduit(Source, ResumableSource,mapOutput)
+import Data.Conduit(Source, ResumableSource, mapOutput, ResourceT, transPipe)
 import Data.Default
 import Data.Monoid((<>))
 import Data.Text(Text)
@@ -49,7 +49,7 @@ import Network.HTTP.Conduit( Request
                            -- , withManager
                            , method
                            , requestBody
-                           -- , responseBody
+                           , requestBodySourceChunked
                            , responseCookieJar
                            )
 import Network.HTTP.Types
@@ -176,7 +176,7 @@ toUrl cli r = let root     = serverAppRoot cli
 toReq   :: (client `IsYesodClientFor` server,
             Functor m,
             Failure HttpException m ) =>
-           Route server -> YesodClientMonadT client m (Request m')
+           Route server -> YesodClientMonadT client m Request
 toReq r = do
   cli <- clientInstance
   mcj <- cookieJar
@@ -191,7 +191,7 @@ runRouteWith   :: ( client `IsYesodClientFor` server
                , Failure HttpException m
                ) =>
                Route server ->
-               (Request m -> Request m) ->
+               (Request -> Request) ->
                    YesodClientMonadT client m (Response (ResumableSource m ByteString))
 runRouteWith r f = do
   mgr <- manager <$> clientInstance
@@ -209,14 +209,13 @@ runGetRoute = flip runRouteWith id
 
 
 runPostRoute :: ( client `IsYesodClientFor` server
-                , ToBuilder a
                 , MonadResource m, MonadBaseControl IO m
                 , Failure HttpException m) =>
-                Route server -> Source m a
+                Route server -> Source (ResourceT IO) ByteString
                   -> YesodClientMonadT client m (Response (ResumableSource m ByteString))
 runPostRoute r s = runRouteWith r $ \req ->
                    req { method      = methodPost
-                       , requestBody = RequestBodySourceChunked . toBuilder $ s
+                       , requestBody = requestBodySourceChunked s
                        }
 
 
