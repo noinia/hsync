@@ -102,7 +102,7 @@ changes dt p = do
     where
       isMyAction    myCi (Notification _ ci _) = ci == myCi
       filterChanges myCi (ResumableSource s final) =
-          ResumableSource (s $= CL.filter (isMyAction myCi)) final
+          ResumableSource (s $= CL.filter (not . isMyAction myCi)) final
 
 
 -- | run the ListenR handler and get a source of Notifications.

@@ -1,3 +1,4 @@
+{-# Language  RankNTypes #-}
 {-# Language  FlexibleContexts #-}
 module HSync.Client.RemoteEvents where
 
@@ -6,6 +7,7 @@ import Control.Failure
 
 
 import Data.Conduit
+import Data.Conduit.Internal(ResumableSource(..))
 
 import HSync.Client.Import
 
@@ -27,15 +29,23 @@ import Network.HTTP.Conduit( HttpException(..) )
 
 
 handleNotification                        :: ( MonadResource m, Failure HttpException m
-                                             , MonadBaseControl IO m) =>
+                                             , MonadBaseControl IO m
+--                                             , MonadBaseControl IO (ActionT (ResourceT m)
+                                               ) =>
                                              Notification -> ActionT m ()
-handleNotification n@(Notification e ci t) = handle'
+handleNotification n@(Notification e ci t) = do
+                                               sync <- getSync
+                                               fp   <- toLocalPath p
+                                               liftIO $ handleAtomic sync fp
   where
-    p       = affectedFromPath e
-    -- handle  = toLocalPath p >>= flip atomicallyWriteIO handle'
-    handle' = protect (noConflict e t)
-                      (handleEvent e)
-                      (handleIncomingConflict n)
+    p                    = affectedFromPath e
+    -- handleAtomic :: Sync -> FilePath -> IO ()
+    handleAtomic sync fp = atomicallyWriteIO fp . runResourceT $ runActionT act sync
+    act                  = protect (noConflict e t)
+                                   (handleEvent e)
+                                   (handleIncomingConflict n)
+
+
 
 handleEvent                         :: (Failure HttpException m,
                                         MonadBaseControl IO m, MonadResource m) =>
@@ -74,20 +84,45 @@ handleIncomingConflict _ = return ()
 
 -- | Start syncing the files in path p. To do this, get all notifications
 -- starting at dt. For each notification that we receive (and will receive in
--- the future), we fork a thread and run a handler that updates our local file
--- system.
+-- the future), we run a handler that updates our local file system.
 syncDownstream     :: ( MonadResource m, Failure HttpException m
                       , MonadBaseControl IO m) =>
                       DateTime -> Path -> ActionT m ()
 syncDownstream dt p = do
-                        sync <- getSync
-                        chs  <- changes dt p
-                        lift $ chs $$+- notificationSink sync
+                        sync            <- getSync
+                        changesSource'  <- changes dt p
+                        liftIO $ print "syncing downstream!"
+                        -- lift $ changesSource' $$+- printSink
+                        let changesSource = transPipe' lift changesSource'
+                        changesSource $$+- notificationSink
 
--- | A sink that, for each incoming notification, forks a new thread, and in
--- this thread runs an action to handle the incoming notification.
-notificationSink      :: MonadIO m => Sync -> Sink Notification m ()
-notificationSink sync = awaitForever handleNotification'
+-- | The function transPipe for ResumableSources. Note that we use the supplied
+-- lifting function on both the source as the finalizer.
+transPipe' ::  Monad m => (forall a. m a -> n a) ->
+               ResumableSource m o -> ResumableSource n o
+transPipe' lft (ResumableSource s final) = ResumableSource (transPipe lft s) (lft final)
+
+
+printSink :: (Show a, MonadIO m) => Sink a m ()
+printSink = awaitForever (liftIO . print)
+
+
+-- | A sink that, for each incoming notification runs the approprieate action
+-- to handle it.
+notificationSink      :: (MonadResource m, Failure HttpException m
+                         , MonadBaseControl IO m) =>
+                         Sink Notification (ActionT m) ()
+-- notificationSink = awaitForever (lift .handleNotification)
+notificationSink = awaitForever handle
   where
-    handleNotification' n = liftIO . forkIO $ runResourceT $
-                              runActionT (handleNotification n) sync
+    handle n = do
+                 liftIO $ print n
+                 lift $ handleNotification n
+
+
+-- where
+--   handleNotification' n = handleNotification
+
+
+  --     liftIO . forkIO $ runResourceT $
+  --                             runActionT (handleNotification n) sync
