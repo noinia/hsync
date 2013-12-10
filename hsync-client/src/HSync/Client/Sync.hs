@@ -24,7 +24,7 @@ import qualified Data.List
 
 type ServerAddress = Text
 type PersistentState = FSTree DateTime
-type PartialPath = Text
+type PartialPath = String
 
 
 -- | Each Synchronized Tree has its own manager/settings etc
@@ -62,16 +62,18 @@ toLocalPath s (Path _ ps) = toLocalPath' s ps
 toLocalPath'   :: Sync -> SubPath -> FilePath
 toLocalPath' s = intercalate "/" . (localBaseDir s :) . map T.unpack
 
-
+-- |TODO Switch to the FilePath package
 -- | given a local file path, create a (remote) Path corresponding to it
 --
 -- Precondition: localBaseDir cli is a basedir of the given file path.
 -- this is not checked.
 toRemotePath        :: Sync -> FilePath -> Path
-toRemotePath cli fp = let n   = length . localBaseDir $ cli
-                          fp' = Data.List.drop (n+1) fp
-                          p   = T.split (== '/') . T.pack $ fp'
-                      in toRemotePath' cli p
+toRemotePath sync fp = let lbd = localBaseDir sync
+                           rbd = remoteBaseDir sync
+                           Just lp = Data.List.stripPrefix lbd fp
+                           fp' = Data.List.dropWhile (=='/') lp -- drop init /
+                           p   = T.split (== '/') . T.pack $ (rbd ++ "/" ++ fp')
+                       in toRemotePath' sync p
 
 
 toRemotePath'   :: Sync -> SubPath -> Path
