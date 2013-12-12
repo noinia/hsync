@@ -34,13 +34,15 @@ handleNotification                        :: ( MonadResource m, Failure HttpExce
                                                ) =>
                                              Notification -> ActionT m ()
 handleNotification n@(Notification e ci t) = do
-                                               sync <- getSync
-                                               fp   <- toLocalPath p
-                                               liftIO $ handleAtomic sync fp
+                                               sync   <- getSync
+                                               fp     <- toLocalPath p
+                                               yState <- getYesodClientState
+                                               liftIO $ handleAtomic yState sync fp
   where
     p                    = affectedFromPath e
     -- handleAtomic :: Sync -> FilePath -> IO ()
-    handleAtomic sync fp = atomicallyWriteIO fp . runResourceT $ runActionT act sync
+    handleAtomic yState sync fp = atomicallyWriteIO fp . runResourceT $
+                                  runActionTWithClientState yState act sync
     act                  = protect (noConflict e t)
                                    (handleEvent e)
                                    (handleIncomingConflict n)

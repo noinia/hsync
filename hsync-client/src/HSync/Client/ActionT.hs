@@ -1,5 +1,7 @@
 module HSync.Client.ActionT where
 
+import Control.Monad.State.Class(get)
+
 import Data.Conduit(ResourceT)
 import Data.Default
 
@@ -30,8 +32,16 @@ getSync :: Monad m => ActionT m Sync
 getSync = clientInstance
 
 
-runActionT          :: Functor m => ActionT m a -> Sync -> m a
-runActionT act sync = evalYesodClientT act sync def
+getYesodClientState :: Monad m => ActionT m YesodClientState
+getYesodClientState = get
+
+
+runActionT :: Functor m => ActionT m a -> Sync -> m a
+runActionT = runActionTWithClientState def
+
+runActionTWithClientState             :: Functor m => YesodClientState ->
+                                         ActionT m a -> Sync -> m a
+runActionTWithClientState st act sync = evalYesodClientT act sync st
 
 
 instance IsYesodClient Sync where

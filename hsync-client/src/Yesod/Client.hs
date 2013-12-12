@@ -134,7 +134,6 @@ clientInstance :: Monad m => YesodClientMonadT cli m cli
 clientInstance = ask
 
 
-
 cookieJar :: (Monad m, Functor m) => YesodClientMonadT cli m (Maybe CookieJar)
 cookieJar = cookieJar' <$> get
 
