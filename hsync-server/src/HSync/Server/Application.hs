@@ -12,7 +12,8 @@ import qualified HSync.Server.Settings as Settings
 import Control.Concurrent(forkIO, ThreadId)
 import Control.Concurrent.STM.TChan
 
-import Data.Conduit(runResourceT)
+import Data.Conduit(runResourceT, ($$), (=$), awaitForever, Sink)
+import Data.Conduit.Binary(sinkFile)
 
 import Yesod.Auth
 import Yesod.Default.Config
@@ -38,7 +39,11 @@ import HSync.Server.Handler.Home
 import HSync.Server.Handler.Auth
 import HSync.Server.Handler.FileActions
 
-import HSync.Server.NotificationLog(logNotificationsToFile)
+-- import HSync.Server.NotificationLog(logNotificationsToFile)
+-- import HSync.Server.NotificationLog(simpleNotificationFileSink)
+
+import qualified Data.Conduit.List as L
+import qualified Data.ByteString.Char8 as B
 
 
 -- This line actually creates our YesodDispatch instance. It is the second half
@@ -63,7 +68,7 @@ makeApplication conf = do
         , destination = RequestLogger.Logger $ loggerSet $ appLogger foundation
         }
 
-    -- startNotificationLogger foundation
+    startNotificationLogger foundation
 
     -- Create the WAI application and apply middlewares
     app <- toWaiAppPlain foundation
@@ -107,5 +112,14 @@ startNotificationLogger     :: HSyncServer -> IO ThreadId
 startNotificationLogger hss = forkIO start
     where
       start :: IO ()
-      start = runResourceT $ notifications' hss >>= logNotificationsToFile dir
+      start = runResourceT $ notifications' hss >>= \s ->
+                               s $$ simpleNotificationFileSink dir
       dir   = extraNotificationLogDir . appExtra . settings $ hss
+
+
+-- | A Sink that simply logs all notifcations to the given file
+simpleNotificationFileSink   :: (MonadResource m, MonadIO m) =>
+                                FilePath -> Sink Notification m ()
+simpleNotificationFileSink f = L.map printNotification =$ sinkFile f
+  where
+    printNotification = B.pack . (++"\n") . toLog
