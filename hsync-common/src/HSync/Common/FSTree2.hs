@@ -13,8 +13,6 @@ import HSync.Common.AtomicIO(exists)
 
 import System.Directory
 import System.FilePath (takeFileName, dropTrailingPathSeparator, (</>))
-import System.Directory (getDirectoryContents)
-
 
 import qualified Data.Text as T
 
@@ -27,7 +25,7 @@ data File      fl   = File { fileName  :: FileName
                       deriving (Show, Read, Eq)
 
 
-hasFileName :: File fl -> FileName -> Bool
+hasFileName       :: File fl -> FileName -> Bool
 f `hasFileName` n = (== n) . fileName $ f
 
 data Directory fl dl = Directory { dirName        :: FileName
@@ -38,7 +36,7 @@ data Directory fl dl = Directory { dirName        :: FileName
                       deriving (Show, Read, Eq)
 
 
-hasDirName :: Directory fl dl -> FileName -> Bool
+hasDirName        :: Directory fl dl -> FileName -> Bool
 d `hasDirName`  n = (== n) . dirName $ d
 
 
@@ -50,10 +48,11 @@ data FSTree fl dl = F (File fl)
 
 
 
-readFSTree :: (Functor m, MonadIO m) => FilePath ->
-              (FilePath -> m fl) -> -- ^ how to ocmpute a file label
-              (FilePath -> m dl) -> -- ^  how to compute a directory label
-              m (Maybe (FSTree fl dl))
+readFSTree                   :: (Functor m, MonadIO m) =>
+                                FilePath ->           -- ^ base dir
+                                (FilePath -> m fl) -> -- ^ how to ocmpute a file label
+                                (FilePath -> m dl) -> -- ^ how to compute a dir label
+                                m (Maybe (FSTree fl dl))
 readFSTree baseDir fL fDirL = do
                                 t <- exists baseDir
                                 case t of
@@ -106,7 +105,17 @@ data FSCrumb fl dl = DCrumb (Crumb dl (File fl)         (Directory fl dl))
 type FSTreeZipper fl dl zs = (FSTree fl dl, [FSCrumb fl dl], zs)
 
 
-goUp :: FSTreeZipper fl dl zs -> Maybe (FSTreeZipper fl dl zs)
+
+readFSTreeZipper              :: (Functor m, MonadIO m) => FilePath ->
+                                 (FilePath -> m fl) -> -- ^ how to ocmpute a file label
+                                 (FilePath -> m dl) -> -- ^ how to compute a dir label
+                                 m (Maybe (FSTreeZipper fl dl FilePath))
+readFSTreeZipper baseDir fL dL = fmap (\t -> (t,[],baseDir)) <$> readFSTree baseDir fL dL
+
+
+
+
+goUp                         :: FSTreeZipper fl dl zs -> Maybe (FSTreeZipper fl dl zs)
 goUp (F f, (FCrumb c):bs,zs) = let ds = unchanged c
                                    fs = lefts c ++ [f] ++ rights c in
                                Just (D $ toDir c ds fs, bs, zs)
@@ -117,36 +126,41 @@ goUp (_,[],zs)               = Nothing
 goUp _                       = error "goUp: inconsistent zipper"
 
 
-goToFile :: FSTreeZipper fl dl zs -> FileName -> Maybe (FSTreeZipper fl dl zs)
-goToFile (D (Directory n dl ds fs), bs, zs) fn = case break (`hasFileName` fn) fs of
+goToFile                                          :: FileName ->
+                                                     FSTreeZipper fl dl zs ->
+                                                     Maybe (FSTreeZipper fl dl zs)
+goToFile fn (D (Directory n dl ds fs), bs, zs) = case break (`hasFileName` fn) fs of
   (_,   [])    -> Nothing
   (lfs, f:rfs) -> Just (F f, FCrumb (Crumb n dl ds lfs rfs):bs,zs)
 goToFile _ _                                   = Nothing -- if we are already at a file
                                                          -- we cannot go to a child
 
 
-goToDir :: FSTreeZipper fl dl zs -> FileName -> Maybe (FSTreeZipper fl dl zs)
-goToDir (D (Directory n dl ds fs), bs, zs) dn = case break (`hasDirName` dn) ds of
+goToDir                                       :: FileName ->
+                                                 FSTreeZipper fl dl zs ->
+                                                 Maybe (FSTreeZipper fl dl zs)
+goToDir dn (D (Directory n dl ds fs), bs, zs) = case break (`hasDirName` dn) ds of
   (_,   [])    -> Nothing
   (lds, d:rds) -> Just (D d, DCrumb (Crumb n dl fs lds rds):bs,zs)
 goToDir _ _                                   = Nothing -- if we are already at a file
                                                          -- we cannot go to a child
 
 
-goToDirOrFile     :: FSTreeZipper fl dl zs -> FileName -> Maybe (FSTreeZipper fl dl zs)
-goToDirOrFile z n = let dz = goToDir z n in case dz of
+goToDirOrFile     :: FileName -> FSTreeZipper fl dl zs -> Maybe (FSTreeZipper fl dl zs)
+goToDirOrFile n z = let dz = goToDir n z in case dz of
                       Just _  -> dz
-                      Nothing -> goToFile z n
+                      Nothing -> goToFile n z
 
 
 -- | traverse the sub-path
-goTo   :: FSTreeZipper fs dl zs -> SubPath -> Maybe (FSTreeZipper fs dl zs)
-goTo z = foldl (\z' n -> z' >>= flip goToDirOrFile n) (return z)
+goTo     :: SubPath -> FSTreeZipper fs dl zs -> Maybe (FSTreeZipper fs dl zs)
+goTo p z = foldl (\z' n -> z' >>= goToDirOrFile n) (return z) p
 
 
 
 -- | If we are curently on a file, get the next file
-goToNextFile :: FSTreeZipper fl dl zs -> Maybe (FSTreeZipper fl dl zs)
+goToNextFile                         :: FSTreeZipper fl dl zs ->
+                                        Maybe (FSTreeZipper fl dl zs)
 goToNextFile (F f, (FCrumb c):bs,zs) = case rights c of
   []      -> Nothing
   (f':rs) -> let c' = c { lefts  = lefts c ++ [f]
