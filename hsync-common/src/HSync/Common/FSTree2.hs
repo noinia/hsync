@@ -125,7 +125,23 @@ goToFile _ _                                   = Nothing -- if we are already at
                                                          -- we cannot go to a child
 
 
+goToDir :: FSTreeZipper fl dl zs -> FileName -> Maybe (FSTreeZipper fl dl zs)
+goToDir (D (Directory n dl ds fs), bs, zs) dn = case break (`hasDirName` dn) ds of
+  (_,   [])    -> Nothing
+  (lds, d:rds) -> Just (D d, DCrumb (Crumb n dl fs lds rds):bs,zs)
+goToDir _ _                                   = Nothing -- if we are already at a file
+                                                         -- we cannot go to a child
 
+
+goToDirOrFile     :: FSTreeZipper fl dl zs -> FileName -> Maybe (FSTreeZipper fl dl zs)
+goToDirOrFile z n = let dz = goToDir z n in case dz of
+                      Just _  -> dz
+                      Nothing -> goToFile z n
+
+
+-- | traverse the sub-path
+goTo   :: FSTreeZipper fs dl zs -> SubPath -> Maybe (FSTreeZipper fs dl zs)
+goTo z = foldl (\z' n -> z' >>= flip goToDirOrFile n) (return z)
 
 
 
