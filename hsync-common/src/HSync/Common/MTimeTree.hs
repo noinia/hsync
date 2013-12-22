@@ -1,10 +1,16 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# Language TemplateHaskell #-}
+{-# Language GeneralizedNewtypeDeriving #-}
+{-# Language DeriveDataTypeable #-}
 module HSync.Common.MTimeTree where
 
 import Control.Applicative((<$>))
+import Control.Monad.State.Class(modify, get)
 
 import Data.Aeson.TH
+import Data.Data(Data, Typeable)
+
+import Data.SafeCopy(base, deriveSafeCopy)
 
 import HSync.Common.DateTime(DateTime, modificationTime)
 import HSync.Common.FSTree
@@ -23,9 +29,11 @@ data DirMTime = DirMTime { localMTime   :: DateTime  -- My own modification time
                          , subtreeMTime :: Maybe DateTime  -- The last modification time
                                                            -- in this subtree
                          }
-              deriving  (Show,Eq,Ord)
+              deriving  (Show,Eq,Ord,Data,Typeable)
 
 $(deriveJSON defaultOptions ''DirMTime)
+$(deriveSafeCopy 0 'base ''DirMTime)
+
 
 -- | Compute a new DirMTime from
 updateDT                  :: DateTime -> DirMTime -> DirMTime
@@ -49,13 +57,11 @@ readMTimeTree baseDir = fmap (labelBottomUp (\(DirMTime l re) dls fls -> DirMTim
 
 -- | Given a path and a datetime, update the node at that path with that time.
 -- this also updates all mtimes on the path to that node.
-updateMTime        :: SubPath -> DateTime -> MTimeFSTree -> MTimeFSTree
-updateMTime p dt t = case return (t,[],())
+updateMTime'         :: SubPath -> DateTime -> Maybe MTimeFSTree -> Maybe MTimeFSTree
+updateMTime' p dt mt = mt >>= flip fsTreeZipper ()
                           >>= goTo p
-                          >>= return . updateAndPropagate updateDT updateDT' f
-                          >>= return . goToRoot of
-                       Nothing       -> error "updateMTime: something went wrong."
-                       Just (t',_,_) -> t'
+                          >>= return . tree . goToRoot .
+                              updateAndPropagate updateDT updateDT' f
   where
     f = updateLabel (const dt) (const $ DirMTime dt (Just dt))
 

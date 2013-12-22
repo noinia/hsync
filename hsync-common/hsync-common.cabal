@@ -43,6 +43,9 @@ library
     , data-default                  >= 0.5.3      && < 0.6
     , monad-control                 >= 0.3.2.1    && < 0.4
     , lifted-base                   >= 0.2.1.0    && < 0.3
+    -- , acid-state                    >= 0.12.1     && < 0.12.2
+    , safecopy                      >= 0.8.2      && < 0.8.3
+    , mtl                           >= 2.1.2      && < 2.2
 
   hs-source-dirs:      src
 

@@ -1,5 +1,8 @@
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# Language TemplateHaskell #-}
+{-# Language GeneralizedNewtypeDeriving #-}
+{-# Language DeriveDataTypeable #-}
 module HSync.Common.DateTime( DateTime(..)
                             , currentTime
                             , Day
@@ -15,6 +18,9 @@ import Control.Monad(mzero)
 import Control.Monad.IO.Class(liftIO, MonadIO(..))
 
 import Data.Aeson
+import Data.Data(Data, Typeable)
+
+import Data.SafeCopy(base, deriveSafeCopy)
 
 import Data.Time (Day, UTCTime, getCurrentTime , utctDay)
 import Data.Time.Format
@@ -34,9 +40,18 @@ import qualified Data.Text             as T
 --------------------------------------------------------------------------------
 
 newtype DateTime = DateTime { unDT :: UTCTime }
-    deriving (Eq,Ord)
+    deriving (Eq,Ord,Data,Typeable)
 
 dtPrefix = "DateTime "
+
+showDateTime :: UTCTime -> String
+showDateTime = formatTime undefined dateTimeFormat
+
+readDateTime :: ReadS DateTime
+readDateTime = readsTime undefined dateTimeFormat
+
+dateTimeFormat :: String
+dateTimeFormat = "%F-%T.%q-%Z"
 
 instance Show DateTime where
     show (DateTime t) = dtPrefix ++ showDateTime t
@@ -57,14 +72,7 @@ instance FromJSON DateTime where
                         . T.unpack $ v
     parseJSON _         = mzero
 
-showDateTime :: UTCTime -> String
-showDateTime = formatTime undefined dateTimeFormat
-
-readDateTime :: ReadS DateTime
-readDateTime = readsTime undefined dateTimeFormat
-
-dateTimeFormat :: String
-dateTimeFormat = "%F-%T.%q-%Z"
+$(deriveSafeCopy 0 'base ''DateTime)
 
 instance PathPiece DateTime where
     toPathPiece = T.pack . showDateTime . unDT

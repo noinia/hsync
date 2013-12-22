@@ -1,4 +1,6 @@
 {-# Language TemplateHaskell #-}
+{-# Language GeneralizedNewtypeDeriving #-}
+{-# Language DeriveDataTypeable #-}
 module HSync.Common.FSTree( File(..)
                           , hasFileName
 
@@ -11,6 +13,13 @@ module HSync.Common.FSTree( File(..)
                           , isFile
 
                           , FSTreeZipper
+                          , fsTreeZipper
+                          , fsTreeZipper'
+
+                          , tree
+                          , crumbs
+                          , zipperState
+
                           , FSCrumb(..)
                           , Crumb(..)
                           , path
@@ -40,6 +49,7 @@ import Control.Applicative((<$>))
 import Control.Monad.IO.Class(liftIO, MonadIO)
 
 import Data.Aeson.TH
+import Data.Data(Data, Typeable)
 
 import Data.List(break)
 import Data.Maybe(catMaybes, fromJust)
@@ -52,6 +62,8 @@ import HSync.Common.AtomicIO(exists)
 import System.Directory
 import System.FilePath (takeFileName, dropTrailingPathSeparator, (</>))
 
+import Data.SafeCopy(base, deriveSafeCopy)
+
 import qualified Data.Text as T
 
 --------------------------------------------------------------------------------
@@ -61,12 +73,13 @@ import qualified Data.Text as T
 data File      fl   = File { fileName  :: FileName
                            , fileLabel :: fl
                            }
-                      deriving (Show, Read, Eq)
+                      deriving (Show, Read, Eq, Data, Typeable)
 
 instance Functor File where
   fmap f (File n l) = File n (f l)
 
 $(deriveJSON defaultOptions ''File)
+$(deriveSafeCopy 0 'base ''File)
 
 ------------------------------
 
@@ -77,22 +90,25 @@ data Directory fl dl = Directory { dirName        :: FileName
                                  , subDirectories :: [Directory fl dl]
                                  , files          :: [File fl]
                                  }
-                      deriving (Show, Read, Eq)
+                      deriving (Show, Read, Eq, Data, Typeable)
 
 instance Functor (Directory fl) where
   fmap f (Directory n l sd fs) = Directory n (f l) (map (fmap f) sd) fs
 
 $(deriveJSON defaultOptions ''Directory)
+$(deriveSafeCopy 0 'base ''Directory)
 
 ------------------------------
 
 -- | Data type representing a filesystem tree
 data FSTree fl dl = F (File fl)
                   | D (Directory fl dl)
-                  deriving (Show,Read)
+                  deriving (Show,Read,Data,Typeable)
 
 
 $(deriveJSON defaultOptions ''FSTree)
+$(deriveSafeCopy 0 'base ''FSTree)
+
 
 ------------------------------
 -- | Some simple operations on files/directories
@@ -128,6 +144,24 @@ isFile = not . isDir
 -- | A FSTree zipper with state. A FSTreeZipper fl dl zs represents a selected
 -- FSTree fl dl, together with state zs.
 type FSTreeZipper fl dl zs = (FSTree fl dl, [FSCrumb fl dl], zs)
+
+
+fsTreeZipper   :: FSTree fl dl -> zs -> Maybe (FSTreeZipper fl dl zs)
+fsTreeZipper t = Just . fsTreeZipper' t
+
+fsTreeZipper'      :: FSTree fl dl -> zs -> FSTreeZipper fl dl zs
+fsTreeZipper' t zs = (t,[],zs)
+
+
+tree         :: FSTreeZipper fl dl zs -> FSTree fl dl
+tree (t,_,_) = t
+
+crumbs          :: FSTreeZipper fl dl zs -> [FSCrumb fl dl]
+crumbs (_,bs,_) = bs
+
+zipperState          :: FSTreeZipper fl dl zs -> zs
+zipperState (_,_,zs) = zs
+
 
 -- | The bread crumbs in our zipper, i.e. all information that we need at a
 -- particular place in the tree. If the currently selected tree t is a
