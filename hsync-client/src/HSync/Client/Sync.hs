@@ -12,7 +12,6 @@ import Data.Yaml
 import HSync.Client.Import
 
 import HSync.Common.DateTime(DateTime)
-import HSync.Common.MTimeTree
 
 import Network.HTTP.Conduit(Manager)
 
@@ -23,7 +22,6 @@ import qualified Data.List
 --------------------------------------------------------------------------------
 
 type ServerAddress = Text
-type PersistentState = Maybe MTimeFSTree
 type PartialPath = String
 
 
@@ -34,7 +32,6 @@ data Sync = Sync { httpManager     :: Manager
                  , user            :: UserIdent
                  , hashedPassword  :: HashedPassword
                  , remoteBaseDir   :: PartialPath
-                 , persistentState :: PersistentState
                  , clientIdent     :: ClientIdent
                  -- Database
                  }
@@ -47,14 +44,9 @@ instance Default Sync where
                , user            = "nobody"
                , hashedPassword  = "hashed-secret"
                , remoteBaseDir   = ""
-               , persistentState = Nothing
                , clientIdent     = "client-ident"
                -- Database
                }
-
-
-remoteTree :: Sync -> Maybe MTimeFSTree
-remoteTree = persistentState
 
 toLocalPath               :: Sync -> Path -> FilePath
 toLocalPath s (Path _ ps) = toLocalPath' s ps
