@@ -27,6 +27,13 @@ data DirMTime = DirMTime { localMTime   :: DateTime  -- My own modification time
 
 $(deriveJSON defaultOptions ''DirMTime)
 
+-- | Compute a new DirMTime from
+updateDT                  :: DateTime -> DirMTime -> DirMTime
+updateDT t (DirMTime l s) = DirMTime l $ maximum [s, Just t]
+
+
+updateDT' (DirMTime _ s') (DirMTime l s) = DirMTime l $ maximum [s, s']
+
 
 -- | Read a dir modificationtime. We do not read the recursive times yet.
 
@@ -34,12 +41,23 @@ readDirMTime fp = flip DirMTime Nothing <$> modificationTime fp
 
 
 
-
-
-
+-- | Read a MTreeFSTree from disk
 readMTimeTree baseDir = fmap (labelBottomUp (\(DirMTime l re) dls fls -> DirMTime l
                           (maximum $ re :  map Just fls ++ map subtreeMTime dls)
                         )) <$> readFSTree baseDir modificationTime readDirMTime
+
+
+-- | Given a path and a datetime, update the node at that path with that time.
+-- this also updates all mtimes on the path to that node.
+updateMTime        :: SubPath -> DateTime -> MTimeFSTree -> MTimeFSTree
+updateMTime p dt t = case return (t,[],())
+                          >>= goTo p
+                          >>= return . updateAndPropagate updateDT updateDT' f
+                          >>= return . goToRoot of
+                       Nothing       -> error "updateMTime: something went wrong."
+                       Just (t',_,_) -> t'
+  where
+    f = updateLabel (const dt) (const $ DirMTime dt (Just dt))
 
 
 class HasFileIdent c where

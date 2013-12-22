@@ -19,6 +19,8 @@ module HSync.Common.FSTree( File(..)
                           , readFSTreeZipper
 
                           , goUp
+                          , goToRoot
+
                           , goToFile
                           , goToDir
                           , goToDirOrFile
@@ -26,18 +28,22 @@ module HSync.Common.FSTree( File(..)
                           , goToNextFile
 
                           , update
+                          , updateAndPropagate
                           , replace
 
                           , labelBottomUp
+                          , updateLabel
                           ) where
 
+
+import Control.Arrow((&&&))
 import Control.Applicative((<$>))
 import Control.Monad.IO.Class(liftIO, MonadIO)
 
 import Data.Aeson.TH
 
 import Data.List(break)
-import Data.Maybe(catMaybes)
+import Data.Maybe(catMaybes, fromJust)
 import Data.Text(Text)
 
 import HSync.Common.Types(FileName, SubPath)
@@ -162,6 +168,11 @@ name'            :: FSCrumb fl dl -> FileName
 name' (DCrumb c) = dirName' c
 name' (FCrumb c) = dirName' c
 
+-- | Given a FSCrumb, get the label corresponding to this crumb.
+label'            :: FSCrumb fl dl -> dl
+label' (DCrumb c) = dirLabel' c
+label' (FCrumb c) = dirLabel' c
+
 
 -- | convert a crumb to a directory
 toDir                      :: Crumb dl unCh ch ->
@@ -228,6 +239,12 @@ goUp (D d, (DCrumb c):bs,zs) = let fs = unchanged c
                                Just (D $ toDir c ds fs, bs, zs)
 goUp (_,[],zs)               = Nothing
 goUp _                       = error "goUp: inconsistent zipper"
+
+
+goToRoot            :: FSTreeZipper fl dl zs -> FSTreeZipper fl dl zs
+goToRoot z@(_,[],_) = z
+goToRoot z          = goToRoot . fromJust $ goUp z
+
 
 -- | Given a filename, go to that *FILE* of the currently selected
 -- subtree. Note that this operation fails (returns Nothing), if the filename
@@ -299,6 +316,39 @@ update f (t,bs,zs)
   where
     t'       = f t
 
+-- | updateAndPropagate updateLF updateDL f z updates the tree currently selected
+--   using function f. Furthermore, it propagates the update of this tree
+--   in the labels of the ancestors of this node using the functions updateFL and updateDL
+updateAndPropagate                      :: (fl -> dl -> dl) ->
+                                           (dl -> dl -> dl) ->
+                                           (FSTree fl dl -> FSTree fl dl) ->
+                                           FSTreeZipper fl dl zs -> FSTreeZipper fl dl zs
+updateAndPropagate updateFL updateDL f z = case update f z of
+  (t, bs, zs) -> let -- updateL is a function that given a label, computes the new
+                     -- label value.
+                     updateL = case t of
+                         F t' -> updateFL (fileLabel t')
+                         D t' -> updateDL (dirLabel t')
+                 in ( t
+                      -- We traverse all crumbs, left to right, and incrementally update
+                      -- all crumbs with their new label. If we have computed a new
+                      -- crumb c, we use it's label in the propagation function in
+                      -- the next step.
+                    , reverse . snd $ foldl (\(updateF,bs') c ->
+                                              let c' = updateFSCrumb c updateF in
+                                              (updateDL (label' c'), c':bs')
+                                  ) (updateL, []) bs
+                    , zs)
+
+
+updateFSCrumb              :: FSCrumb fl dl -> (dl -> dl) -> FSCrumb fl dl
+updateFSCrumb (FCrumb c) f = FCrumb $ updateCrumb c f
+updateFSCrumb (DCrumb c) f = DCrumb $ updateCrumb c f
+
+updateCrumb     :: Crumb dl unCh ch -> (dl -> dl) -> Crumb dl unCh ch
+updateCrumb c f = c { dirLabel' = f (dirLabel' c) }
+
+
 -- | Replace the currently selected subtree
 replace   :: FSTree fl dl -> FSTreeZipper fl dl zs -> FSTreeZipper fl dl zs
 replace t = update (const t)
@@ -321,3 +371,8 @@ labelBottomUp' f (Directory n ol sd fs) = Directory n (f ol sdl fsl) sd' fs
     sd' = map (labelBottomUp' f) sd
     sdl = map dirLabel  sd'
     fsl = map fileLabel fs
+
+
+updateLabel           :: (fl -> fl) -> (dl -> dl) -> FSTree fl dl -> FSTree fl dl
+updateLabel f _ (F t) = F $ t { fileLabel = f $ fileLabel t }
+updateLabel _ f (D t) = D $ t { dirLabel  = f $ dirLabel t }
