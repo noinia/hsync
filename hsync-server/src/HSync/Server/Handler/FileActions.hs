@@ -12,7 +12,7 @@ import Data.ByteString(ByteString)
 
 import Network.Wai(requestBody)
 
-import HSync.Common.FSTree(FSTree(NoFiles), readFSTree)
+import HSync.Common.MTimeTree(MTimeFSTree, readMTimeTree)
 
 import HSync.Server.Handler.Auth(requireRead,requireWrite)
 
@@ -44,16 +44,16 @@ getListenNowR p = protectRead p "listen" $ do
 --------------------------------------------------------------------------------
 -- | Handles related to listing files/trees
 
--- | Produces a JSON value representing a Maybe (FSTree DateTime)
+-- | Produces a JSON value representing a Maybe MTimeFSTree
 getTreeR   :: Path -> Handler Value
 getTreeR p = protectRead p "tree" $
                toJSON <$> getTreeOf p
 
-getTreeOf   :: Path -> Handler (FSTree DateTime)
+getTreeOf   :: Path -> Handler (Maybe MTimeFSTree)
 getTreeOf p = let fp = toFilePath filesDir p in
               liftIO $ protect (isPropperFile fp)
-                               (readFSTree fp) -- TODO: Should I create a lock here?
-                               (return NoFiles)
+                               (readMTimeTree fp) -- TODO: Should I create a lock here?
+                               (return Nothing)
 
 --------------------------------------------------------------------------------
 -- | Handles related to file events
