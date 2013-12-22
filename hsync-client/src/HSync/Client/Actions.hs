@@ -27,7 +27,7 @@ import HSync.Client.Sync(Sync, user, hashedPassword, clientIdent)
 import HSync.Client.ActionT
 
 import HSync.Common.DateTime(DateTime)
-import HSync.Common.FSTree
+import HSync.Common.MTimeTree
 
 import HSync.Server.Import
 
@@ -152,7 +152,7 @@ remoteFileInfo fp = do
 -- | Runs the getTree Handler: get the FSTree representing the Filestystem at p
 getRemoteTree   :: ( MonadResource m, MonadThrow m
                    , MonadBaseControl IO m, Failure HttpException m) =>
-                   Path -> ActionT m (FSTree DateTime)
+                   Path -> ActionT m (Maybe MTimeFSTree)
 getRemoteTree p = do
                     liftIO $ print $ "path: " ++ show p
                     resp <- runGetRoute $ TreeR p

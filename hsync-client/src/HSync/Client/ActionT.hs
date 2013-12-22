@@ -7,7 +7,7 @@ import Data.Default
 
 
 import HSync.Common.DateTime(DateTime)
-import HSync.Common.FSTree(FSTree)
+import HSync.Common.MTimeTree
 
 import HSync.Client.Import
 import HSync.Client.Sync(Sync)
@@ -52,7 +52,7 @@ instance IsYesodClient Sync where
 
 
 
-remoteTree :: (Functor m, Monad m) => ActionT m (FSTree DateTime)
+remoteTree :: (Functor m, Monad m) => ActionT m (Maybe MTimeFSTree)
 remoteTree = S.remoteTree <$> getSync
 
 toLocalPath   :: (Functor m, Monad m) => Path -> ActionT m FilePath
