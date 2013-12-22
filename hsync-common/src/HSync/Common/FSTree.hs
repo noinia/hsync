@@ -103,7 +103,7 @@ $(deriveSafeCopy 0 'base ''Directory)
 -- | Data type representing a filesystem tree
 data FSTree fl dl = F (File fl)
                   | D (Directory fl dl)
-                  deriving (Show,Read,Data,Typeable)
+                  deriving (Eq,Show,Read,Data,Typeable)
 
 
 $(deriveJSON defaultOptions ''FSTree)

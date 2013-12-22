@@ -57,8 +57,8 @@ readMTimeTree baseDir = fmap (labelBottomUp (\(DirMTime l re) dls fls -> DirMTim
 
 -- | Given a path and a datetime, update the node at that path with that time.
 -- this also updates all mtimes on the path to that node.
-updateMTime'         :: SubPath -> DateTime -> Maybe MTimeFSTree -> Maybe MTimeFSTree
-updateMTime' p dt mt = mt >>= flip fsTreeZipper ()
+updateMTime         :: SubPath -> DateTime -> Maybe MTimeFSTree -> Maybe MTimeFSTree
+updateMTime p dt mt = mt >>= flip fsTreeZipper ()
                           >>= goTo p
                           >>= return . tree . goToRoot .
                               updateAndPropagate updateDT updateDT' f
