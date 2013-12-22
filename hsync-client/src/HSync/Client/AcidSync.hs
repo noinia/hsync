@@ -20,23 +20,26 @@ import Data.Data(Data, Typeable)
 import Data.SafeCopy(base, deriveSafeCopy)
 
 import HSync.Common.MTimeTree
+import HSync.Common.DateTime(DateTime)
+import HSync.Common.Types
 
 --------------------------------------------------------------------------------
 
 newtype MTimeTreeState = MTimeTreeState { unMTTS :: Maybe MTimeFSTree }
                          deriving (Eq,Show,Data,Typeable)
 
-$(deriveSafeCopy 0 'base ''DirMTime)
+
+$(deriveSafeCopy 0 'base ''MTimeTreeState)
 
 
 peekMTimeTree :: Query MTimeTreeState (Maybe MTimeFSTree)
 peekMTimeTree = unMTTS <$> ask
 
-updateMTimeTree      :: SubPath -> DateTime -> Update MTimeFSTree (Maybe MTimeFSTree)
-updateMTimeTree p dt = modify (updateMTime p dt) >> get >>= return . unMTTS
+updateMTimeTree      :: SubPath -> DateTime -> Update MTimeTreeState (Maybe MTimeFSTree)
+updateMTimeTree p dt = modify (MTimeTreeState . updateMTime p dt . unMTTS)
+                       >> get >>= return . unMTTS
 
-
-$(makeAcidic ''MTimeFSTree ['peekMTimeTree, 'updateMTime])
+$(makeAcidic ''MTimeTreeState ['peekMTimeTree, 'updateMTimeTree])
 
 
 
