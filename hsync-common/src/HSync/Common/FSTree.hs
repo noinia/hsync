@@ -36,7 +36,6 @@ module HSync.Common.FSTree( File(..)
                           ) where
 
 
-import Control.Arrow((&&&))
 import Control.Applicative((<$>))
 import Control.Monad.IO.Class(liftIO, MonadIO)
 
