@@ -21,6 +21,7 @@ library
                        HSync.Common.FileIdent
                        HSync.Common.AtomicIO
                        HSync.Common.FSTree
+                       HSync.Common.MTimeTree
                        HSync.Common.DateTime
                        HSync.Common.Notification
 
