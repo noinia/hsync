@@ -12,10 +12,10 @@ import qualified HSync.Server.Settings as Settings
 import Control.Concurrent(forkIO, ThreadId)
 import Control.Concurrent.STM.TChan
 
-import Data.Conduit(runResourceT, ($$), (=$), awaitForever, Sink)
+import Data.Conduit(runResourceT, ($$), (=$), Sink)
 import Data.Conduit.Binary(sinkFile)
 
-import Yesod.Auth
+--import Yesod.Auth
 import Yesod.Default.Config
 import Yesod.Default.Main
 import Yesod.Default.Handlers
@@ -68,7 +68,7 @@ makeApplication conf = do
         , destination = RequestLogger.Logger $ loggerSet $ appLogger foundation
         }
 
-    startNotificationLogger foundation
+    _ <- startNotificationLogger foundation
 
     -- Create the WAI application and apply middlewares
     app <- toWaiAppPlain foundation

@@ -5,11 +5,7 @@ module HSync.Server.Handler.Auth where
 import Data.Maybe
 
 import HSync.Server.Import
-import Yesod.Form
-
-import Data.Text(Text)
-
-import Data.Digest.Pure.SHA        (sha1, showDigest)
+import Data.Digest.Pure.SHA(sha1, showDigest)
 
 import qualified Data.Text                  as T
 import qualified Data.ByteString.Lazy.Char8 as B
@@ -43,29 +39,12 @@ postRegisterR = do
     where
       tryInsert u@(User i _) = protect (not <$> userExists i)
                                            (do
-                                             runDB $ insert u
+                                             _ <- runDB $ insert u
                                              setMessage "User Registered."
                                              redirect HomeR)
                                            existingUser
       invalidInput = setMessage "Invalid Input" >> redirect RegisterR
       existingUser = setMessage "User exists"   >> redirect RegisterR
-
-
-
-
-
--- do
---   (mu,mp) <- lift $ runInputPost $ (,)
---              <$> iopt textField "username"
---              <*> iopt textField "password"
---
---   if isJust mu && isJust mp && not exists
---     then do
---
---            return "OK"
---     else do
---            setMessage "Invalid username/password"
---            redirect RegisterR
 
 
 userForm :: Html -> MForm Handler (FormResult User, Widget)
@@ -99,6 +78,7 @@ requireWrite             :: Path -> Handler Bool
 requireWrite p@(Path u ps) = requireRead p
 
 
+requireAuthId' :: Handler UserIdent
 requireAuthId' = maybeAuthId >>= maybe (permissionDenied "Login Required") return
 
 
