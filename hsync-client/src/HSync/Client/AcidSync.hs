@@ -16,7 +16,7 @@ import Data.Acid(AcidState, Update, Query,
                  makeAcidic)
 import Data.Acid.Advanced(query',update')
 import Data.Data(Data, Typeable)
-
+import Data.Default
 import Data.SafeCopy(base, deriveSafeCopy)
 
 import HSync.Common.MTimeTree
@@ -30,6 +30,9 @@ newtype MTimeTreeState = MTimeTreeState { unMTTS :: Maybe MTimeFSTree }
 
 
 $(deriveSafeCopy 0 'base ''MTimeTreeState)
+
+instance Default MTimeTreeState where
+  def = MTimeTreeState Nothing
 
 
 peekMTimeTree :: Query MTimeTreeState (Maybe MTimeFSTree)

@@ -2,15 +2,19 @@
 module HSync.Client.SyncActions where
 
 import Control.Applicative((<$>))
+import Control.Exception.Lifted(bracket)
 
 import Control.Monad.IO.Class (liftIO, MonadIO )
 
+import Data.Acid(openLocalState)
+import Data.Acid.Local(createCheckpointAndClose)
 
+import Data.Default
 import Data.Conduit(ResourceT, runResourceT, MonadThrow, MonadUnsafeIO, MonadBaseControl)
 import Data.Either
 
 import HSync.Client.Actions(login, putFile)
-import HSync.Client.ActionT(ActionT, runActionT, getSync)
+import HSync.Client.ActionT(Action, runActionT, getSync, AcidSync(..))
 import HSync.Client.Sync
 import HSync.Client.RemoteEvents
 
@@ -30,16 +34,18 @@ import Data.List(isPrefixOf)
 -- | Given a path to a sync config file, Loads the config file, and starts a
 -- new connection manager, that we associate with the sync. Then we run the
 -- given action.
-withSync :: (MonadIO m, MonadBaseControl IO m, MonadThrow m, MonadUnsafeIO m) =>
-            FilePath -> ActionT (ResourceT m) () -> m ()
-withSync fp act = withManager $ \mgr -> do
-                              esync <- liftIO $ readConfig fp
-                              case esync of
+withSync        :: FilePath -> Action () -> IO ()
+withSync fp act = do
+                    esync <- liftIO $ readConfig fp
+                    bracket (openLocalState def)
+                            (createCheckpointAndClose)
+                            (\acid -> withManager $ \mgr -> case esync of
                                 Left errMsg -> liftIO $ print errMsg
                                 Right sync' -> let sync = sync' { httpManager = mgr }
-                                               in runActionT act sync
+                                               in runActionT act sync (AcidSync acid)
+                            )
 
-listenMain   :: FilePath -> IO ()
+listenMain    :: FilePath -> IO ()
 listenMain fp = withSync fp $ do
                                 u <- user <$> getSync
                                 now <- liftIO $ currentTime
