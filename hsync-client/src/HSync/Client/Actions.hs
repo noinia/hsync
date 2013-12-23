@@ -12,7 +12,7 @@ import Data.Aeson( Value
                  , fromJSON
                  ,  Result(..)
                  )
-import Data.Aeson.Parser(json)
+import Data.Aeson.Parser(value)
 
 import Data.Conduit.Attoparsec(sinkParser , conduitParser)
 
@@ -74,8 +74,7 @@ import Debug.Trace
 
 --------------------------------------------------------------------------------
 
-login :: ( MonadResource m, Failure HttpException m
-         , MonadBaseControl IO m) => ActionT m Bool
+login :: Action Bool
 login = do
   sync <- getSync
   resp <- runGetRoute $ MyLoginR (user sync) (hashedPassword sync)
@@ -85,16 +84,14 @@ login = do
     "INVALID" -> return False
 
 
-setSessionCreds :: Monad m => Response body -> ActionT m ()
-setSessionCreds = updateCookieJar
+setSessionCreds :: Response body -> Action ()
+setSessionCreds = liftYT . updateCookieJar
 
 --------------------------------------------------------------------------------
 
 -- | run the ListenR handler and get a source with all the
 -- notifications. Filter out the ones that I triggered myself.
-changes     :: ( MonadResource m, MonadThrow m
-               , MonadBaseControl IO m, Failure HttpException m) =>
-               DateTime -> Path -> ActionT m (ResumableSource m Notification)
+changes      :: DateTime -> Path -> Action (ResumableSource SyncBaseMonad Notification)
 changes dt p = do
                  myCi <- clientIdent <$> getSync
                  filterChanges myCi <$> changes' dt p
@@ -106,9 +103,8 @@ changes dt p = do
 
 
 -- | run the ListenR handler and get a source of Notifications.
-changes'     :: ( MonadResource m, MonadThrow m
-                , MonadBaseControl IO m, Failure HttpException m) =>
-                DateTime -> Path -> ActionT m (ResumableSource m Notification)
+changes'      :: DateTime -> Path ->
+                 Action (ResumableSource SyncBaseMonad Notification)
 changes' dt p = do
                  resp <- runGetRoute $ ListenR dt p
                  return . toJSONSource . responseBody $ resp
@@ -124,9 +120,7 @@ jsonConduit = conduitParser jsonParser C.=$= CL.map snd
 
 
 -- -- | Simply output the list of changes
-printChanges   :: ( MonadResource m, MonadThrow m
-                  , MonadBaseControl IO m, Failure HttpException m) =>
-                  Path -> ActionT m ()
+printChanges   :: Path -> Action ()
 printChanges p = do
   now <- liftIO $ currentTime
   cs  <- changes' now p
@@ -139,9 +133,7 @@ printChanges p = do
 --------------------------------------------------------------------------------
 
 -- | Get the fileident and the path for the file with local path fp
-remoteFileInfo    :: ( MonadResource m, MonadThrow m, MonadIO m
-                     , MonadBaseControl IO m, Failure HttpException m) =>
-                     FilePath -> ActionT m (FileIdent,Path)
+remoteFileInfo    :: FilePath -> Action (FileIdent,Path)
 remoteFileInfo fp = do
                       p  <- toRemotePath fp
                       fi <- toFileIdent <$> getRemoteTree p
@@ -150,9 +142,7 @@ remoteFileInfo fp = do
                       return (fi,p)
 
 -- | Runs the getTree Handler: get the FSTree representing the Filestystem at p
-getRemoteTree   :: ( MonadResource m, MonadThrow m
-                   , MonadBaseControl IO m, Failure HttpException m) =>
-                   Path -> ActionT m (Maybe MTimeFSTree)
+getRemoteTree   :: Path -> Action (Maybe MTimeFSTree)
 getRemoteTree p = do
                     liftIO $ print $ "path: " ++ show p
                     resp <- runGetRoute $ TreeR p
@@ -166,25 +156,23 @@ parseFromJSONSink = sinkParser jsonParser
 -- | An Attoparsec parser that attempts to parse the incoming bytestring in
 -- JSON format.
 jsonParser :: FromJSON a => AP.Parser ByteString a
-jsonParser = json >>= \v -> case fromJSON v of
-                              Error s   -> fail s
-                              Success x -> return x
+jsonParser = value >>= \v -> case fromJSON v of
+                               Error s   -> fail s
+                               Success x -> return x
+             -- Note: we are using the json value parser here, since we want to
+             --       be able to parse 'null' values (in case of Maybe ).
 
 --------------------------------------------------------------------------------
 
 -- | Run a getFile handler to download the file with path p. The file is stored
 -- at the `default' local path corresponding to p.
-getFile   :: ( MonadResource m, Failure HttpException m
-             , MonadBaseControl IO m) =>
-             Path -> ActionT m ()
+getFile   :: Path -> Action ()
 getFile p = toLocalPath p >>= getFile' p
 
 
 -- | run the getFile handler to download the file with path p. The contents of
 -- that file are written to the (local) file with path lp
-getFile'      :: ( MonadResource m, Failure HttpException m
-                 , MonadBaseControl IO m) =>
-                 Path -> FilePath -> ActionT m ()
+getFile'      :: Path -> FilePath -> Action ()
 getFile' p lp = do
   resp <- runGetRoute $ FileR p
   let status = responseStatus resp
@@ -193,23 +181,18 @@ getFile' p lp = do
 --------------------------------------------------------------------------------
 
 -- | run putDir: i.e. create a new directory with path p
-putDir   :: ( MonadResource m, Failure HttpException m
-            , MonadIO m, MonadBaseControl IO m) =>
-            Path -> ActionT m ()
+putDir   :: Path -> Action ()
 putDir p = runPostRoute (PutDirR NonExistent p) noData >> return ()
     where
       noData = sourceLbs LB.empty
 
 -- | Run a postPut action: i.e. upload the file at fp onto the server. We
 -- assume that fp is a global path to the file!
-putFile    :: ( MonadResource m, Failure HttpException m
-              , MonadIO m, MonadBaseControl IO m) => FilePath -> ActionT m ()
+putFile    :: FilePath -> Action ()
 putFile fp = remoteFileInfo fp >>= uncurry (putFile' fp)
 
 
-putFile'         :: ( MonadResource m, Failure HttpException m
-                    , MonadIO m, MonadBaseControl IO m) =>
-                    FilePath -> FileIdent -> Path -> ActionT m ()
+putFile'         :: FilePath -> FileIdent -> Path -> Action ()
 putFile' fp fi p = do
                      let h = PutFileR fi p
                          s = sourceFile fp
@@ -219,10 +202,7 @@ putFile' fp fi p = do
                      resp <- runPostRoute h s
                      liftIO $ print "woei"
 
-
-putFileOrDir :: ( MonadResource m, Failure HttpException m
-                , MonadIO m, MonadBaseControl IO m) =>
-                FilePath -> ActionT m ()
+putFileOrDir    :: FilePath -> Action ()
 putFileOrDir fp = fileIdent fp >>= \fi -> case fi of
                     FI.NonExistent -> error "putFileOrDir: nonexistent file"
                     FI.Directory _ -> toRemotePath fp >>= putDir
@@ -232,12 +212,8 @@ putFileOrDir fp = fileIdent fp >>= \fi -> case fi of
 --------------------------------------------------------------------------------
 -- | Updates
 
-getUpdate      :: ( MonadResource m, Failure HttpException m
-                  , MonadBaseControl IO m) =>
-                  Path -> FileIdent -> ActionT m ()
+getUpdate      :: Path -> FileIdent -> Action ()
 getUpdate p fi = getFile p
-
-
 
 --------------------------------------------------------------------------------
 -- | Deletes
@@ -245,26 +221,19 @@ getUpdate p fi = getFile p
 
 -- | Runs the DeleteR handler: i.e. deletes the file (with path p) on the
 -- server, assuming that the remote file (still) has fileIdent fi.
-deleteFile      :: ( MonadResource m, Failure HttpException m
-                   , MonadIO m, MonadBaseControl IO m) =>
-                   FileIdent -> Path -> ActionT m ()
+deleteFile      :: FileIdent -> Path -> Action ()
 deleteFile fi p = runDeleteRoute (DeleteR fi p) >> return ()
 
 
 -- runs the delete handler to delete the directory with path p (and FileIdent fi)
-deleteDir :: ( MonadResource m, Failure HttpException m
-             , MonadIO m, MonadBaseControl IO m) =>
-             FileIdent -> Path -> ActionT m ()
+deleteDir :: FileIdent -> Path -> Action ()
 deleteDir = deleteFile
-
-
 
 
 --------------------------------------------------------------------------------
 -- | Local actions
 
-deleteFileLocally               :: (MonadIO m, Functor m) =>
-                                   Path -> FileIdent -> ActionT m ()
+deleteFileLocally               :: Path -> FileIdent -> Action ()
 deleteFileLocally _ NonExistent = error "deleteFileLocally: non existent file"
 deleteFileLocally p fi          = toLocalPath p >>= liftIO . f
   where
@@ -272,7 +241,5 @@ deleteFileLocally p fi          = toLocalPath p >>= liftIO . f
                              else removeDirectoryRecursive
 
 
-
-createDirectoryLocally   :: (MonadIO m, Functor m) =>
-                            Path -> ActionT m ()
+createDirectoryLocally   :: Path -> Action ()
 createDirectoryLocally p = toLocalPath p >>= liftIO . createDirectory

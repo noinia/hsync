@@ -28,30 +28,25 @@ import Network.HTTP.Conduit( HttpException(..) )
 -- | Handle Notifications
 
 
-handleNotification                        :: ( MonadResource m, Failure HttpException m
-                                             , MonadBaseControl IO m
---                                             , MonadBaseControl IO (ActionT (ResourceT m)
-                                               ) =>
-                                             Notification -> ActionT m ()
+handleNotification                         :: Notification -> Action ()
 handleNotification n@(Notification e ci t) = do
                                                sync   <- getSync
                                                fp     <- toLocalPath p
                                                yState <- getYesodClientState
-                                               liftIO $ handleAtomic yState sync fp
+                                               acid   <- getAcidSync
+                                               liftIO $ handleAtomic acid yState sync fp
   where
-    p                    = affectedFromPath e
-    -- handleAtomic :: Sync -> FilePath -> IO ()
-    handleAtomic yState sync fp = atomicallyWriteIO fp . runResourceT $
-                                  runActionTWithClientState yState act sync
-    act                  = protect (noConflict e t)
-                                   (handleEvent e)
-                                   (handleIncomingConflict n)
+    p = affectedFromPath e
+    -- handleAtomic :: AcidSync -> Sync -> FilePath -> IO ()
+    handleAtomic acid yState sync fp = atomicallyWriteIO fp . runResourceT $
+                                         runActionTWithClientState yState sync acid act
+    act = protect (noConflict e t)
+                  (handleEvent e)
+                  (handleIncomingConflict n)
 
 
 
-handleEvent                         :: (Failure HttpException m,
-                                        MonadBaseControl IO m, MonadResource m) =>
-                                       EventKind -> ActionT m ()
+handleEvent                         :: EventKind -> Action ()
 handleEvent (FileAdded p)           = getFile p
 handleEvent (FileRemoved p fi)      = deleteFileLocally p fi
 handleEvent (FileUpdated p fi)      = getUpdate p fi
@@ -69,8 +64,7 @@ handleEvent (DirectoryMoved f t)    = error "handleEvent: moveDir not implemente
 noConflict e t = return True --TODO
 
 
-conflictsLocal         :: Monad m =>
-                          Path -> Maybe FileIdent -> DateTime -> ActionT m Bool
+conflictsLocal         :: Path -> Maybe FileIdent -> DateTime -> Action Bool
 conflictsLocal p mfi t = return False -- TODO!!
 
 
@@ -87,9 +81,7 @@ handleIncomingConflict _ = return ()
 -- | Start syncing the files in path p. To do this, get all notifications
 -- starting at dt. For each notification that we receive (and will receive in
 -- the future), we run a handler that updates our local file system.
-syncDownstream     :: ( MonadResource m, Failure HttpException m
-                      , MonadBaseControl IO m) =>
-                      DateTime -> Path -> ActionT m ()
+syncDownstream      :: DateTime -> Path -> Action ()
 syncDownstream dt p = do
                         sync            <- getSync
                         changesSource'  <- changes dt p
@@ -111,20 +103,10 @@ printSink = awaitForever (liftIO . print)
 
 -- | A sink that, for each incoming notification runs the approprieate action
 -- to handle it.
-notificationSink      :: (MonadResource m, Failure HttpException m
-                         , MonadBaseControl IO m) =>
-                         Sink Notification (ActionT m) ()
+notificationSink :: Sink Notification Action ()
 -- notificationSink = awaitForever (lift .handleNotification)
 notificationSink = awaitForever handle
   where
     handle n = do
                  liftIO $ print n
                  lift $ handleNotification n
-
-
--- where
---   handleNotification' n = handleNotification
-
-
-  --     liftIO . forkIO $ runResourceT $
-  --                             runActionT (handleNotification n) sync
