@@ -1,4 +1,6 @@
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE FlexibleContexts #-}
 module HSync.Client.ActionT where
 
 import Control.Applicative
@@ -11,6 +13,8 @@ import Control.Monad.State.Class(get)
 
 import Control.Monad.Trans.Class
 import Control.Monad.IO.Class
+
+import Control.Failure
 
 import Data.Acid(AcidState)
 import Data.Acid.Advanced(query',update')
@@ -29,6 +33,8 @@ import HSync.Client.Import
 
 import HSync.Client.AcidSync
 import HSync.Client.Sync(Sync)
+
+import Network.HTTP.Conduit(HttpException)
 
 import Yesod.Client
 
@@ -52,7 +58,7 @@ instance IsYesodClient Sync where
 -- | The ActionT transformer adds the AcidState to the yesodClientMonad
 -- transformer
 newtype ActionT acid m a = ActionT { unActionT ::
-                                        ReaderT acid (YesodClientMonadT Sync m) a
+                                        ReaderT acid (YesodClientT Sync m) a
                                    }
 
 instance Monad m => Monad (ActionT acid m) where
@@ -72,6 +78,21 @@ instance Functor m => Functor (ActionT acid m) where
 instance (Functor m, Monad m) => Applicative (ActionT acid m) where
   pure = ActionT . pure
   (ActionT f) <*> (ActionT m) = ActionT $ f <*> m
+
+
+instance ( MonadResource m
+         , MonadBaseControl IO m
+         , Failure HttpException m
+         ) =>
+         MonadYesodClient Sync (ActionT acid) m where
+  runGetRoute r     = liftYT $ runGetRoute r
+  runPostRoute r s  = liftYT $ runPostRoute r s
+  runDeleteRoute r  = liftYT $ runDeleteRoute r
+
+
+-- | Lift a YesodClientT m action into a ActionT m action
+liftYT      :: YesodClientT Sync m a -> ActionT acid m a
+liftYT yAct = ActionT . ReaderT $ (\_ -> yAct)
 
 ------------------------------
 
@@ -107,15 +128,15 @@ type Action = ActionT AcidSync SyncBaseMonad
 
 -- | Get the sync for this action
 getSync :: Action Sync
-getSync = ActionT . ReaderT $ (\_ -> clientInstance)
+getSync = liftYT clientInstance
 
 -- | Get the client state
 getYesodClientState :: Action YesodClientState
-getYesodClientState = ActionT . ReaderT $ (\_ -> get)
+getYesodClientState = liftYT get
 
 -- | Get the AcidSync itself
-acidSync :: Action AcidSync
-acidSync = ActionT ask
+getAcidSync :: Action AcidSync
+getAcidSync = ActionT ask
 
 ------------------------------
 
@@ -124,7 +145,7 @@ queryAcid                   :: QueryEvent ev =>
                                ev ->
                                Action (EventResult ev)
 queryAcid field queryEvent = do
-                               acidState <- field <$> acidSync
+                               acidState <- field <$> getAcidSync
                                query' acidState queryEvent
 
 -- | Get the remote tree
