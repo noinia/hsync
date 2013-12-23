@@ -1,2 +1,5 @@
 dist/
 src/Creds.hs
+state/
+config/putsync.yaml
+config/testsync.yaml

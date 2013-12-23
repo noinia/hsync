@@ -4,3 +4,6 @@ config/client_session_key.aes
 yesod-devel/
 .ghci
 files/
+config/keter.yaml
+deploy/
+notificationlog.log
