@@ -5,15 +5,16 @@
              , FlexibleContexts
              , FlexibleInstances
              , MultiParamTypeClasses
+             , FunctionalDependencies
   #-}
 module Yesod.Client where
 
 import Control.Applicative((<$>),(<*>),Applicative(..))
 
-import Blaze.ByteString.Builder( Builder
-                               , fromByteString
-                               , flush
-                               , toLazyByteString
+import Blaze.ByteString.Builder( -- Builder
+                               -- , fromByteString
+                               -- , flush
+                                toLazyByteString
                                )
 
 import Control.Monad.Reader(MonadReader(..),ReaderT,runReaderT)
@@ -62,6 +63,7 @@ import qualified Network.HTTP.Conduit       as HC
 
 --------------------------------------------------------------------------------
 
+-- | Specifies what type of operations a yesodClient should support
 class IsYesodClient client where
     type YesodServer client
 
@@ -69,13 +71,67 @@ class IsYesodClient client where
     manager       :: client -> Manager
     server        :: client -> YesodServer client
 
+--------------------------------------------------------------------------------
+-- | Basic actions that we can run on something that is a MonadYesodClient
 
--- class YesodClientAction m where
---     type ClientInstance m
+class ( MonadResource m
+      , MonadBaseControl IO m
+      , Failure HttpException m
+      , IsYesodClient client
+      , Yesod (YesodServer client)
+      ) =>
+      MonadYesodClient client yt m | yt -> client where
 
---     clientInstance :: m (ClientInstance m)
---     cookieJar      :: m (Maybe CookieJar)
+  runGetRoute :: Route (YesodServer client) ->
+                 yt m (Response (ResumableSource m ByteString))
 
+  runPostRoute :: Route (YesodServer client) ->
+                   Source (ResourceT IO) ByteString ->
+                   yt m (Response (ResumableSource m ByteString))
+
+
+  runDeleteRoute :: Route (YesodServer client) ->
+                     yt m (Response (ResumableSource m ByteString))
+
+--------------------------------------------------------------------------------
+
+-- | A monad transformer that implements the MonadYesodClient actions
+newtype YesodClientT cli m a =
+    YesodClientT { unYCT :: StateT YesodClientState (ReaderT cli m) a }
+
+
+-- | A yesodClientMonadT is a monad.
+instance Monad m => Monad (YesodClientT cli m) where
+    return                      = YesodClientT . return
+    (YesodClientT m) >>= f = let f' = unYCT . f in
+                                  YesodClientT $ m >>= f'
+
+-- | ... a functor,
+instance Functor m => Functor (YesodClientT cli m) where
+    fmap f = YesodClientT . fmap f . unYCT
+
+-- | ... an applicative,
+instance (Functor m, Monad m) => Applicative (YesodClientT cli m) where
+    pure = YesodClientT . pure
+    (YesodClientT f) <*> (YesodClientT x) = YesodClientT $ f <*> x
+
+-- | .. a monad transformer,
+instance MonadTrans (YesodClientT cli) where
+    lift = YesodClientT . lift . lift
+
+-- | a reader monad.
+instance Monad m => MonadReader cli (YesodClientT cli m) where
+    ask     = YesodClientT . lift $ ask
+    local f = YesodClientT . StateT . fmap (local f) . runStateT . unYCT
+
+
+--- and we can do IO if required.
+instance MonadIO m => MonadIO (YesodClientT cli m) where
+    liftIO = YesodClientT . liftIO
+
+--------------------------------------------------------------------------------
+
+-- | The state maintained by a YesodClient
 data YesodClientState = YesodClientState { cookieJar'      :: Maybe CookieJar
                                          }
                          deriving (Show,Eq)
@@ -83,84 +139,69 @@ data YesodClientState = YesodClientState { cookieJar'      :: Maybe CookieJar
 instance Default YesodClientState where
     def = YesodClientState . Just . createCookieJar $ []
 
-newtype YesodClientMonadT cli m a =
-    YesodClientMonadT { unYCT :: StateT YesodClientState (ReaderT cli m) a }
+-- | YesodClientT maintains YesodClientState as state
+instance Monad m => MonadState YesodClientState (YesodClientT cli m) where
+    state = YesodClientT . state
 
+--------------------------------------------------------------------------------
 
-instance Monad m => Monad (YesodClientMonadT cli m) where
-    return                      = YesodClientMonadT . return
-    (YesodClientMonadT m) >>= f = let f' = unYCT . f in
-                                  YesodClientMonadT $ m >>= f'
-
-instance Functor m => Functor (YesodClientMonadT cli m) where
-    fmap f = YesodClientMonadT . fmap f . unYCT
-
-instance (Functor m, Monad m) => Applicative (YesodClientMonadT cli m) where
-    pure = YesodClientMonadT . pure
-    (YesodClientMonadT f) <*> (YesodClientMonadT x) = YesodClientMonadT $ f <*> x
-
-
-instance MonadTrans (YesodClientMonadT cli) where
-    lift = YesodClientMonadT . lift . lift
-
-instance Monad m => MonadReader cli (YesodClientMonadT cli m) where
-    ask     = YesodClientMonadT . lift $ ask
-    local f = YesodClientMonadT . StateT . fmap (local f) . runStateT . unYCT
-
-
-instance Monad m => MonadState YesodClientState (YesodClientMonadT cli m) where
-    state = YesodClientMonadT . state
-
-instance MonadIO m => MonadIO (YesodClientMonadT cli m) where
-    liftIO = YesodClientMonadT . liftIO
-
-runYesodClientT                                :: YesodClientMonadT cli m a ->
+-- | Run a yesodClientT monad transformer
+runYesodClientT                                :: YesodClientT cli m a ->
                                                   cli ->
                                                   YesodClientState ->
                                                       m (a,YesodClientState)
-runYesodClientT (YesodClientMonadT comp) cli s = runReaderT (runStateT comp s) cli
+runYesodClientT (YesodClientT comp) cli s = runReaderT (runStateT comp s) cli
 
 
-
-evalYesodClientT            :: Functor m => YesodClientMonadT cli m a ->
+-- | run an action, then drop the client state
+evalYesodClientT            :: Functor m => YesodClientT cli m a ->
                                  cli -> YesodClientState -> m a
 evalYesodClientT comp cli s = fst <$> runYesodClientT comp cli s
 
 
-
-
-
-clientInstance :: Monad m => YesodClientMonadT cli m cli
+-- | Get the client instance
+clientInstance :: Monad m => YesodClientT cli m cli
 clientInstance = ask
 
-
-cookieJar :: (Monad m, Functor m) => YesodClientMonadT cli m (Maybe CookieJar)
+-- | Get the cookiejar
+cookieJar :: (Monad m, Functor m) => YesodClientT cli m (Maybe CookieJar)
 cookieJar = cookieJar' <$> get
 
 
-updateCookieJar   :: Monad m => Response body => YesodClientMonadT cli m ()
+-- | Update the cookiejar
+updateCookieJar   :: Monad m => Response body => YesodClientT cli m ()
 updateCookieJar r = modify $ \st -> st {cookieJar' = Just . responseCookieJar $ r}
 
+--------------------------------------------------------------------------------
 
+-- | The MonadYesodClient instance for the YesodClientT
+instance ( MonadResource m
+         , MonadBaseControl IO m
+         , Failure HttpException m
+         , IsYesodClient client
+         , Yesod (YesodServer client)
+         ) =>
+         MonadYesodClient client (YesodClientT client) m where
 
+  runGetRoute = flip runRouteWith id
 
+  runPostRoute r s = runRouteWith r $ \req ->
+                       req { method      = methodPost
+                           , requestBody = requestBodySourceChunked s
+                           }
 
+  runDeleteRoute r = runRouteWith r $ \req ->
+                       req { method      = methodDelete
+                           , requestBody = RequestBodyBS empty
+                           }
+
+--------------------------------------------------------------------------------
+-- | Relating the Client to the server
 
 type IsYesodClientFor client server = ( IsYesodClient client
                                       , Yesod server
                                       , YesodServer client ~ server
                                       )
-
--- type IsActionMonadFor m client = ( YesodClientAction m
---                                  , ClientInstance m ~ client
---                                  )
-
---------------------------------------------------------------------------------
-
-
-
-
-
 
 
 toUrl     :: (client `IsYesodClientFor` server) =>
@@ -175,7 +216,7 @@ toUrl cli r = let root     = serverAppRoot cli
 toReq   :: (client `IsYesodClientFor` server,
             Functor m,
             Failure HttpException m ) =>
-           Route server -> YesodClientMonadT client m Request
+           Route server -> YesodClientT client m Request
 toReq r = do
   cli <- clientInstance
   mcj <- cookieJar
@@ -191,47 +232,9 @@ runRouteWith   :: ( client `IsYesodClientFor` server
                ) =>
                Route server ->
                (Request -> Request) ->
-                   YesodClientMonadT client m (Response (ResumableSource m ByteString))
+                   YesodClientT client m (Response (ResumableSource m ByteString))
 runRouteWith r f = do
   mgr <- manager <$> clientInstance
   req' <- toReq r
   let req = f req'
   lift $ http req mgr
-
-runGetRoute :: ( client `IsYesodClientFor` server
-               , MonadResource m, MonadBaseControl IO m
-               , Failure HttpException m
-               ) =>
-               Route server ->
-                   YesodClientMonadT client m (Response (ResumableSource m ByteString))
-runGetRoute = flip runRouteWith id
-
-
-runPostRoute :: ( client `IsYesodClientFor` server
-                , MonadResource m, MonadBaseControl IO m
-                , Failure HttpException m) =>
-                Route server -> Source (ResourceT IO) ByteString
-                  -> YesodClientMonadT client m (Response (ResumableSource m ByteString))
-runPostRoute r s = runRouteWith r $ \req ->
-                   req { method      = methodPost
-                       , requestBody = requestBodySourceChunked s
-                       }
-
-
-
-runDeleteRoute :: ( client `IsYesodClientFor` server
-                  , MonadResource m, MonadBaseControl IO m
-                  , Failure HttpException m) =>
-                  Route server -> YesodClientMonadT client m (Response (ResumableSource m ByteString))
-runDeleteRoute r = runRouteWith r $ \req ->
-                     req { method      = methodDelete
-                         , requestBody = RequestBodyBS empty
-                         }
-
-
-class ToBuilder a where
-    toBuilder :: Monad m => Source m a -> Source m Builder
-
-
-instance ToBuilder ByteString where
-    toBuilder = mapOutput (\bs -> fromByteString bs <> flush)
