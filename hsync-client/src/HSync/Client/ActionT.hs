@@ -1,5 +1,4 @@
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE FlexibleContexts #-}
 module HSync.Client.ActionT where
 
@@ -15,10 +14,6 @@ import Control.Monad.Trans.Class
 import Control.Monad.IO.Class
 
 import Control.Failure
-
-import Data.Acid(AcidState)
-import Data.Acid.Advanced(query',update')
-import Data.Acid.Memory.Pure(Event, QueryEvent, EventResult, EventState)
 
 import Data.Conduit(ResourceT)
 
@@ -114,10 +109,6 @@ runActionTWithClientState st sync acid (ActionT a) = evalYesodClientT
 --------------------------------------------------------------------------------
 -- | The instantiated monad we will use to run our actions
 
--- | A single type that collects everything that we acidize
-data AcidSync = AcidSync { remoteTreeAcid :: AcidState MTimeTreeState
-                         }
-
 -- | Our base monad for our computations
 type SyncBaseMonad = ResourceT IO
 
@@ -137,22 +128,6 @@ getYesodClientState = liftYT get
 -- | Get the AcidSync itself
 getAcidSync :: Action AcidSync
 getAcidSync = ActionT ask
-
-------------------------------
-
-queryAcid                   :: QueryEvent ev =>
-                               (AcidSync -> AcidState (EventState ev)) ->
-                               ev ->
-                               Action (EventResult ev)
-queryAcid field queryEvent = do
-                               acidState <- field <$> getAcidSync
-                               query' acidState queryEvent
-
--- | Get the remote tree
-remoteTree :: Action (Maybe MTimeFSTree)
-remoteTree = queryAcid remoteTreeAcid PeekMTimeTree
-
-
 
 ------------------------------
 -- | Something on paths
