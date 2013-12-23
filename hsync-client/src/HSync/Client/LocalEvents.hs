@@ -11,9 +11,7 @@ import System.FSNotify
 import qualified System.FSNotify as FSN
 
 -- | should we use the time?
-handleEvent                 :: ( MonadResource m, Failure HttpException m
-                               , MonadIO m, MonadBaseControl IO m) =>
-                               FSN.Event -> ActionT m ()
+handleEvent                 :: FSN.Event -> Action ()
 handleEvent (Added fp _)    = putFileOrDir fp
 handleEvent (Modified fp _) = return ()  -- TODO: We need the OLD fileident here
 handleEvent (Removed fp _)  = return ()  --       same here

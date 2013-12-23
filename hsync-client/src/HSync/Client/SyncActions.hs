@@ -14,7 +14,8 @@ import Data.Conduit(ResourceT, runResourceT, MonadThrow, MonadUnsafeIO, MonadBas
 import Data.Either
 
 import HSync.Client.Actions(login, putFile)
-import HSync.Client.ActionT(Action, runActionT, getSync, AcidSync(..))
+import HSync.Client.ActionT(Action, runActionT, getSync)
+import HSync.Client.AcidSync(AcidSync(..))
 import HSync.Client.Sync
 import HSync.Client.RemoteEvents
 
@@ -66,3 +67,8 @@ putMain fp = withSync fp $ do
   login
   liftIO $ mapM_ print fs
   mapM_ putFile fs
+
+downloadMain fp = withSync fp $ do
+  sync <- getSync
+  login
+  cloneDownstream $ Path (user sync) []

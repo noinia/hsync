@@ -2,6 +2,9 @@
 {-# Language  FlexibleContexts #-}
 module HSync.Client.RemoteEvents where
 
+import Control.Monad.IO.Class(MonadIO(..))
+
+import Control.Monad.Trans.Class(lift)
 import Control.Concurrent(forkIO)
 import Control.Failure
 
@@ -9,19 +12,24 @@ import Control.Failure
 import Data.Conduit
 import Data.Conduit.Internal(ResumableSource(..))
 
-import HSync.Client.Import
-
 import HSync.Client.ActionT
 import HSync.Client.Actions
 import HSync.Client.Sync(Sync)
+import HSync.Client.AcidActions
 
+import HSync.Common.Import
 import HSync.Common.AtomicIO
 import HSync.Common.DateTime(DateTime)
--- import HSync.Common.FileIdent
 import HSync.Common.Notification
+
+import HSync.Common.FSTree
+import HSync.Common.Types
 
 import Network.HTTP.Conduit( HttpException(..) )
 
+import System.Directory( doesDirectoryExist)
+
+import qualified HSync.Common.FileIdent as FI
 
 
 --------------------------------------------------------------------------------
@@ -64,7 +72,7 @@ handleEvent (DirectoryMoved f t)    = error "handleEvent: moveDir not implemente
 noConflict e t = return True --TODO
 
 
-conflictsLocal         :: Path -> Maybe FileIdent -> DateTime -> Action Bool
+conflictsLocal         :: Path -> Maybe FI.FileIdent -> DateTime -> Action Bool
 conflictsLocal p mfi t = return False -- TODO!!
 
 
@@ -74,6 +82,35 @@ conflictsLocal p mfi t = return False -- TODO!!
 -- | Conflict Handling
 
 handleIncomingConflict _ = return ()
+
+--------------------------------------------------------------------------------
+-- | Cloning
+
+
+-- | Download/copy/clone the tree indicated by path. We assume that the local
+-- directory corresponding to path is empty.
+cloneDownstream   :: Path -> Action ()
+cloneDownstream p = getRemoteTree p >>= \mt -> case mt of
+  Nothing      -> error "cloneDownStream: no tree" -- TODO: fix the error stuff
+  Just t@(F _) -> getFile p                       >> replaceMTimeTree (subPath p) t
+  Just t@(D d) -> do cloneDirectoryDownstream p d >> replaceMTimeTree (subPath p) t
+
+
+
+cloneDirectoryDownstream       :: Path -> Directory fl dl -> Action ()
+cloneDirectoryDownstream p dir = protect dirExists
+                                         ifAct
+                                         elseAct
+  where
+    (sds,fs)      = (subDirectories dir, files dir)
+    dirExists     = toLocalPath p >>= liftIO . doesDirectoryExist
+    ifAct         = downloadDirs >> downloadFiles
+    downloadDirs  = mapM_ (\d -> let p' = append . dirName $ d in
+                                cloneDirectoryDownstream p' d) sds
+    downloadFiles = mapM_ (getFile .  append . fileName) fs
+    elseAct       = createDirectoryLocally p >> ifAct
+    append n      = p { subPath = subPath p ++ [n]}
+
 
 --------------------------------------------------------------------------------
 -- | Syncing
