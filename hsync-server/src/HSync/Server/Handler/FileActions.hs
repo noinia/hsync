@@ -13,7 +13,7 @@ import Data.Text.Encoding(decodeUtf8)
 import Network.Wai(requestBody)
 
 import HSync.Common.MTimeTree(MTimeFSTree, readMTimeTree)
-import HSync.Common.HttpRequest(hClientId)
+import HSync.Common.HttpRequest(hClientId, hFileIdent')
 
 import HSync.Server.Handler.Auth(requireRead,requireWrite)
 
@@ -51,10 +51,10 @@ getTreeR p = protectRead p "tree" $
                toJSON <$> getTreeOf p
 
 getTreeOf   :: Path -> Handler (Maybe MTimeFSTree)
-getTreeOf p = let fp = toFilePath filesDir p in
-              liftIO $ protect (isPropperFile fp)
-                               (readMTimeTree fp) -- TODO: Should I create a lock here?
-                               (return Nothing)
+getTreeOf p = asLocalPath p >>= \fp ->
+                liftIO $ protect (isPropperFile fp)
+                                 (readMTimeTree fp) -- TODO: Should I create a lock here?
+                                 (return Nothing)
 
 --------------------------------------------------------------------------------
 -- | Handles related to file events
@@ -65,11 +65,12 @@ getFileR p = protectRead p "file" $ serveFile p
 getDeltaR   :: Path -> Handler TypedContent
 getDeltaR p = protectRead p "delta" $ serveSource dummy
 
+
 getSignatureR   :: Path -> Handler TypedContent
 getSignatureR p = protectRead p "signature" $ serveSource dummy
 
 
-deleteDeleteR                :: FileIdent -> Path -> Handler Text
+deleteDeleteR      :: FileIdent -> Path -> Handler Text
 deleteDeleteR fi p = atomicallyWriteR p "delete" delete'
     where
       delete' fp = protectedByFI fi fp "delete" $ do
@@ -111,13 +112,12 @@ clientId = lookupHeader hClientId >>= \mh -> case mh of
 -- | Handles related to directoryevents
 
 postPutDirR     :: FileIdent -> Path -> Handler Text
-postPutDirR fi p = withNotification putDir'
+postPutDirR fi p = asLocalPath p >>= (withNotification . putDir')
   --atomicallyWriteR p "putDir" putDir'
     where
-      fp      = toFilePath filesDir p
-      putDir' = protectedByFI fi fp "putDir" $ do
-                        liftIO $ createDirectory fp
-                        notification (DirectoryAdded p)
+      putDir' fp = protectedByFI fi fp "putDir" $ do
+                          liftIO $ createDirectory fp
+                          notification (DirectoryAdded p)
 
 
 -- TODO: Handle Directories!!!
@@ -130,8 +130,15 @@ serveSource   :: Source Handler ByteString -> Handler TypedContent
 serveSource s = respondSource typeOctet (s $= awaitForever sendChunkBS)
 
 
-serveFile   :: MonadHandler m => Path -> m a
-serveFile p = sendFile typeOctet (toFilePath filesDir p)
+serveFile   :: Path -> Handler a
+serveFile p = addFIHeader p >> asLocalPath p >>= sendFile typeOctet
+
+
+addFIHeader   :: Path -> Handler ()
+addFIHeader p = addHeader hFileIdent' "TODO: FileIdentGoesHere"
+
+
+
 
 protectRead         :: Path -> Text -> Handler a -> Handler a
 protectRead p err h = protect (requireRead p) h (permissionDenied err)
@@ -146,10 +153,10 @@ type FINotification = Either ErrorDescription Notification
 atomicallyWriteR              :: Path -> Text ->
                                  (FilePath -> Handler FINotification) ->
                                      Handler Text
-atomicallyWriteR p hName h = protectWrite p hName $ withNotification h'
+atomicallyWriteR p hName h = asLocalPath p >>= \fp ->
+                               protectWrite p hName $ withNotification (h' fp)
     where
-      fp = toFilePath filesDir p
-      h' = atomicallyWriteIO fp (h fp)
+      h' fp = atomicallyWriteIO fp (h fp)
 
 -- | Runs a handler h that should proce a notification, and logs the
 -- notification.

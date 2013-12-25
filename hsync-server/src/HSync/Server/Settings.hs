@@ -24,9 +24,6 @@ import qualified Data.Text as T
 type PersistConf = SqliteConf
 
 
-filesDir :: Text
-filesDir = "files"
-
 -- Static setting below. Changing these requires a recompile
 
 -- | The location of static files on your system. This is a file system
@@ -72,13 +69,18 @@ widgetFile = (if development then widgetFileReload
               widgetFileSettings
 
 data Extra = Extra
-    { extraNotificationLogDir :: FilePath
+    { extraFilesDir           :: FilePath
+    , extraNotificationLogDir :: FilePath -- TODO: change this
     , extraCopyright          :: Text
     , extraAnalytics          :: Maybe Text -- ^ Google Analytics
     } deriving Show
 
 parseExtra :: DefaultEnv -> Object -> Parser Extra
-parseExtra _ o = (\tp -> Extra (T.unpack tp))
-    <$> o .:  "notificationLogDir"
+parseExtra _ o = (\fDir nDir -> Extra (T.unpack fDir) (T.unpack nDir))
+    <$> o .:  "filesDir"
+    <*> o .:  "notificationLogDir"
     <*> o .:  "copyright"
     <*> o .:? "analytics"
+-- TODO: This should be updated, both the notification and the files dir are
+-- paths. So we should store them uniformly. But I don't want to bother with
+-- that now.

@@ -14,7 +14,7 @@ import HSync.Common.Types
 import HSync.Common.FileIdent(FileIdent)
 import HSync.Common.Notification
 
-import Data.Text(Text)
+import Data.Text(pack)
 import Data.Default
 import Data.Conduit(Source,yield)
 
@@ -41,9 +41,9 @@ import HSync.Server.Model
 import Text.Jasmine (minifym)
 import Text.Hamlet (hamletFile)
 
-
 import qualified HSync.Server.Settings as Settings
 import qualified Database.Persist
+
 
 -- | The site argument for your application. This can be a good place to
 -- keep settings and values requiring initialization before your application
@@ -208,15 +208,15 @@ instance RenderMessage HSyncServer FormMessage where
 
 -- | Get the 'Extra' value, used to hold data from the settings.yml file.
 getExtra :: Handler Extra
-getExtra = fmap (appExtra . settings) getYesod
+getExtra = appExtra . settings <$> getYesod
 
--- Note: previous versions of the scaffolding included a deliver function to
--- send emails. Unfortunately, there are too many different options for us to
--- give a reasonable default. Instead, the information is available on the
--- wiki:
---
--- https://github.com/yesodweb/yesod/wiki/Sending-email
+getFilesDir :: Handler FilePath
+getFilesDir = extraFilesDir <$> getExtra
 
+
+asLocalPath   :: Path -> Handler FilePath
+asLocalPath p = flip toFilePath p . pack <$> getFilesDir
+                -- TODO: The packing and unpacking is silly
 
 notifications :: Handler (Source Handler Notification)
 notifications = getYesod >>= notifications'
