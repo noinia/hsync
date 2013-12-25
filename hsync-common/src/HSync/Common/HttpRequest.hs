@@ -19,3 +19,10 @@ mkRequestHeader n v = (mkHeaderName n, encodeUtf8 v)
 -- | The HTTP-header identifying the client
 hClientId :: HeaderName
 hClientId = mkHeaderName "client-ident"
+
+-- | The http-header identifying the file ident
+hFileIdent :: HeaderName
+hFileIdent = mkHeaderName hFileIdent'
+
+hFileIdent' :: Text
+hFileIdent' = "fileIdent"
