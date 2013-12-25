@@ -30,6 +30,7 @@ import Control.Failure
 
 
 import Data.ByteString(ByteString, empty)
+
 import Data.Conduit(Source, ResumableSource, mapOutput, ResourceT, transPipe)
 import Data.Default
 import Data.Monoid((<>))
@@ -53,13 +54,15 @@ import Network.HTTP.Conduit( Request
                            , requestBodySourceChunked
                            , responseCookieJar
                            )
+
 import Network.HTTP.Types
 
 import Yesod.Core
 
-
 import qualified Data.ByteString.Lazy.Char8 as LC
 import qualified Network.HTTP.Conduit       as HC
+
+import qualified Network.HTTP.Types.Header  as H
 
 --------------------------------------------------------------------------------
 
@@ -67,9 +70,12 @@ import qualified Network.HTTP.Conduit       as HC
 class IsYesodClient client where
     type YesodServer client
 
-    serverAppRoot :: client -> Text
-    manager       :: client -> Manager
-    server        :: client -> YesodServer client
+    serverAppRoot  :: client -> Text
+    manager        :: client -> Manager
+    server         :: client -> YesodServer client
+
+    defaultRequestModifier   :: client -> Request -> Request
+    defaultRequestModifier _ = id
 
 --------------------------------------------------------------------------------
 -- | Basic actions that we can run on something that is a MonadYesodClient
@@ -92,6 +98,9 @@ class ( MonadResource m
 
   runDeleteRoute :: Route (YesodServer client) ->
                      yt m (Response (ResumableSource m ByteString))
+
+
+
 
 --------------------------------------------------------------------------------
 
@@ -221,11 +230,13 @@ toReq r = do
   cli <- clientInstance
   mcj <- cookieJar
   req <- parseUrl . toUrl cli $ r
-  return $ req { HC.cookieJar       = mcj
-               , HC.responseTimeout = Nothing
-               }
+  return . defaultRequestModifier cli $ req { HC.cookieJar       = mcj
+                                            , HC.responseTimeout = Nothing
+                                            }
 
 
+-- | Given a route and a request modification function f. Create a request for
+-- this route, modify it with f, and then run the request.
 runRouteWith   :: ( client `IsYesodClientFor` server
                , MonadResource m, MonadBaseControl IO m
                , Failure HttpException m
@@ -235,6 +246,9 @@ runRouteWith   :: ( client `IsYesodClientFor` server
                    YesodClientT client m (Response (ResumableSource m ByteString))
 runRouteWith r f = do
   mgr <- manager <$> clientInstance
-  req' <- toReq r
-  let req = f req'
+  req <- f <$> toReq r
   lift $ http req mgr
+
+
+addRequestHeader         :: H.Header -> Request -> Request
+addRequestHeader hdr req = req { HC.requestHeaders = hdr : HC.requestHeaders req }

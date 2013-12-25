@@ -19,10 +19,12 @@ import Data.Conduit(ResourceT)
 
 import Data.Data(Data,Typeable)
 import Data.Default
+import Data.Text.Encoding(encodeUtf8)
+
 
 import HSync.Common.DateTime(DateTime)
 import HSync.Common.MTimeTree
-
+import HSync.Common.HttpRequest(hClientId)
 
 import HSync.Client.Import
 
@@ -45,6 +47,8 @@ instance IsYesodClient Sync where
     server   _    = def
     manager       = S.httpManager
 
+    defaultRequestModifier sync = addRequestHeader
+                                    (hClientId, encodeUtf8 $ S.clientIdent sync)
 
 --------------------------------------------------------------------------------
 -- | A monad for running Sync Actions
