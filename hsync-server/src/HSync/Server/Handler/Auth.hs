@@ -74,8 +74,9 @@ requireRead (Path u ps) = do
                             ui <- requireAuthId'
                             return $ u == ui
 
-requireWrite             :: Path -> Handler Bool
-requireWrite p@(Path u ps) = requireRead p
+-- | For now require the same thing as reading
+requireWrite :: Path -> Handler Bool
+requireWrite = requireRead
 
 
 requireAuthId' :: Handler UserIdent
