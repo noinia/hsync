@@ -24,6 +24,7 @@ library
                        HSync.Common.MTimeTree
                        HSync.Common.DateTime
                        HSync.Common.Notification
+                       HSync.Common.HttpRequest
 
   -- other-modules:
   build-depends:
@@ -46,6 +47,8 @@ library
     -- , acid-state                    >= 0.12.1     && < 0.12.2
     , safecopy                      >= 0.8.2      && < 0.8.3
     , mtl                           >= 2.1.2      && < 2.2
+    , case-insensitive              >= 1.0        && < 1.2
+    , http-types                    >= 0.8        && < 0.9
 
   hs-source-dirs:      src
 
