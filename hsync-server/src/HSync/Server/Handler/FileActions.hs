@@ -8,11 +8,12 @@ import Data.Aeson(encode)
 import Data.Conduit
 import Data.Conduit.Binary
 import Data.ByteString(ByteString)
-
+import Data.Text.Encoding(decodeUtf8)
 
 import Network.Wai(requestBody)
 
 import HSync.Common.MTimeTree(MTimeFSTree, readMTimeTree)
+import HSync.Common.HttpRequest(hClientId)
 
 import HSync.Server.Handler.Auth(requireRead,requireWrite)
 
@@ -100,17 +101,11 @@ postPutFileR fi            p = do
       determineEvent _           = error "putFile: unknown event."
 
 
-
-
+-- | Retireve the clientId from the request information
 clientId :: Handler ClientIdent
-clientId = return "clientId"
-
-
-
-
-
-
-
+clientId = lookupHeader hClientId >>= \mh -> case mh of
+             Nothing -> invalidArgs ["clientId: Invalid clientId."]
+             Just ci -> return $ decodeUtf8 ci
 
 --------------------------------------------------------------------------------
 -- | Handles related to directoryevents
