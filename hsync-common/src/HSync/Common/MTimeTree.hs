@@ -14,6 +14,7 @@ import Data.SafeCopy(base, deriveSafeCopy)
 
 import HSync.Common.DateTime(DateTime, modificationTime)
 import HSync.Common.FSTree
+import HSync.Common.FSTreeZipper
 import HSync.Common.Types(FileName, SubPath)
 
 import qualified HSync.Common.FileIdent as FI

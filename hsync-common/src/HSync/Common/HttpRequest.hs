@@ -2,7 +2,7 @@ module HSync.Common.HttpRequest where
 
 import Data.CaseInsensitive(mk)
 
-import Data.Text.Encoding(encodeUtf8)
+import Data.Text.Encoding(encodeUtf8,decodeUtf8)
 
 import Network.HTTP.Types.Header
 
@@ -27,5 +27,5 @@ hFileIdent = mkHeaderName hFileIdent'
 hFileIdent' :: Text
 hFileIdent' = "fileIdent"
 
-getHeader       :: HeaderName -> ResponseHeaders -> Maybe Text
-getHeader n hrs = fmap encodeUtf8 . lookup n
+getHeader   :: HeaderName -> ResponseHeaders -> Maybe Text
+getHeader n = fmap decodeUtf8 . lookup n
