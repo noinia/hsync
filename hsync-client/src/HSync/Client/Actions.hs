@@ -3,6 +3,7 @@ module HSync.Client.Actions where
 
 
 import Control.Failure
+import Control.Exception(throw)
 
 import Control.Monad(when)
 import Control.Monad.IO.Class (liftIO)
@@ -25,9 +26,11 @@ import Data.Conduit.Internal(ResumableSource(..))
 
 import HSync.Client.Sync(Sync, user, hashedPassword, clientIdent)
 import HSync.Client.ActionT
+import HSync.Client.AcidActions(updateFileIdent)
 
 import HSync.Common.DateTime(DateTime)
 import HSync.Common.MTimeTree
+import HSync.Common.HttpRequest(getHeader, hFileIdent)
 
 import HSync.Server.Import
 
@@ -46,6 +49,7 @@ import Network.HTTP.Conduit( Request
                            , responseBody
                            , responseStatus
                            , responseCookieJar
+                           , responseHeaders
                            )
 import Network.HTTP.Types
 import Network.Wai(requestBody)
@@ -138,7 +142,6 @@ remoteFileInfo fp = do
                       p  <- toRemotePath fp
                       fi <- toFileIdent <$> getRemoteTree p
                       liftIO $ print (p,fi)
-
                       return (fi,p)
 
 -- | Runs the getTree Handler: get the FSTree representing the Filestystem at p
@@ -175,8 +178,11 @@ getFile p = toLocalPath p >>= getFile' p
 getFile'      :: Path -> FilePath -> Action ()
 getFile' p lp = do
   resp <- runGetRoute $ FileR p
-  let status = responseStatus resp
-  when (status == ok200) $ lift (responseBody resp C.$$+- sinkFile lp)
+  lift (responseBody resp C.$$+- sinkFile lp)
+  case (getHeader hFileIdent . responseHeaders $ resp) >>= fromPathPiece of
+    Nothing -> throw $ InvalidHeader (B.pack "fileIdent header")
+    Just fi -> updateFileIdent p fi
+
 
 --------------------------------------------------------------------------------
 
@@ -185,15 +191,12 @@ putDir   :: Path -> Action ()
 putDir p = runPostRoute (PutDirR NonExistent p) noData >> return ()
     where
       noData = sourceLbs LB.empty
+      -- TODO: Update the remote state
 
 -- | Run a postPut action: i.e. upload the file at fp onto the server. We
 -- assume that fp is a global path to the file!
-putFile    :: FilePath -> Action ()
-putFile fp = remoteFileInfo fp >>= uncurry (putFile' fp)
-
-
-putFile'         :: FilePath -> FileIdent -> Path -> Action ()
-putFile' fp fi p = do
+putFile         :: FilePath -> FileIdent -> Path -> Action ()
+putFile fp fi p = do
                      let h = PutFileR fi p
                          s = sourceFile fp
                      sync <- getSync
@@ -201,13 +204,22 @@ putFile' fp fi p = do
                      liftIO $ print $ toUrl sync h
                      resp <- runPostRoute h s
                      liftIO $ print "woei"
+                     -- TODO: Update the remote state
 
+
+-- | Given a local (absolute) file path. Upload the file or directory.
 putFileOrDir    :: FilePath -> Action ()
 putFileOrDir fp = fileIdent fp >>= \fi -> case fi of
                     FI.NonExistent -> error "putFileOrDir: nonexistent file"
                     FI.Directory _ -> toRemotePath fp >>= putDir
-                    FI.File      _ -> toRemotePath fp >>= putFile' fp fi
+                    FI.File      _ -> toRemotePath fp >>= putFile fp fi
 
+-- | Force uploading the file at fp onto the server. I.e. get the remote file
+-- info for this file, and then upload the file. Note that this is unsafe in
+-- the sense that this will replace the file of the server without the
+-- guarantee that our file is newer.
+forcePutFile    :: FilePath -> Action ()
+forcePutFile fp = remoteFileInfo fp >>= uncurry (putFile fp)
 
 --------------------------------------------------------------------------------
 -- | Updates
@@ -215,19 +227,18 @@ putFileOrDir fp = fileIdent fp >>= \fi -> case fi of
 getUpdate      :: Path -> FileIdent -> Action ()
 getUpdate p fi = getFile p
 
+
+putUpdate :: FilePath -> FileIdent -> Path -> Action ()
+putUpdate = putFile
+
 --------------------------------------------------------------------------------
 -- | Deletes
 
-
 -- | Runs the DeleteR handler: i.e. deletes the file (with path p) on the
 -- server, assuming that the remote file (still) has fileIdent fi.
-deleteFile      :: FileIdent -> Path -> Action ()
-deleteFile fi p = runDeleteRoute (DeleteR fi p) >> return ()
-
-
--- runs the delete handler to delete the directory with path p (and FileIdent fi)
-deleteDir :: FileIdent -> Path -> Action ()
-deleteDir = deleteFile
+deleteRemote      :: FileIdent -> Path -> Action ()
+deleteRemote fi p = runDeleteRoute (DeleteR fi p) >> return ()
+                    -- TODO: Update the state that we have of the remote server
 
 
 --------------------------------------------------------------------------------

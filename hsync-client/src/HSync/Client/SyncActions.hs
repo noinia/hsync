@@ -13,7 +13,7 @@ import Data.Default
 import Data.Conduit(ResourceT, runResourceT, MonadThrow, MonadUnsafeIO, MonadBaseControl)
 import Data.Either
 
-import HSync.Client.Actions(login, putFile)
+import HSync.Client.Actions(login, forcePutFile)
 import HSync.Client.ActionT(Action, runActionT, getSync)
 import HSync.Client.AcidSync(AcidSync(..))
 import HSync.Client.Sync
@@ -66,7 +66,7 @@ putMain fp = withSync fp $ do
   let fs = map ("/Users/frank/tmp/synced/tls/" ++) . filter (not . isPrefixOf ".") $ fs'
   login
   liftIO $ mapM_ print fs
-  mapM_ putFile fs
+  mapM_ forcePutFile fs
 
 downloadMain fp = withSync fp $ do
   sync <- getSync
