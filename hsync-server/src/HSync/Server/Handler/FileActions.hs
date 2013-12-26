@@ -135,9 +135,11 @@ serveFile p = addFIHeader p >> asLocalPath p >>= sendFile typeOctet
 
 
 addFIHeader   :: Path -> Handler ()
-addFIHeader p = addHeader hFileIdent' "TODO: FileIdentGoesHere"
+addFIHeader p = getFileIdent p >>= addHeader hFileIdent' . toPathPiece
 
 
+getFileIdent   :: Path -> Handler FileIdent
+getFileIdent p = asLocalPath p >>= fileIdent
 
 
 protectRead         :: Path -> Text -> Handler a -> Handler a

@@ -26,3 +26,6 @@ hFileIdent = mkHeaderName hFileIdent'
 
 hFileIdent' :: Text
 hFileIdent' = "fileIdent"
+
+getHeader       :: HeaderName -> ResponseHeaders -> Maybe Text
+getHeader n hrs = fmap encodeUtf8 . lookup n
