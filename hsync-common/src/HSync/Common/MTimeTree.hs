@@ -14,7 +14,7 @@ import Data.SafeCopy(base, deriveSafeCopy)
 
 import HSync.Common.DateTime(DateTime, modificationTime)
 import HSync.Common.FSTree
-import HSync.Common.FSTreeZipper
+import HSync.Common.FSTree.Zipper
 import HSync.Common.Types(FileName, SubPath)
 
 import qualified HSync.Common.FileIdent as FI
@@ -40,7 +40,7 @@ $(deriveSafeCopy 0 'base ''DirMTime)
 updateDT                  :: DateTime -> DirMTime -> DirMTime
 updateDT t (DirMTime l s) = DirMTime l $ maximum [s, Just t]
 
-
+updateDT'                                :: DirMTime -> DirMTime -> DirMTime
 updateDT' (DirMTime _ s') (DirMTime l s) = DirMTime l $ maximum [s, s']
 
 
@@ -56,16 +56,19 @@ readMTimeTree baseDir = fmap (labelBottomUp (\(DirMTime l re) dls fls -> DirMTim
                         )) <$> readFSTree baseDir modificationTime readDirMTime
 
 
-
 -- | Given a path and a datetime, update the node at that path with that time.
 -- this also updates all mtimes on the path to that node.
-updateMTime         :: SubPath -> DateTime -> Maybe MTimeFSTree -> Maybe MTimeFSTree
-updateMTime p dt mt = mt >>= flip fsTreeZipper ()
-                          >>= goTo p
-                          >>= return . tree . goToRoot .
-                              updateAndPropagate updateDT updateDT' f
+updateMTime      :: SubPath -> DateTime -> MTimeFSTree -> Maybe MTimeFSTree
+updateMTime p dt = updateAndPropagateUp (Left dt) propagateF (Just . treeF) p
   where
-    f = updateLabel (const dt) (const $ DirMTime dt (Just dt))
+    treeF                 = updateLabel (const dt) (const $ DirMTime dt (Just dt))
+                           -- if we have a file, the label is just the dt itself
+                           -- if we have a dir. both its local label as its recursive
+                           -- label are dt (since clearly this is the last event that
+                           -- has happened in this subtree )
+    propagateF            :: Either DateTime DirMTime -> DirMTime -> DirMTime
+    propagateF (Left t)   = updateDT  t
+    propagateF (Right dl) = updateDT' dl
 
 
 class HasFileIdent c where
