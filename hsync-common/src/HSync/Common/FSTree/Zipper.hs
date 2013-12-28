@@ -1,34 +1,36 @@
 {-# Language TemplateHaskell #-}
 {-# Language GeneralizedNewtypeDeriving #-}
 {-# Language DeriveDataTypeable #-}
-module HSync.Common.FSTreeZipper( FSTreeZipper
-                                , fsTreeZipper
-                                , fsTreeZipper'
+module HSync.Common.FSTree.Zipper( FSTreeZipper
+                                 , fsTreeZipper
+                                 , fsTreeZipper'
+                                 , fsTreeZipperAt
 
-                                , tree
-                                , crumbs
-                                , zipperState
+                                 , tree
+                                 , crumbs
+                                 , zipperState
 
-                                , FSCrumb(..)
-                                , Crumb(..)
-                                , path
+                                 , FSCrumb(..)
+                                 , Crumb(..)
+                                 , path
 
-                                , readFSTreeZipper
+                                 , readFSTreeZipper
 
-                                , goUp
-                                , goToRoot
+                                 , goUp
+                                 , goToRoot
 
-                                , goToFile
-                                , goToDir
-                                , goToDirOrFile
-                                , goTo
-                                , goToNextFile
+                                 , goToFile
+                                 , goToDir
+                                 , goToDirOrFile
+                                 , goTo
+                                 , goToNextFile
 
-                                , update
-                                , updateAndPropagate
-                                , replace
-                                , delete
-                                ) where
+                                 , updateAndPropagate
+                                 , update
+                                 , adjust
+                                 , replace
+                                 , delete
+                                 ) where
 
 
 import Control.Applicative((<$>))
@@ -41,7 +43,7 @@ import Data.List(break)
 import Data.Maybe(catMaybes, fromJust)
 import Data.Text(Text)
 
-import HSync.Common.FSTree
+import HSync.Common.FSTree.Basic
 import HSync.Common.Types(FileName, SubPath)
 
 
@@ -213,13 +215,70 @@ goToNextFile (F f, (FCrumb c):bs,zs) = case rights c of
 goToNextFile (F _, [], _)            = Nothing
 goToNextFile _                       = Nothing
 
+
+--------------------------------------------------------------------------------
+-- | More creating zippers
+
+-- | given a FSTree, a state, and a subpath, create a zipper centered at that path
+fsTreeZipperAt        :: FSTree fl dl -> zs -> SubPath -> Maybe (FSTreeZipper fl dl zs)
+fsTreeZipperAt t zs p = fsTreeZipper t zs >>= goTo p
+
+
 --------------------------------------------------------------------------------
 -- | Modifying the zipper
 
+
+
+-- | updateAndPropgate defaultL labelL treeF z updates the currently selected
+-- subtree using function treeF, and update the labels all ancestors of the
+-- current tree with the help of labelF.
+--
+-- If treeF returns Nothing,the current tree is deleted, and we move up to its
+-- parent (if possible). If treeF returns a just t, we replace the current tree
+-- with that tree.
+--
+-- With respect to propagating updates: We update all ancestors of the current
+-- tree, starting with the ancestor of the current tree. At each label update,
+-- we use the information from it's local children.
+--
+-- If we delete the current tree, we do update parent of the currently selected
+-- tree. We then start the updating process with label 'defaultFl'.
+updateAndPropagate  :: Either fl dl ->
+                       (Either fl dl -> dl -> dl) ->
+                       (FSTree fl dl -> Maybe (FSTree fl dl)) ->
+                       FSTreeZipper fl dl zs -> Maybe (FSTreeZipper fl dl zs)
+updateAndPropagate defaultL labelF treeF z@(t,bs,_) = case treeF t of
+    Nothing -> delete $ prop defaultL z
+    Just t' -> Just . prop (label t')  $  replace t' z
+  where
+    prop el (t,bs,zs) = (t,propagate labelF el bs,zs)
+
+
+-- | propagate f el cs Propagates an update f to the crumbs cs. For each crumb
+-- we compute the new crumb using function f, and the updated function.
+propagate     :: (Either fl dl -> dl -> dl) ->
+                 Either fl dl ->
+                 [FSCrumb fl dl] -> [FSCrumb fl dl]
+propagate f el = reverse . map fst . scanl propagate' (undefined, f el)
+  where
+    -- Propagate computes the new crumb, and updates the update function
+    propagate' (_,g) c = let c' = adjustFSCrumb g c
+                             g' = f . Right . label' $ c'
+                         in (c',g')
+
+-- | Use the given function to update the currentsly selected subtree. If the
+-- function returns nothing we remove the current subtree, and move up to the
+-- parent.
+update :: (FSTree fl dl -> Maybe (FSTree fl dl)) ->
+          FSTreeZipper fl dl zs -> Maybe (FSTreeZipper fl dl zs)
+update f z@(t,_,_) = case f t of
+                       Nothing -> delete z
+                       Just t' -> Just $ replace t' z
+
 -- | apply the given function on the currently selected subtree.
-update               :: (FSTree fl dl -> FSTree fl dl) ->
+adjust               :: (FSTree fl dl -> FSTree fl dl) ->
                         FSTreeZipper fl dl zs -> FSTreeZipper fl dl zs
-update f (t,bs,zs)
+adjust f (t,bs,zs)
   | isDir t == isDir t' = (t',bs,zs) -- the FSTree is of the same type as before
   | otherwise           = case (t',bs) of -- FSTree changed of type
        (F _, (DCrumb (Crumb n l fs dl dr)):bs') ->
@@ -233,51 +292,59 @@ update f (t,bs,zs)
   where
     t'       = f t
 
--- | updateAndPropagate updateLF updateDL f z updates the tree currently selected
---   using function f. Furthermore, it propagates the update of this tree
---   in the labels of the ancestors of this node using the functions updateFL and updateDL
-updateAndPropagate                      :: (fl -> dl -> dl) ->
-                                           (dl -> dl -> dl) ->
-                                           (FSTree fl dl -> FSTree fl dl) ->
-                                           FSTreeZipper fl dl zs -> FSTreeZipper fl dl zs
-updateAndPropagate updateFL updateDL f z = case update f z of
-  (t, bs, zs) -> let -- updateL is a function that given a label, computes the new
-                     -- label value.
-                     updateL = case t of
-                         F t' -> updateFL (fileLabel t')
-                         D t' -> updateDL (dirLabel t')
-                 in ( t
-                      -- We traverse all crumbs, left to right, and incrementally update
-                      -- all crumbs with their new label. If we have computed a new
-                      -- crumb c, we use it's label in the propagation function in
-                      -- the next step.
-                    , reverse . snd $ foldl (\(updateF,bs') c ->
-                                              let c' = updateFSCrumb c updateF in
-                                              (updateDL (label' c'), c':bs')
-                                  ) (updateL, []) bs
-                    , zs)
-
-
-updateFSCrumb              :: FSCrumb fl dl -> (dl -> dl) -> FSCrumb fl dl
-updateFSCrumb (FCrumb c) f = FCrumb $ updateCrumb c f
-updateFSCrumb (DCrumb c) f = DCrumb $ updateCrumb c f
-
-updateCrumb     :: Crumb dl unCh ch -> (dl -> dl) -> Crumb dl unCh ch
-updateCrumb c f = c { dirLabel' = f (dirLabel' c) }
-
 
 -- | Replace the currently selected subtree
 replace   :: FSTree fl dl -> FSTreeZipper fl dl zs -> FSTreeZipper fl dl zs
-replace t = update (const t)
-
-
-withTree             :: (FSTree fl dl -> FSTree fl dl) ->
-                        FSTreeZipper fl dl zs -> FSTreeZipper fl dl zs
-withTree f (t,bs,zs) = (f t, bs, zs)
+replace t = adjust (const t)
 
 
 -- | Delete the currently selected tree. This moves us up to the parent node of
 -- the zipper.
 delete               :: FSTreeZipper fl dl zs -> Maybe (FSTreeZipper fl dl zs)
-delete z@(F f, _, _) = update (\(D d') -> D $ removeFile   (fileName f) d') <$> goUp z
-delete z@(D d, _, _) = update (\(D d') -> D $ removeSubDir (dirName d)  d') <$> goUp z
+delete z@(F f, _, _) = adjust (\(D d') -> D $ removeFile   (fileName f) d') <$> goUp z
+delete z@(D d, _, _) = adjust (\(D d') -> D $ removeSubDir (dirName d)  d') <$> goUp z
+
+
+
+
+
+
+-- -- | adjustAndPropagate adjustLF adjustDL f z adjusts the tree currently selected
+-- --   using function f. Furthermore, it propagates the adjust of this tree
+-- --   in the labels of the ancestors of this node using the functions adjustFL and adjustDL
+-- adjustAndPropagate                      :: (fl -> dl -> dl) ->
+--                                            (dl -> dl -> dl) ->
+--                                            (FSTree fl dl -> FSTree fl dl) ->
+--                                            FSTreeZipper fl dl zs -> FSTreeZipper fl dl zs
+-- adjustAndPropagate adjustFL adjustDL f z = case adjust f z of
+--   (t, bs, zs) -> let -- adjustL is a function that given a label, computes the new
+--                      -- label value.
+--                      adjustL = case t of
+--                          F t' -> adjustFL (fileLabel t')
+--                          D t' -> adjustDL (dirLabel t')
+--                  in ( t
+--                       -- We traverse all crumbs, left to right, and incrementally adjust
+--                       -- all crumbs with their new label. If we have computed a new
+--                       -- crumb c, we use it's label in the propagation function in
+--                       -- the next step.
+--                     , reverse . snd $ foldl (\(adjustF,bs') c ->
+--                                               let c' = adjustFSCrumb adjustF c in
+--                                               (adjustDL (label' c'), c':bs')
+--                                   ) (adjustL, []) bs
+--                     , zs)
+
+
+-- | Given a function on a FSTree and a zipper. Run the function on the current
+-- zipper (withoug modifying the crumbs of the zipper state)
+withTree             :: (FSTree fl dl -> FSTree fl dl) ->
+                        FSTreeZipper fl dl zs -> FSTreeZipper fl dl zs
+withTree f (t,bs,zs) = (f t, bs, zs)
+
+
+-- | Adjusts the label of a FSCrumb
+adjustFSCrumb              :: (dl -> dl) -> FSCrumb fl dl -> FSCrumb fl dl
+adjustFSCrumb f (FCrumb c) = FCrumb $ adjustCrumb c f
+adjustFSCrumb f (DCrumb c) = DCrumb $ adjustCrumb c f
+
+adjustCrumb     :: Crumb dl unCh ch -> (dl -> dl) -> Crumb dl unCh ch
+adjustCrumb c f = c { dirLabel' = f (dirLabel' c) }
