@@ -10,10 +10,13 @@ import Data.Acid.Memory.Pure( Event, QueryEvent,UpdateEvent
 import HSync.Common.FSTree
 import HSync.Common.MTimeTree
 import HSync.Common.Types
+import HSync.Common.FileIdent
 
 
 import HSync.Client.ActionT
 import HSync.Client.AcidSync
+
+import qualified HSync.Common.FileIdent as FI
 
 --------------------------------------------------------------------------------
 
@@ -36,14 +39,35 @@ updateAcid field updateEvent = do
                                acidState <- field <$> getAcidSync
                                update' acidState updateEvent
 
-
-
 -- | returns a Maybe MTimeFSTree that the client *thinks* represents the state
 -- of the filesystem on the server.
 serverTreeState :: Action (Maybe MTimeFSTree)
 serverTreeState = queryAcid remoteTreeAcid QueryMTimeTree
 
 
--- | Replaces the subtree at sp in the remoteTree with st
-replaceMTimeTree       :: SubPath -> MTimeFSTree -> Action ()
-replaceMTimeTree sp st = updateAcid remoteTreeAcid (UpdateReplaceMTimeTree sp st)
+-- | Update the tree state
+updateTreeState   :: (MTimeFSTree -> Maybe MTimeFSTree) -> Action ()
+updateTreeState f = updateTreeState' (>>= f)
+
+
+updateTreeState'   :: (Maybe MTimeFSTree -> Maybe MTimeFSTree) -> Action ()
+updateTreeState' f = do
+                      mt <- serverTreeState
+                      let mt' = f mt
+                      updateAcid remoteTreeAcid (UpdateReplaceFull mt')
+
+
+-- | Get what we think is the FileIdent for the file indicated by path.
+serverFileState    :: SubPath -> Action FI.FileIdent
+serverFileState sp = toFileIdent <$> serverTreeState
+
+
+--------------------------------------------------------------------------------
+
+updateFileIdent                     :: Path -> FI.FileIdent -> Action ()
+updateFileIdent p FI.NonExistent    = return () -- TODO
+updateFileIdent p (FI.File dt)      = updateFileIdent' (subPath p) dt
+updateFileIdent p (FI.Directory dt) = updateFileIdent' (subPath p) dt
+-- TODO, distinguish between adds and updates
+
+updateFileIdent' p dt = updateTreeState (Just . updateMTime p dt)

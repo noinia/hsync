@@ -92,8 +92,8 @@ handleIncomingConflict _ = return ()
 cloneDownstream   :: Path -> Action ()
 cloneDownstream p = getRemoteTree p >>= \mt -> case mt of
   Nothing      -> error "cloneDownStream: no tree" -- TODO: fix the error stuff
-  Just t@(F _) -> getFile p                       >> replaceMTimeTree (subPath p) t
-  Just t@(D d) -> do cloneDirectoryDownstream p d >> replaceMTimeTree (subPath p) t
+  Just t@(F _) -> getFile p
+  Just t@(D d) -> cloneDirectoryDownstream p d
 
 
 

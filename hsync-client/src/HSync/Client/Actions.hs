@@ -179,19 +179,16 @@ getFile'      :: Path -> FilePath -> Action ()
 getFile' p lp = do
   resp <- runGetRoute $ FileR p
   lift (responseBody resp C.$$+- sinkFile lp)
-  case (getHeader hFileIdent . responseHeaders $ resp) >>= fromPathPiece of
-    Nothing -> throw $ InvalidHeader (B.pack "fileIdent header")
-    Just fi -> updateFileIdent p fi
-
+  withFIHeader resp p (updateFileIdent p)
 
 --------------------------------------------------------------------------------
 
 -- | run putDir: i.e. create a new directory with path p
 putDir   :: Path -> Action ()
-putDir p = runPostRoute (PutDirR NonExistent p) noData >> return ()
+putDir p = runPostRoute (PutDirR NonExistent p) noData >>= \resp ->
+           withFIHeader resp p (updateFileIdent p)
     where
-      noData = sourceLbs LB.empty
-      -- TODO: Update the remote state
+      noData   = sourceLbs LB.empty
 
 -- | Run a postPut action: i.e. upload the file at fp onto the server. We
 -- assume that fp is a global path to the file!
@@ -204,7 +201,7 @@ putFile fp fi p = do
                      liftIO $ print $ toUrl sync h
                      resp <- runPostRoute h s
                      liftIO $ print "woei"
-                     -- TODO: Update the remote state
+                     withFIHeader resp p (updateFileIdent p)
 
 
 -- | Given a local (absolute) file path. Upload the file or directory.
@@ -254,3 +251,14 @@ deleteFileLocally p fi          = toLocalPath p >>= liftIO . f
 
 createDirectoryLocally   :: Path -> Action ()
 createDirectoryLocally p = toLocalPath p >>= liftIO . createDirectory
+
+--------------------------------------------------------------------------------
+-- | Helper functions
+
+
+-- | Update the view that we have of the remote tree
+withFIHeader          :: Response b -> Path -> (FileIdent -> Action ()) -> Action ()
+withFIHeader resp p h = case    (getHeader hFileIdent . responseHeaders $ resp)
+                            >>= fromPathPiece of
+    Nothing -> throw $ InvalidHeader (B.pack "fileIdent header")
+    Just fi -> h fi
