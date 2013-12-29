@@ -36,12 +36,14 @@ $(deriveJSON defaultOptions ''DirMTime)
 $(deriveSafeCopy 0 'base ''DirMTime)
 
 
--- | Compute a new DirMTime from
-updateDT                  :: DateTime -> DirMTime -> DirMTime
-updateDT t (DirMTime l s) = DirMTime l $ maximum [s, Just t]
+-- | Compute a new DirMTime label
+updateDirMT                         :: Either DateTime DirMTime -> DirMTime -> DirMTime
+updateDirMT (Left t)                = updateDirMT' (Just t)
+updateDirMT (Right (DirMTime _ s')) = updateDirMT' s'
 
-updateDT'                                :: DirMTime -> DirMTime -> DirMTime
-updateDT' (DirMTime _ s') (DirMTime l s) = DirMTime l $ maximum [s, s']
+updateDirMT'                   :: Maybe DateTime -> DirMTime -> DirMTime
+updateDirMT' s' (DirMTime l s) = DirMTime l $ maximum [s, s']
+
 
 
 -- | Read a dir modificationtime. We do not read the recursive times yet.
@@ -59,16 +61,28 @@ readMTimeTree baseDir = fmap (labelBottomUp (\(DirMTime l re) dls fls -> DirMTim
 -- | Given a path and a datetime, update the node at that path with that time.
 -- this also updates all mtimes on the path to that node.
 updateMTime      :: SubPath -> DateTime -> MTimeFSTree -> Maybe MTimeFSTree
-updateMTime p dt = updateAndPropagateUp (Left dt) propagateF (Just . treeF) p
+updateMTime p dt = updateAndPropagateUp (Left dt) updateDirMT (Just . treeF) p
   where
     treeF                 = updateLabel (const dt) (const $ DirMTime dt (Just dt))
                            -- if we have a file, the label is just the dt itself
                            -- if we have a dir. both its local label as its recursive
                            -- label are dt (since clearly this is the last event that
                            -- has happened in this subtree )
-    propagateF            :: Either DateTime DirMTime -> DirMTime -> DirMTime
-    propagateF (Left t)   = updateDT  t
-    propagateF (Right dl) = updateDT' dl
+
+-- | Replace a subtree and propagate the new labels upwards.
+replaceMTime      :: SubPath ->
+                     MTimeFSTree -> -- ^ subtree
+                     MTimeFSTree -> MTimeFSTree
+replaceMTime p st = replaceAndPropagateUp updateDirMT st p
+
+
+-- deleteMTime :: SubPath -> DateTime ->
+
+
+
+
+
+
 
 
 class HasFileIdent c where

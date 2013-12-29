@@ -26,6 +26,7 @@ module HSync.Common.FSTree.Zipper( FSTreeZipper
                                  , goToNextFile
 
                                  , updateAndPropagate
+
                                  , update
                                  , adjust
                                  , replace
@@ -266,6 +267,7 @@ propagate f el = reverse . map fst . scanl propagate' (undefined, f el)
                              g' = f . Right . label' $ c'
                          in (c',g')
 
+
 -- | Use the given function to update the currentsly selected subtree. If the
 -- function returns nothing we remove the current subtree, and move up to the
 -- parent.
@@ -296,6 +298,9 @@ adjust f (t,bs,zs)
 -- | Replace the currently selected subtree
 replace   :: FSTree fl dl -> FSTreeZipper fl dl zs -> FSTreeZipper fl dl zs
 replace t = adjust (const t)
+
+
+
 
 
 -- | Delete the currently selected tree. This moves us up to the parent node of
