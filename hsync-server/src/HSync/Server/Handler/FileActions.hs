@@ -95,7 +95,9 @@ postPutFileR fi            p = do
     where
       putFile' s fp = protectedByFI fi fp "putFile" $ do
                            liftIO . runResourceT $ s $$ sinkFile fp
+                           addFIHeader p
                            notification (determineEvent fi p)
+
 
       determineEvent NonExistent = FileAdded
       determineEvent (File _)    = flip FileUpdated fi
@@ -117,6 +119,7 @@ postPutDirR fi p = asLocalPath p >>= (withNotification . putDir')
     where
       putDir' fp = protectedByFI fi fp "putDir" $ do
                           liftIO $ createDirectory fp
+                          addFIHeader p
                           notification (DirectoryAdded p)
 
 
