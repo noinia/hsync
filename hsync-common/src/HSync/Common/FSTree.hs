@@ -9,47 +9,129 @@ import Data.Maybe(fromJust)
 import HSync.Common.FSTree.Basic as HSync.Common.FSTree
 
 import HSync.Common.FSTree.Zipper( fsTreeZipperAt, tree, goToRoot
-                                 , update, updateAndPropagate, replace
+                                 , updateAndPropagate
                                  , FSTreeZipper
                                  )
 import HSync.Common.Types
 
 
--- | Given a function and a path p, update the subtree rooted at p. If the function
---    returns Nothing, the subtree is deleted.
-updateSubTree       :: (FSTree fl dl -> Maybe (FSTree fl dl))
-                       -> SubPath -> FSTree fl dl -> Maybe (FSTree fl dl)
-updateSubTree f p t = atSubTree p t (update f)
+--------------------------------------------------------------------------------
+
+
+-- | A function to propagate labels upwards
+type PropFunc fl dl = Either fl dl -> dl -> dl
 
 
 -- | updates a given subtree, and propagates any label updates to all ancestor labels
-updateAndPropagateUp              :: Either fl dl -> -- ^ default label
-                                     (Either fl dl -> dl -> dl) -> -- ^ label update F
-                                     (FSTree fl dl -> Maybe (FSTree fl dl)) ->
-                                     SubPath ->
-                                     FSTree fl dl ->
-                                     Maybe (FSTree fl dl)
-updateAndPropagateUp dL lF tF p t = atSubTree p t (updateAndPropagate dL lF tF)
+propagateUp              :: PropFunc fl dl -> -- ^ label update F
+                            Either fl dl ->   -- ^ default label
+                            SubPath ->
+                            (FSTree fl dl -> Maybe (FSTree fl dl)) ->
+                            FSTree fl dl ->
+                            Maybe (FSTree fl dl)
+propagateUp lF dL p tF t = atSubTree p t (updateAndPropagate dL lF tF)
 
 
--- | Replace a subtree and propagates label updates to all ancestor labels
-replaceAndPropagateUp         :: (Either fl dl -> dl -> dl) -> -- ^ label function
-                                 FSTree fl dl ->               -- ^ the new subtree
-                                 SubPath      ->               -- ^ path where to replace
-                                 FSTree fl dl ->               -- ^ the full tree.
-                                 FSTree fl dl
-replaceAndPropagateUp lF st p = fromJust .
-                              updateAndPropagateUp undefined lF (const $ Just st) p
-                              -- since fTree _ = Just st, we can safely leave
-                              -- the default element unspecified.
+-- | Variant of the above that just adjusts the tree, i.e. no deletes.
+propagateUp'         :: PropFunc fl dl -> -- ^ label update F
+                        SubPath ->
+                        (FSTree fl dl -> FSTree fl dl) ->
+                        FSTree fl dl ->
+                        FSTree fl dl
+propagateUp' lF p tF = fromJust . propagateUp lF undefined p (Just . tF)
+                       -- since fTree _ = Just st, we can safely leave
+                       -- the default element unspecified.
+
+update :: PropFunc fl dl
+       -> Either fl dl
+       -> SubPath
+       -> (FSTree fl dl -> Maybe (FSTree fl dl))
+       -> FSTree fl dl
+       -> Maybe (FSTree fl dl)
+update = propagateUp
 
 
--- | Replace a subtree. If the path does not exist, we return the unmodified tree.
-replaceSubTree        :: SubPath ->      -- ^ the path at which to replace
-                         FSTree fl dl -> -- ^ the new subtree
-                         FSTree fl dl -> -- ^ the full tree
-                         FSTree fl dl
-replaceSubTree p st t = fromJust $ atSubTree p t (return . replace st)
+adjust :: PropFunc fl dl
+       -> SubPath
+       -> (FSTree fl dl -> FSTree fl dl)
+       -> FSTree fl dl
+       -> FSTree fl dl
+adjust = propagateUp'
+
+replace         :: PropFunc fl dl ->
+                   SubPath ->
+                   FSTree fl dl -> -- ^ New subtree
+                   FSTree fl dl -> FSTree fl dl
+replace lF p st = adjust lF p (const st)
+
+
+delete         :: PropFunc fl dl
+               -> Either fl dl   -- ^ Value to start the label propagation with
+               -> SubPath
+               -> FSTree fl dl
+               -> Maybe (FSTree fl dl)
+delete lF dL p = propagateUp lF dL p (const Nothing)
+
+
+
+
+
+addFileAt        :: PropFunc fl dl -> SubPath -> File fl -> FSTree fl dl -> FSTree fl dl
+addFileAt lF p f = adjust lF (init p) (addFile f)
+
+
+addDirAt        :: PropFunc fl dl -> SubPath -> Directory fl dl ->
+                   FSTree fl dl -> FSTree fl dl
+addDirAt lF p d = adjust lF (init p) (addSubDir d)
+
+
+
+
+-- -- | Replace a subtree and propagates label updates to all ancestor labels
+-- replaceAndPropagateUp         :: PropFunc fl dl -> -- ^ label function
+--                                  SubPath        -> -- ^ path where to replace
+--                                  FSTree fl dl   -> -- ^ the new subtree
+--                                  FSTree fl dl   -> -- ^ the full tree.
+--                                  FSTree fl dl
+-- replaceAndPropagateUp lF st p = adjustAndPropagateUp lF (const st) p
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+--------------------------------------------------------------------------------
+
+
+-- -- | Given a function and a path p, update the subtree rooted at p. If the function
+-- --    returns Nothing, the subtree is deleted.
+-- updateSubTree       :: (FSTree fl dl -> Maybe (FSTree fl dl))
+--                        -> SubPath -> FSTree fl dl -> Maybe (FSTree fl dl)
+-- updateSubTree f p t = atSubTree p t (update f)
+
+
+-- -- | Replace a subtree. If the path does not exist, we return the unmodified tree.
+-- replaceSubTree        :: SubPath ->      -- ^ the path at which to replace
+--                          FSTree fl dl -> -- ^ the new subtree
+--                          FSTree fl dl -> -- ^ the full tree
+--                          FSTree fl dl
+-- replaceSubTree p st t = fromJust $ atSubTree p t (return . replace st)
 
 
 

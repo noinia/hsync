@@ -13,8 +13,11 @@ import Data.Data(Data, Typeable)
 import Data.SafeCopy(base, deriveSafeCopy)
 
 import HSync.Common.DateTime(DateTime, modificationTime)
-import HSync.Common.FSTree
-import HSync.Common.FSTree.Zipper
+import HSync.Common.FSTree( FSTree(..), File(..), Directory(..)
+                          , update, adjust, delete, replace
+                          , readFSTree, labelBottomUp, updateLabel
+                          , addFileAt, addDirAt
+                          )
 import HSync.Common.Types(FileName, SubPath)
 
 import qualified HSync.Common.FileIdent as FI
@@ -60,28 +63,31 @@ readMTimeTree baseDir = fmap (labelBottomUp (\(DirMTime l re) dls fls -> DirMTim
 
 -- | Given a path and a datetime, update the node at that path with that time.
 -- this also updates all mtimes on the path to that node.
-updateMTime      :: SubPath -> DateTime -> MTimeFSTree -> Maybe MTimeFSTree
-updateMTime p dt = updateAndPropagateUp (Left dt) updateDirMT (Just . treeF) p
+updateMTime      :: SubPath -> DateTime -> MTimeFSTree -> MTimeFSTree
+updateMTime p dt = adjust updateDirMT p treeF
   where
-    treeF                 = updateLabel (const dt) (const $ DirMTime dt (Just dt))
-                           -- if we have a file, the label is just the dt itself
-                           -- if we have a dir. both its local label as its recursive
-                           -- label are dt (since clearly this is the last event that
-                           -- has happened in this subtree )
+    treeF = updateLabel (const dt) (const $ DirMTime dt (Just dt))
+            -- if we have a file, the label is just the dt itself
+            -- if we have a dir. both its local label as its recursive
+            -- label are dt (since clearly this is the last event that
+            -- has happened in this subtree )
 
 -- | Replace a subtree and propagate the new labels upwards.
-replaceMTime      :: SubPath ->
-                     MTimeFSTree -> -- ^ subtree
-                     MTimeFSTree -> MTimeFSTree
-replaceMTime p st = replaceAndPropagateUp updateDirMT st p
+replaceSubTree :: SubPath
+               -> MTimeFSTree -- ^ subtree
+               -> MTimeFSTree -> MTimeFSTree
+replaceSubTree = replace updateDirMT
 
 
--- deleteMTime :: SubPath -> DateTime ->
+deleteSubDir      :: SubPath
+                  -> DateTime -- ^ Time at which we delete the file/dir
+                  -> MTimeFSTree -> Maybe MTimeFSTree
+deleteSubDir p dt = delete updateDirMT (Left dt) p
 
 
+addDir = addDirAt updateDirMT
 
-
-
+addFile = addFileAt updateDirMT
 
 
 

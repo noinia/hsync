@@ -13,6 +13,9 @@ module HSync.Common.FSTree.Basic( File(..)
                                 , isFile
                                 , label
 
+                                , addFile
+                                , addSubDir
+
                                 , readFSTree
 
                                 , labelBottomUp
@@ -118,6 +121,15 @@ isFile = not . isDir
 label       :: FSTree fl dl -> Either fl dl
 label (F f) = Left . fileLabel $ f
 label (D d) = Right . dirLabel $ d
+
+
+addFile         :: File fl -> FSTree fl dl -> FSTree fl dl
+addFile _ (F _) = error "addFile: cannot add a file to a file"
+addFile f (D d) = D $ d { files = f : files d }
+
+addSubDir          :: Directory fl dl -> FSTree fl dl -> FSTree fl dl
+addSubDir _  (F _) = error "addSubDir: cannot add a subdirectory to a file"
+addSubDir d' (D d) = D $ d { subDirectories = d' : subDirectories d }
 
 --------------------------------------------------------------------------------
 -- | Reading a FSTree from Disk
