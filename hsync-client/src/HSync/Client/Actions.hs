@@ -201,6 +201,9 @@ putFile fp fi p = do
                      liftIO $ print $ toUrl sync h
                      resp <- runPostRoute h s
                      liftIO $ print "woei"
+                     let x = ((getHeader hFileIdent . responseHeaders $ resp)
+                              >>= fromPathPiece) :: Maybe FileIdent
+                     liftIO $ print x
                      withFIHeader resp p (updateFileIdent p)
 
 

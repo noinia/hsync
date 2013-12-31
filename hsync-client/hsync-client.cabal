@@ -52,6 +52,8 @@ executable hsync-client
                  , acid-state                    >= 0.12.1     && < 0.12.2
                  , safecopy                      >= 0.8.2      && < 0.8.3
                  , lifted-base                   >= 0.2.1.0    && < 0.3
+                 , filemanip                     >= 0.3.6.2    && < 0.3.7
+                 , system-filepath               >= 0.4.7      && < 0.5
 
 
     extensions: OverloadedStrings

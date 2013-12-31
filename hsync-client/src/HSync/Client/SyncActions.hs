@@ -18,6 +18,7 @@ import HSync.Client.ActionT(Action, runActionT, getSync)
 import HSync.Client.AcidSync(AcidSync(..))
 import HSync.Client.Sync
 import HSync.Client.RemoteEvents
+import HSync.Client.LocalEvents
 
 
 import HSync.Common.DateTime

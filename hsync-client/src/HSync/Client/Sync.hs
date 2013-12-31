@@ -15,6 +15,8 @@ import HSync.Common.DateTime(DateTime)
 
 import Network.HTTP.Conduit(Manager)
 
+import System.FilePath.GlobPattern(GlobPattern, (/~))
+
 import qualified Data.Text as T
 import qualified Data.List
 
@@ -23,6 +25,8 @@ import qualified Data.List
 
 type ServerAddress = Text
 type PartialPath = String
+
+type IgnoredPatterns = [GlobPattern]
 
 
 -- | Each Synchronized Tree has its own manager/settings etc
@@ -33,6 +37,8 @@ data Sync = Sync { httpManager     :: Manager
                  , hashedPassword  :: HashedPassword
                  , remoteBaseDir   :: PartialPath
                  , clientIdent     :: ClientIdent
+                 , ignore          :: IgnoredPatterns
+                 , ignorePath      :: FilePath
                  -- Database
                  }
 
@@ -45,6 +51,8 @@ instance Default Sync where
                , hashedPassword  = "hashed-secret"
                , remoteBaseDir   = ""
                , clientIdent     = "client-ident"
+               , ignore          = []
+               , ignorePath      = "config/ignore"
                -- Database
                }
 
@@ -74,13 +82,14 @@ toRemotePath' s = Path (user s)
 
 
 
-fromConfig lbd s u hp rbd ci = def { localBaseDir   = lbd
-                                   , serverAddress  = s
-                                   , user           = u
-                                   , hashedPassword = hp
-                                   , remoteBaseDir  = rbd
-                                   , clientIdent    = ci
-                                   }
+fromConfig lbd s u hp rbd ci iPath = def { localBaseDir   = lbd
+                                         , serverAddress  = s
+                                         , user           = u
+                                         , hashedPassword = hp
+                                         , remoteBaseDir  = rbd
+                                         , clientIdent    = ci
+                                         , ignorePath     = T.unpack iPath
+                                         }
 
 instance FromJSON Sync where
   parseJSON (Object v) = fromConfig <$> v .: "localBaseDir"
@@ -89,18 +98,20 @@ instance FromJSON Sync where
                                     <*> v .: "hashedPassword"
                                     <*> v .: "remoteBaseDir"
                                     <*> v .: "clientIdent"
+                                    <*> v .: "ignore"
   parseJSON _          = mzero
-
-
-
-
 
 
 type ErrorMessage = String
 
+
+readIgnore      :: Sync -> IO Sync
+readIgnore sync = (fmap lines . readFile . ignorePath $ sync) >>= \ps ->
+                    return $ sync { ignore = ps }
+
 readConfig    :: FilePath -> IO (Either ErrorMessage Sync)
-readConfig fp = decodeFileEither fp >>= \es -> return $ case es of
-                  Left parseError -> Left . showError $ parseError
-                  Right s         -> Right s
+readConfig fp = decodeFileEither fp >>= \es -> case es of
+                  Left parseError -> return . Left . showError $ parseError
+                  Right s         -> Right <$> readIgnore s
   where
     showError pe = "Error parsing sync config file " ++ show fp ++ ":\n" ++ show pe
