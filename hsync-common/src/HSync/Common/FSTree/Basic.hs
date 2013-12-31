@@ -136,11 +136,11 @@ addSubDir d' (D d) = D $ d { subDirectories = d' : subDirectories d }
 
 
 -- | Reading a FSTree from disk
-readFSTree                   :: (Functor m, MonadIO m) =>
-                                FilePath ->           -- ^ base dir
-                                (FilePath -> m fl) -> -- ^ how to ocmpute a file label
-                                (FilePath -> m dl) -> -- ^ how to compute a dir label
-                                m (Maybe (FSTree fl dl))
+readFSTree                  :: (Functor m, MonadIO m) =>
+                               FilePath -- ^ base dir
+                            -> (FilePath -> m fl) -- ^ how to ocmpute a file label
+                            -> (FilePath -> m dl)  -- ^ how to compute a dir label
+                            -> m (Maybe (FSTree fl dl))
 readFSTree baseDir fL fDirL = do
                                 t <- exists baseDir
                                 case t of

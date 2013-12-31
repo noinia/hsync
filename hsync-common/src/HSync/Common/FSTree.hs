@@ -23,12 +23,12 @@ type PropFunc fl dl = Either fl dl -> dl -> dl
 
 
 -- | updates a given subtree, and propagates any label updates to all ancestor labels
-propagateUp              :: PropFunc fl dl -> -- ^ label update F
-                            Either fl dl ->   -- ^ default label
-                            SubPath ->
-                            (FSTree fl dl -> Maybe (FSTree fl dl)) ->
-                            FSTree fl dl ->
-                            Maybe (FSTree fl dl)
+propagateUp              :: PropFunc fl dl  -- ^ label update F
+                         -> Either fl dl    -- ^ default label
+                         -> SubPath
+                         -> (FSTree fl dl -> Maybe (FSTree fl dl))
+                         -> FSTree fl dl
+                         -> Maybe (FSTree fl dl)
 propagateUp lF dL p tF t = atSubTree p t (updateAndPropagate dL lF tF)
 
 
