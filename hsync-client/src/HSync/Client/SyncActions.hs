@@ -73,3 +73,9 @@ downloadMain fp = withSync fp $ do
   sync <- getSync
   login
   cloneDownstream $ Path (user sync) []
+
+
+uploadMain fp = withSync fp $ do
+                                u <- user <$> getSync
+                                login
+                                syncUpstream $ Path u [""]

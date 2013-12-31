@@ -18,7 +18,11 @@ import HSync.Common.FSTree( FSTree(..), File(..), Directory(..)
                           , readFSTree, labelBottomUp, updateLabel
                           , addFileAt, addDirAt
                           )
+
+import HSync.Common.FSTree.Zipper( fsTreeZipperAt , tree )
 import HSync.Common.Types(FileName, SubPath)
+
+
 
 import qualified HSync.Common.FileIdent as FI
 
@@ -89,6 +93,10 @@ addDir = addDirAt updateDirMT
 
 addFile = addFileAt updateDirMT
 
+
+-- | get the fileIdent of a certain file in the tree
+fileIdentOf     :: SubPath -> MTimeFSTree -> FI.FileIdent
+fileIdentOf p t = toFileIdent . fmap tree $ fsTreeZipperAt t () p
 
 
 class HasFileIdent c where

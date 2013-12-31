@@ -13,7 +13,7 @@ import HSync.Client.Sync(Sync(..))
 import HSync.Common.Types
 
 import System.FilePath.GlobPattern((/~))
-import System.FSNotify(watchTree, withManager, eventPath)
+import System.FSNotify(watchTree, startManager, stopManager, eventPath)
 
 import Filesystem.Path.CurrentOS(decodeString, encodeString)
 
@@ -22,10 +22,15 @@ import qualified System.FSNotify as FSN
 
 -- | should we use the time?
 handleEvent                 :: FSN.Event -> Action ()
-handleEvent (FSN.Added fp _)    = putFileOrDir (encodeString fp)
+handleEvent (FSN.Added fp _)    = do
+                                    liftIO $ print "fileAdded "
+                                    liftIO $ print fp
+                                    putFileOrDir (encodeString fp)
 handleEvent (FSN.Modified fp _) = do
                                     p  <- toRemotePath (encodeString fp)
                                     fi <- serverFileState $ subPath p
+                                    liftIO $ print "fileModified "
+                                    liftIO $ print (fp,p,fi)
                                     putUpdate (encodeString fp) fi p
 handleEvent (FSN.Removed fp _)  = do
                                     p  <- toRemotePath (encodeString fp)
@@ -46,10 +51,14 @@ syncUpstream p = do
                    fp     <- toLocalPath p
                    yState <- getYesodClientState
                    acid   <- getAcidSync
-                   aPred  <- actionPredicate
                    let handleEvent'   :: FSN.Event -> IO ()
                        handleEvent' e = runResourceT $
                                           runActionTWithClientState
                                              yState sync acid (handleEvent e)
-                       fsnAct mgr     = watchTree mgr (decodeString fp) aPred handleEvent'
-                   liftIO $ withManager fsnAct
+                   aPred  <- actionPredicate
+                   liftIO $ do
+                     mgr <- startManager
+                     watchTree mgr (decodeString fp) aPred handleEvent'
+                     print "press retrun to stop"
+                     getLine
+                     stopManager mgr

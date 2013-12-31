@@ -14,3 +14,4 @@ main = withSocketsDo $ do
     "listen"   -> listenMain   configPath
     "put"      -> putMain      configPath
     "download" -> downloadMain configPath
+    "upload"   -> uploadMain configPath

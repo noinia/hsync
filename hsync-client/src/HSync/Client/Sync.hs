@@ -15,7 +15,7 @@ import HSync.Common.DateTime(DateTime)
 
 import Network.HTTP.Conduit(Manager)
 
-import System.FilePath.GlobPattern(GlobPattern, (/~))
+import System.FilePath.GlobPattern(GlobPattern)
 
 import qualified Data.Text as T
 import qualified Data.List
@@ -45,7 +45,7 @@ data Sync = Sync { httpManager     :: Manager
 
 instance Default Sync where
     def = Sync { httpManager     = undefined
-               , localBaseDir    = "/Users/frank/tmp/synced"
+               , localBaseDir    = "/Users/frank/tmp/synced/"
                , serverAddress   = "http://localhost:3000"
                , user            = "nobody"
                , hashedPassword  = "hashed-secret"
@@ -72,9 +72,8 @@ toRemotePath sync fp = let lbd = localBaseDir sync
                            rbd = remoteBaseDir sync
                            Just lp = Data.List.stripPrefix lbd fp
                            fp' = Data.List.dropWhile (=='/') lp -- drop init /
-                           p   = T.split (== '/') . T.pack $ (rbd ++ "/" ++ fp')
+                           p   = T.split (== '/') . T.pack $ (rbd ++ fp')
                        in toRemotePath' sync p
-
 
 toRemotePath'   :: Sync -> SubPath -> Path
 toRemotePath' s = Path (user s)

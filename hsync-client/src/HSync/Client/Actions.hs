@@ -26,7 +26,7 @@ import Data.Conduit.Internal(ResumableSource(..))
 
 import HSync.Client.Sync(Sync, user, hashedPassword, clientIdent)
 import HSync.Client.ActionT
-import HSync.Client.AcidActions(updateFileIdent)
+import HSync.Client.AcidActions(updateFileIdent, expectedFileIdent)
 
 import HSync.Common.DateTime(DateTime)
 import HSync.Common.MTimeTree
@@ -55,7 +55,7 @@ import Network.HTTP.Types
 import Network.Wai(requestBody)
 
 
-import System.Directory( createDirectory
+import System.Directory( createDirectory, doesDirectoryExist
                        , removeFile , removeDirectoryRecursive )
 
 import Yesod.Client
@@ -209,10 +209,11 @@ putFile fp fi p = do
 
 -- | Given a local (absolute) file path. Upload the file or directory.
 putFileOrDir    :: FilePath -> Action ()
-putFileOrDir fp = fileIdent fp >>= \fi -> case fi of
-                    FI.NonExistent -> error "putFileOrDir: nonexistent file"
-                    FI.Directory _ -> toRemotePath fp >>= putDir
-                    FI.File      _ -> toRemotePath fp >>= putFile fp fi
+putFileOrDir fp = do
+                    isDir <- liftIO $ doesDirectoryExist fp
+                    p     <- toRemotePath fp
+                    if isDir then putDir p
+                             else expectedFileIdent p >>= \fi -> putFile fp fi p
 
 -- | Force uploading the file at fp onto the server. I.e. get the remote file
 -- info for this file, and then upload the file. Note that this is unsafe in

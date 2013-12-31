@@ -71,3 +71,11 @@ updateFileIdent p (FI.Directory dt) = updateFileIdent' (subPath p) dt
 -- TODO, distinguish between adds and updates
 
 updateFileIdent' p dt = updateTreeState (Just . updateMTime p dt)
+
+
+
+
+expectedFileIdent   :: Path -> Action FI.FileIdent
+expectedFileIdent p = serverTreeState >>= \mt -> case mt of
+                        Nothing -> error "expectedFileIdent: no status tree"
+                        Just t  -> return $ fileIdentOf (subPath p) t
