@@ -260,7 +260,9 @@ updateAndPropagate defaultL labelF treeF z@(t,bs,_) = case treeF t of
 propagate     :: (Either fl dl -> dl -> dl) ->
                  Either fl dl ->
                  [FSCrumb fl dl] -> [FSCrumb fl dl]
-propagate f el = reverse . map fst . scanl propagate' (undefined, f el)
+propagate f el = tail . map fst . scanl propagate' (undefined, f el)
+                 -- take the tail, since scanl also saves the intiial value
+                 -- which is undefined
   where
     -- Propagate computes the new crumb, and updates the update function
     propagate' (_,g) c = let c' = adjustFSCrumb g c
