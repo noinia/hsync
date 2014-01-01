@@ -23,6 +23,8 @@ module HSync.Common.FSTree.Basic( File(..)
 
                                 , removeFile
                                 , removeSubDir
+
+                                , prettyPrintTree
                                 ) where
 
 
@@ -207,3 +209,24 @@ removeSubDir n d = d { subDirectories = filter ((/= n) . dirName) . subDirectori
 -- removeSubDir'         :: FileName -> FSTree fl dl -> FSTree fl dl
 -- removeSubDir' n (D d) = D $ removeSubDir n d
 -- removeSubDir' _ t     = t
+
+
+--------------------------------------------------------------------------------
+
+prettyPrintTree       :: (Show fl, Show dl) => FSTree fl dl -> String
+prettyPrintTree (F f) = prettyPrintFile "" f
+prettyPrintTree (D d) = unlines $ prettyPrintDir "" d
+
+
+prettyPrintFile pref (File n l) = pref ++ "+ File "  ++ show n
+                                       ++ " label: " ++ show l
+
+
+prettyPrintDir pref d = let pref' = pref ++ "  " in
+                              [ pref ++ "Directory " ++ show (dirName d)
+                                     ++ " label = "  ++ show (dirLabel d)
+                              ]
+                              ++
+                              (concatMap (prettyPrintDir pref') . subDirectories $ d)
+                              ++
+                              (map (prettyPrintFile pref') . files $ d)
