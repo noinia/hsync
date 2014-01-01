@@ -87,33 +87,6 @@ addDirAt lF p d = adjust lF (init p) (addSubDir d)
 
 
 
--- -- | Replace a subtree and propagates label updates to all ancestor labels
--- replaceAndPropagateUp         :: PropFunc fl dl -> -- ^ label function
---                                  SubPath        -> -- ^ path where to replace
---                                  FSTree fl dl   -> -- ^ the new subtree
---                                  FSTree fl dl   -> -- ^ the full tree.
---                                  FSTree fl dl
--- replaceAndPropagateUp lF st p = adjustAndPropagateUp lF (const st) p
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 --------------------------------------------------------------------------------
