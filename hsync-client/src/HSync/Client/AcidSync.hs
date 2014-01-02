@@ -20,7 +20,6 @@ import Data.Default
 import Data.SafeCopy(base, deriveSafeCopy)
 
 import HSync.Common.MTimeTree
-import HSync.Common.FSTree
 
 import HSync.Common.DateTime(DateTime)
 import HSync.Common.Types

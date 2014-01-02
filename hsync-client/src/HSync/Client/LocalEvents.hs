@@ -28,13 +28,13 @@ handleEvent (FSN.Added fp _)    = do
                                     putFileOrDir (encodeString fp)
 handleEvent (FSN.Modified fp _) = do
                                     p  <- toRemotePath (encodeString fp)
-                                    fi <- serverFileState $ subPath p
+                                    fi <- expectedFileIdent p
                                     liftIO $ print "fileModified "
                                     liftIO $ print (fp,p,fi)
                                     putUpdate (encodeString fp) fi p
 handleEvent (FSN.Removed fp _)  = do
                                     p  <- toRemotePath (encodeString fp)
-                                    fi <- serverFileState $ subPath p
+                                    fi <- expectedFileIdent p
                                     deleteRemote fi p
    -- TODO: Fix, the encodeString is a bit ugly. FSNotify uses system-filepath's
    -- FilePath data type.

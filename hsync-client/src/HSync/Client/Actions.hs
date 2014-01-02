@@ -179,14 +179,15 @@ getFile'      :: Path -> FilePath -> Action ()
 getFile' p lp = do
   resp <- runGetRoute $ FileR p
   lift (responseBody resp C.$$+- sinkFile lp)
-  withFIHeader resp p (updateFileIdent p)
+  oldFi <- expectedFileIdent p
+  withFIHeader resp p (updateFileIdent p oldFi)
 
 --------------------------------------------------------------------------------
 
 -- | run putDir: i.e. create a new directory with path p
 putDir   :: Path -> Action ()
 putDir p = runPostRoute (PutDirR NonExistent p) noData >>= \resp ->
-           withFIHeader resp p (updateFileIdent p)
+           withFIHeader resp p (updateFileIdent p NonExistent)
     where
       noData   = sourceLbs LB.empty
 
@@ -204,7 +205,7 @@ putFile fp fi p = do
                      let x = ((getHeader hFileIdent . responseHeaders $ resp)
                               >>= fromPathPiece) :: Maybe FileIdent
                      liftIO $ print x
-                     withFIHeader resp p (updateFileIdent p)
+                     withFIHeader resp p (updateFileIdent p fi)
 
 
 -- | Given a local (absolute) file path. Upload the file or directory.
@@ -238,7 +239,8 @@ putUpdate = putFile
 -- | Runs the DeleteR handler: i.e. deletes the file (with path p) on the
 -- server, assuming that the remote file (still) has fileIdent fi.
 deleteRemote      :: FileIdent -> Path -> Action ()
-deleteRemote fi p = runDeleteRoute (DeleteR fi p) >> return ()
+deleteRemote fi p = runDeleteRoute (DeleteR fi p)
+                    >> return ()
                     -- TODO: Update the state that we have of the remote server
 
 

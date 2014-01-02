@@ -7,10 +7,9 @@ import Data.Acid.Advanced(query',update')
 import Data.Acid.Memory.Pure( Event, QueryEvent,UpdateEvent
                             , EventResult, EventState)
 
-import HSync.Common.FSTree
 import HSync.Common.MTimeTree
 import HSync.Common.Types
-import HSync.Common.FileIdent
+import HSync.Common.DateTime(DateTime)
 
 
 import HSync.Client.ActionT
@@ -20,7 +19,7 @@ import qualified HSync.Common.FileIdent as FI
 
 --------------------------------------------------------------------------------
 
--- | Run a acid Query in the Action monad
+-- | Run a acid Qury in the Action monad
 queryAcid                   :: QueryEvent ev =>
                                (AcidSync -> AcidState (EventState ev)) ->
                                ev ->
@@ -58,24 +57,34 @@ updateTreeState' f = do
 
 
 -- | Get what we think is the FileIdent for the file indicated by path.
-serverFileState    :: SubPath -> Action FI.FileIdent
-serverFileState sp = toFileIdent <$> serverTreeState
+expectedFileIdent   :: Path -> Action FI.FileIdent
+expectedFileIdent p = fileIdentOf (subPath p) <$> serverTreeState
 
 
 --------------------------------------------------------------------------------
 
-updateFileIdent                     :: Path -> FI.FileIdent -> Action ()
-updateFileIdent p FI.NonExistent    = return () -- TODO
-updateFileIdent p (FI.File dt)      = updateFileIdent' (subPath p) dt
-updateFileIdent p (FI.Directory dt) = updateFileIdent' (subPath p) dt
--- TODO, distinguish between adds and updates
+-- | Given a path, the old file ident and the new file ident. Update this file
+-- ident in the remote-tree state that we maintain.
+updateFileIdent         :: Path -> FI.FileIdent -> FI.FileIdent -> Action ()
+updateFileIdent p oldFi = updateFileIdent' p undefined oldFi
 
-updateFileIdent' p dt = updateTreeState (Just . updateMTime p dt)
+-- | Given a path, a potential removal time, the old fi and the new fi, update the
+--  file ident that we store in the remote-tree state.
+updateFileIdent'                 :: Path -> DateTime
+                                 -> FI.FileIdent -> FI.FileIdent -> Action ()
+updateFileIdent' p d oldFi newFi = updateTreeState $ updateFI (subPath p) d oldFi newFi
 
-
-
-
-expectedFileIdent   :: Path -> Action FI.FileIdent
-expectedFileIdent p = serverTreeState >>= \mt -> case mt of
-                        Nothing -> error "expectedFileIdent: no status tree"
-                        Just t  -> return $ fileIdentOf (subPath p) t
+-- | updateFI determines which function we should run to update the remote tree state.
+updateFI                                   :: SubPath -> DateTime ->
+                                              FI.FileIdent -> FI.FileIdent ->
+                                              (MTimeFSTree -> Maybe MTimeFSTree)
+updateFI _ _ FI.NonExistent FI.NonExistent = error "updateFI: NonExistent."
+updateFI p _ FI.NonExistent newFi          = let n  = last p
+                                                 dt = FI.getDateTime newFi
+                                                 f  = File n dt
+                                                 d  = emptyDirectory n $ dirMTime dt
+                                             in Just . if FI.isFile newFi
+                                                       then addFile p f else addDir p d
+updateFI p d _              FI.NonExistent = delete p d
+updateFI p _ _              newFi          = let dt = FI.getDateTime newFi in
+                                             Just . updateMTime p dt
