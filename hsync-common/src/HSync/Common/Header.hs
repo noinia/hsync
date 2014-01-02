@@ -78,11 +78,11 @@ instance IsTypedHeader HFileIdent where
 
 ------------------------------
 
-data HHDeletionTime = HHDeletionTime deriving (Show,Eq)
+data HDeletionTime = HDeletionTime deriving (Show,Eq)
 
 
-instance IsTypedHeader HHDeletionTime where
-  type HeaderValue HHDeletionTime = DateTime
+instance IsTypedHeader HDeletionTime where
+  type HeaderValue HDeletionTime = DateTime
 
   headerName        _ = "deletionTime"
   parseHeaderValue  _ = fromPathPiece . decodeUtf8
