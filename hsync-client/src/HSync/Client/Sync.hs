@@ -84,7 +84,9 @@ fromConfig lbd s u hp rbd ci iPath = def { localBaseDir   = lbd
                                          , serverAddress  = s
                                          , user           = u
                                          , hashedPassword = hp
-                                         , remoteBaseDir  = T.split (== '/') rbd
+                                         , remoteBaseDir  = if T.null rbd
+                                                            then []
+                                                            else T.split (== '/') rbd
                                          , clientIdent    = ci
                                          , ignorePath     = T.unpack iPath
                                          }

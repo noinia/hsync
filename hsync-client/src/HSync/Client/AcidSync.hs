@@ -51,7 +51,7 @@ queryMTimeTree = unMTTS <$> ask
 
 
 updateReplaceFull    :: Maybe MTimeFSTree -> Update MTimeTreeState ()
-updateReplaceFull mt = modify (onMTimeTree $ const mt)
+updateReplaceFull mt = modify (MTimeTreeState . const mt . unMTTS)
 
 
 -- -- | Given a subpath and a tree. Replace that part of the subtree. with the new tree,

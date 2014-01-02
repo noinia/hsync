@@ -88,12 +88,21 @@ handleIncomingConflict _ = return ()
 
 
 -- | Download/copy/clone the tree indicated by path. We assume that the local
--- directory corresponding to path is empty.
+-- directory corresponding to path is empty. This action will replace the
+-- remotetree state, so it is unsafe to run other actions in parallel with
+-- this!
 cloneDownstream   :: Path -> Action ()
-cloneDownstream p = getRemoteTree p >>= \mt -> case mt of
-  Nothing      -> error "cloneDownStream: no tree" -- TODO: fix the error stuff
-  Just t@(F _) -> getFile p
-  Just t@(D d) -> cloneDirectoryDownstream p d
+cloneDownstream p = do
+                      mt <- getRemoteTree p
+                      downloadTree mt
+                      updateTreeState' (const mt) -- store that we have fetched
+                                                  -- a new remote tree.
+                      serverTreeState >>= liftIO . print
+  where
+    downloadTree Nothing      = error "cloneDownStream: no tree"
+                                  -- TODO: fix the error stuff
+    downloadTree (Just (F _)) = getFile p
+    downloadTree (Just (D d)) = cloneDirectoryDownstream p d
 
 
 
