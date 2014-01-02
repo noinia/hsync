@@ -75,8 +75,9 @@ deleteDeleteR fi p = atomicallyWriteR p "delete" delete'
     where
       delete' fp = protectedByFI fi fp "delete" $ do
                         liftIO $ removeFile fp
-                        addFIHeader p
-                        notification (FileRemoved p fi)
+                        dt <- currentTime
+                        addDeletionHeader dt
+                        notification' (FileRemoved p fi) dt
 
 postPatchR                :: FileIdent -> Path -> Handler Text
 postPatchR NonExistent _ = invalidArgs ["postPatch: cannot patch a nonexistent file."]
@@ -143,6 +144,11 @@ serveFile p = addFIHeader p >> asLocalPath p >>= sendFile typeOctet
 addFIHeader   :: Path -> Handler ()
 addFIHeader p = getFileIdent p >>= addTypedHeader HFileIdent
 
+-- | Adds a deletion time header
+addDeletionHeader :: DateTime -> Handler ()
+addDeletionHeader = addTypedHeader HDeletionTime
+
+
 getFileIdent   :: Path -> Handler FileIdent
 getFileIdent p = asLocalPath p >>= fileIdent
 
@@ -175,8 +181,13 @@ withNotification h = h >>= \mn -> case mn of
 
 -- | Produce a notification with the given arguments and the current data/time
 notification     :: EventKind -> Handler Notification
-notification evt = Notification evt <$> clientId
-                                    <*> liftIO currentTime
+notification evt = currentTime >>= notification' evt
+
+
+notification'        :: EventKind -> DateTime -> Handler Notification
+notification' evt dt = (\ci -> Notification evt ci dt) <$> clientId
+
+
 
 --------------------------------------------------------------------------------
 -- | Testing functions
