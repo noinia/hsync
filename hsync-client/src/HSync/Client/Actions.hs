@@ -30,7 +30,7 @@ import HSync.Client.AcidActions(updateFileIdent, expectedFileIdent)
 
 import HSync.Common.DateTime(DateTime)
 import HSync.Common.MTimeTree
-import HSync.Common.HttpRequest(getHeader, hFileIdent)
+import HSync.Common.Header
 
 import HSync.Server.Import
 
@@ -202,9 +202,12 @@ putFile fp fi p = do
                      liftIO $ print $ toUrl sync h
                      resp <- runPostRoute h s
                      liftIO $ print "woei"
-                     let x = ((getHeader hFileIdent . responseHeaders $ resp)
-                              >>= fromPathPiece) :: Maybe FileIdent
-                     liftIO $ print x
+                     -- let mh = headerValue HFileIdent . responseHeaders $ resp
+
+
+                     --       ((getHeader hFileIdent . responseHeaders $ resp)
+                     --          >>= fromPathPiece) :: Maybe FileIdent
+                     -- liftIO $ print x
                      withFIHeader resp p (updateFileIdent p fi)
 
 
@@ -264,7 +267,6 @@ createDirectoryLocally p = toLocalPath p >>= liftIO . createDirectory
 
 -- | Update the view that we have of the remote tree
 withFIHeader          :: Response b -> Path -> (FileIdent -> Action ()) -> Action ()
-withFIHeader resp p h = case    (getHeader hFileIdent . responseHeaders $ resp)
-                            >>= fromPathPiece of
-    Nothing -> throw $ InvalidHeader (B.pack "fileIdent header")
-    Just fi -> h fi
+withFIHeader resp p h = maybe (throw $
+                                 InvalidHeader (B.pack "fileIdent header")) h
+                      . headerValue HFileIdent $ responseHeaders resp

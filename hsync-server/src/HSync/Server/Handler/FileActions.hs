@@ -13,7 +13,7 @@ import Data.Text.Encoding(decodeUtf8)
 import Network.Wai(requestBody)
 
 import HSync.Common.MTimeTree(MTimeFSTree, readMTimeTree)
-import HSync.Common.HttpRequest(hClientId, hFileIdent')
+import HSync.Common.Header
 
 import HSync.Server.Handler.Auth(requireRead,requireWrite)
 
@@ -75,6 +75,7 @@ deleteDeleteR fi p = atomicallyWriteR p "delete" delete'
     where
       delete' fp = protectedByFI fi fp "delete" $ do
                         liftIO $ removeFile fp
+                        addFIHeader p
                         notification (FileRemoved p fi)
 
 postPatchR                :: FileIdent -> Path -> Handler Text
@@ -106,9 +107,10 @@ postPutFileR fi            p = do
 
 -- | Retireve the clientId from the request information
 clientId :: Handler ClientIdent
-clientId = lookupHeader hClientId >>= \mh -> case mh of
-             Nothing -> invalidArgs ["clientId: Invalid clientId."]
-             Just ci -> return $ decodeUtf8 ci
+clientId = lookupTypedHeader HClientId >>=
+             maybe (invalidArgs ["clientId: Invalid clientId."])
+                   return
+
 
 --------------------------------------------------------------------------------
 -- | Handles related to directoryevents
@@ -137,9 +139,9 @@ serveFile   :: Path -> Handler a
 serveFile p = addFIHeader p >> asLocalPath p >>= sendFile typeOctet
 
 
+-- | Sets a 'hFileIdent' header with the new fileIdent
 addFIHeader   :: Path -> Handler ()
-addFIHeader p = getFileIdent p >>= addHeader hFileIdent' . toPathPiece
-
+addFIHeader p = getFileIdent p >>= addTypedHeader HFileIdent
 
 getFileIdent   :: Path -> Handler FileIdent
 getFileIdent p = asLocalPath p >>= fileIdent
