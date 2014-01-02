@@ -2,7 +2,6 @@ module HSync.Server.Model where
 
 import Prelude
 import Yesod
-import Data.Text(Text)
 import Database.Persist.Quasi
 
 import Data.Typeable
