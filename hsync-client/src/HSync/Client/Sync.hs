@@ -24,7 +24,6 @@ import qualified Data.List
 --------------------------------------------------------------------------------
 
 type ServerAddress = Text
-type PartialPath = String
 
 type IgnoredPatterns = [GlobPattern]
 
@@ -35,7 +34,7 @@ data Sync = Sync { httpManager     :: Manager
                  , serverAddress   :: ServerAddress
                  , user            :: UserIdent
                  , hashedPassword  :: HashedPassword
-                 , remoteBaseDir   :: PartialPath
+                 , remoteBaseDir   :: SubPath
                  , clientIdent     :: ClientIdent
                  , ignore          :: IgnoredPatterns
                  , ignorePath      :: FilePath
@@ -49,7 +48,7 @@ instance Default Sync where
                , serverAddress   = "http://localhost:3000"
                , user            = "nobody"
                , hashedPassword  = "hashed-secret"
-               , remoteBaseDir   = ""
+               , remoteBaseDir   = []
                , clientIdent     = "client-ident"
                , ignore          = []
                , ignorePath      = "config/ignore"
@@ -71,8 +70,8 @@ toRemotePath        :: Sync -> FilePath -> Path
 toRemotePath sync fp = let lbd = localBaseDir sync
                            rbd = remoteBaseDir sync
                            Just lp = Data.List.stripPrefix lbd fp
-                           fp' = Data.List.dropWhile (=='/') lp -- drop init /
-                           p   = T.split (== '/') . T.pack $ (rbd ++ fp')
+                           fp' = T.pack . Data.List.dropWhile (=='/') $ lp -- drop init /
+                           p   = rbd <> T.split (== '/') fp'
                        in toRemotePath' sync p
 
 toRemotePath'   :: Sync -> SubPath -> Path
@@ -85,7 +84,7 @@ fromConfig lbd s u hp rbd ci iPath = def { localBaseDir   = lbd
                                          , serverAddress  = s
                                          , user           = u
                                          , hashedPassword = hp
-                                         , remoteBaseDir  = rbd
+                                         , remoteBaseDir  = T.split (== '/') rbd
                                          , clientIdent    = ci
                                          , ignorePath     = T.unpack iPath
                                          }
