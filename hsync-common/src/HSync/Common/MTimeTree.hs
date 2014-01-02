@@ -2,7 +2,29 @@
 {-# Language TemplateHaskell #-}
 {-# Language GeneralizedNewtypeDeriving #-}
 {-# Language DeriveDataTypeable #-}
-module HSync.Common.MTimeTree where
+module HSync.Common.MTimeTree( MTimeFSTree
+                             , DirMTime(..)
+                             , dirMTime
+                             , readDirMTime
+                             , readMTimeTree
+
+                             , replaceSubTree
+                             , updateMTime
+
+                             , delete
+
+                             , addDir
+                             , addFile
+
+                             , fileIdentOf
+
+                             , HasFileIdent(..)
+
+                             -- Reexports:
+                             , FSTree(..), File(..), Directory(..)
+                             , emptyDirectory , isDir , isFile
+                             , label
+                             ) where
 
 import Control.Applicative((<$>))
 import Control.Monad.State.Class(modify, get)
@@ -14,9 +36,10 @@ import Data.SafeCopy(base, deriveSafeCopy)
 
 import HSync.Common.DateTime(DateTime, modificationTime)
 import HSync.Common.FSTree( FSTree(..), File(..), Directory(..)
-                          , update, adjust, delete, replace
+                          , update, adjust, replace
                           , readFSTree, labelBottomUp, updateLabel
                           , addFileAt, addDirAt
+                          , emptyDirectory , isDir , isFile , label
                           )
 
 import HSync.Common.FSTree.Zipper( fsTreeZipperAt , tree )
@@ -25,6 +48,7 @@ import HSync.Common.Types(FileName, SubPath)
 
 
 import qualified HSync.Common.FileIdent as FI
+import qualified HSync.Common.FSTree    as FT
 
 --------------------------------------------------------------------------------
 
@@ -42,6 +66,9 @@ data DirMTime = DirMTime { localMTime   :: DateTime  -- My own modification time
 $(deriveJSON defaultOptions ''DirMTime)
 $(deriveSafeCopy 0 'base ''DirMTime)
 
+-- | Create a new DirMTime from a DateTime
+dirMTime    :: DateTime -> DirMTime
+dirMTime dt = DirMTime dt (Just dt)
 
 -- | Compute a new DirMTime label
 updateDirMT                         :: Either DateTime DirMTime -> DirMTime -> DirMTime
@@ -70,7 +97,7 @@ readMTimeTree baseDir = fmap (labelBottomUp (\(DirMTime l re) dls fls -> DirMTim
 updateMTime      :: SubPath -> DateTime -> MTimeFSTree -> MTimeFSTree
 updateMTime p dt = adjust updateDirMT p treeF
   where
-    treeF = updateLabel (const dt) (const $ DirMTime dt (Just dt))
+    treeF = updateLabel (const dt) (const $ dirMTime dt)
             -- if we have a file, the label is just the dt itself
             -- if we have a dir. both its local label as its recursive
             -- label are dt (since clearly this is the last event that
@@ -82,22 +109,30 @@ replaceSubTree :: SubPath
                -> MTimeFSTree -> MTimeFSTree
 replaceSubTree = replace updateDirMT
 
+-- | TODO, rename
+delete      :: SubPath
+            -> DateTime -- ^ Time at which we delete the file/dir
+            -> MTimeFSTree -> Maybe MTimeFSTree
+delete p dt = FT.delete updateDirMT (Left dt) p
 
-deleteSubDir      :: SubPath
-                  -> DateTime -- ^ Time at which we delete the file/dir
-                  -> MTimeFSTree -> Maybe MTimeFSTree
-deleteSubDir p dt = delete updateDirMT (Left dt) p
 
-
+addDir :: SubPath
+       -> Directory DateTime DirMTime
+       -> MTimeFSTree
+       -> MTimeFSTree
 addDir = addDirAt updateDirMT
 
+addFile :: SubPath
+        -> File DateTime
+        -> MTimeFSTree
+        -> MTimeFSTree
 addFile = addFileAt updateDirMT
 
 
 -- | get the fileIdent of a certain file in the tree
-fileIdentOf     :: SubPath -> MTimeFSTree -> FI.FileIdent
-fileIdentOf p t = toFileIdent . fmap tree $ fsTreeZipperAt t () p
-
+fileIdentOf      :: SubPath -> Maybe MTimeFSTree -> FI.FileIdent
+fileIdentOf p mt = toFileIdent . fmap tree $
+                     mt >>= \t -> fsTreeZipperAt t () p
 
 class HasFileIdent c where
   toFileIdent :: c -> FI.FileIdent
