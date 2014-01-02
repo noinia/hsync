@@ -78,8 +78,8 @@ instance PathPiece DateTime where
     toPathPiece = T.pack . showDateTime . unDT
     fromPathPiece = D.parseTime undefined dateTimeFormat . T.unpack
 
-currentTime :: IO DateTime
-currentTime = DateTime <$> getCurrentTime
+currentTime :: (Functor m, MonadIO m) => m DateTime
+currentTime = DateTime <$> liftIO getCurrentTime
 
 day :: DateTime -> Day
 day = utctDay . unDT
