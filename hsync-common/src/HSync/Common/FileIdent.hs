@@ -3,6 +3,7 @@
 module HSync.Common.FileIdent( FileIdent(..)
                              , fileIdent
 
+                             , getDateTime
                              , isDirectory
                              , isFile
                              , isNonExistent
@@ -44,6 +45,9 @@ data FileIdent = NonExistent
 
 $(deriveJSON defaultOptions ''FileIdent)
 
+getDateTime (Directory t) = t
+getDateTime (File t)      = t
+getDateTime _             = error "getDateTime: NonExistent."
 
 isDirectory               :: FileIdent -> Bool
 isDirectory (Directory _) = True
