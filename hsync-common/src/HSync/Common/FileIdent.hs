@@ -3,6 +3,8 @@
 module HSync.Common.FileIdent( FileIdent(..)
                              , fileIdent
 
+                             , HasFileIdent(..)
+
                              , getDateTime
                              , isDirectory
                              , isFile
@@ -79,6 +81,16 @@ instance PathPiece FileIdent where
                     | otherwise                 = Nothing
         where
           f s = fromPathPiece $ T.drop (T.length s) t
+
+
+--------------------------------------------------------------------------------
+-- | Types that can be converted to file idents
+
+class HasFileIdent c where
+  toFileIdent :: c -> FileIdent
+
+instance HasFileIdent FileIdent where
+  toFileIdent = id
 
 --------------------------------------------------------------------------------
 -- | Computing and comparing File Idents

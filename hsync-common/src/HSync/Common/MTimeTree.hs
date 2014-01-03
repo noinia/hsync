@@ -18,8 +18,6 @@ module HSync.Common.MTimeTree( MTimeFSTree
 
                              , fileIdentOf
 
-                             , HasFileIdent(..)
-
                              -- Reexports:
                              , FSTree(..), File(..), Directory(..)
                              , emptyDirectory , isDir , isFile
@@ -35,6 +33,7 @@ import Data.Data(Data, Typeable)
 import Data.SafeCopy(base, deriveSafeCopy)
 
 import HSync.Common.DateTime(DateTime, modificationTime)
+import HSync.Common.FileIdent(HasFileIdent(..))
 import HSync.Common.FSTree( FSTree(..), File(..), Directory(..)
                           , update, adjust, replace
                           , readFSTree, labelBottomUp, updateLabel
@@ -44,7 +43,6 @@ import HSync.Common.FSTree( FSTree(..), File(..), Directory(..)
 
 import HSync.Common.FSTree.Zipper( fsTreeZipperAt , tree )
 import HSync.Common.Types(FileName, SubPath)
-
 
 
 import qualified HSync.Common.FileIdent as FI
@@ -133,9 +131,6 @@ addFile = addFileAt updateDirMT
 fileIdentOf      :: SubPath -> Maybe MTimeFSTree -> FI.FileIdent
 fileIdentOf p mt = toFileIdent . fmap tree $
                      mt >>= \t -> fsTreeZipperAt t () p
-
-class HasFileIdent c where
-  toFileIdent :: c -> FI.FileIdent
 
 instance HasFileIdent (File DateTime) where
   toFileIdent = FI.File . fileLabel
