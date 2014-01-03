@@ -4,6 +4,7 @@ module HSync.Client.SyncActions where
 import Control.Applicative((<$>))
 import Control.Exception.Lifted(bracket)
 
+import Control.Monad(when)
 import Control.Monad.IO.Class (liftIO, MonadIO )
 
 import Data.Acid(openLocalState)
@@ -12,6 +13,8 @@ import Data.Acid.Local(createCheckpointAndClose)
 import Data.Default
 import Data.Conduit(ResourceT, runResourceT, MonadThrow, MonadUnsafeIO, MonadBaseControl)
 import Data.Either
+import Data.Maybe(isNothing)
+
 
 import HSync.Client.Actions(login, forcePutFile)
 import HSync.Client.ActionT(Action, runActionT, getSync)
@@ -19,6 +22,12 @@ import HSync.Client.AcidSync(AcidSync(..))
 import HSync.Client.Sync
 import HSync.Client.RemoteEvents
 import HSync.Client.LocalEvents
+
+
+-- Remove when done debugging
+import HSync.Client.AcidActions(serverTreeState)
+import HSync.Common.FSTree.Basic(prettyPrintTree)
+--
 
 
 import HSync.Common.DateTime
@@ -58,7 +67,25 @@ listenMain fp = withSync fp $ do
 
 -- -- | The main method for the sync with config fp
 syncMain    :: FilePath -> IO ()
-syncMain fp = listenMain fp
+syncMain fp = withSync fp $ do
+                              _  <- login
+                              mt <- serverTreeState
+                              when (isNothing mt) firstRun
+
+
+
+-- | Things to do on the first run
+firstRun :: Action ()
+firstRun = do
+             sync <- getSync
+             cloneDownstream $ Path (user sync) (remoteBaseDir sync)
+
+
+
+
+
+
+
 
 
 putMain fp = withSync fp $ do
@@ -72,10 +99,15 @@ putMain fp = withSync fp $ do
 downloadMain fp = withSync fp $ do
   sync <- getSync
   login
-  cloneDownstream $ Path (user sync) []
+  cloneDownstream $ Path (user sync) (remoteBaseDir sync)
 
 
 uploadMain fp = withSync fp $ do
                                 u <- user <$> getSync
                                 login
                                 syncUpstream $ Path u [""]
+
+
+showState fp = withSync fp $ do
+                               Just t <- serverTreeState
+                               liftIO . putStr $ prettyPrintTree t

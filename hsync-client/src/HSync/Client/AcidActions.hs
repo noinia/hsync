@@ -38,18 +38,18 @@ updateAcid field updateEvent = do
                                acidState <- field <$> getAcidSync
                                update' acidState updateEvent
 
--- | returns a Maybe MTimeFSTree that the client *thinks* represents the state
+-- | returns a Maybe MTimeTree that the client *thinks* represents the state
 -- of the filesystem on the server.
-serverTreeState :: Action (Maybe MTimeFSTree)
+serverTreeState :: Action (Maybe MTimeTree)
 serverTreeState = queryAcid remoteTreeAcid QueryMTimeTree
 
 
 -- | Update the tree state
-updateTreeState   :: (MTimeFSTree -> Maybe MTimeFSTree) -> Action ()
+updateTreeState   :: (MTimeTree -> Maybe MTimeTree) -> Action ()
 updateTreeState f = updateTreeState' (>>= f)
 
 
-updateTreeState'   :: (Maybe MTimeFSTree -> Maybe MTimeFSTree) -> Action ()
+updateTreeState'   :: (Maybe MTimeTree -> Maybe MTimeTree) -> Action ()
 updateTreeState' f = do
                       mt <- serverTreeState
                       let mt' = f mt
@@ -77,14 +77,14 @@ updateFileIdent' p d oldFi newFi = updateTreeState $ updateFI (subPath p) d oldF
 -- | updateFI determines which function we should run to update the remote tree state.
 updateFI                                   :: SubPath -> DateTime ->
                                               FI.FileIdent -> FI.FileIdent ->
-                                              (MTimeFSTree -> Maybe MTimeFSTree)
+                                              (MTimeTree -> Maybe MTimeTree)
 updateFI _ _ FI.NonExistent FI.NonExistent = error "updateFI: NonExistent."
 updateFI p _ FI.NonExistent newFi          = let n  = last p
                                                  dt = FI.getDateTime newFi
                                                  f  = File n dt
-                                                 d  = emptyDirectory n $ dirMTime dt
+                                                 d  = emptyDirectory n $ fromFileLabel dt
                                              in Just . if FI.isFile newFi
                                                        then addFile p f else addDir p d
 updateFI p d _              FI.NonExistent = delete p d
 updateFI p _ _              newFi          = let dt = FI.getDateTime newFi in
-                                             Just . updateMTime p dt
+                                             Just . adjustLabel p dt

@@ -148,7 +148,7 @@ remoteFileInfo fp = do
                       return (fi,p)
 
 -- | Runs the getTree Handler: get the FSTree representing the Filestystem at p
-getRemoteTree   :: Path -> Action (Maybe MTimeFSTree)
+getRemoteTree   :: Path -> Action (Maybe MTimeTree)
 getRemoteTree p = do
                     liftIO $ print $ "path: " ++ show p
                     resp <- runGetRoute $ TreeR p

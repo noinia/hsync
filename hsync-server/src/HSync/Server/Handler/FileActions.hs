@@ -12,7 +12,7 @@ import Data.Text.Encoding(decodeUtf8)
 
 import Network.Wai(requestBody)
 
-import HSync.Common.MTimeTree(MTimeFSTree, readMTimeTree)
+import HSync.Common.MTimeTree(MTimeTree, readMTimeTree)
 import HSync.Common.Header
 
 import HSync.Server.Handler.Auth(requireRead,requireWrite)
@@ -45,12 +45,12 @@ getListenNowR p = protectRead p "listen" $ do
 --------------------------------------------------------------------------------
 -- | Handles related to listing files/trees
 
--- | Produces a JSON value representing a Maybe MTimeFSTree
+-- | Produces a JSON value representing a Maybe MTimeTree
 getTreeR   :: Path -> Handler Value
 getTreeR p = protectRead p "tree" $
                toJSON <$> getTreeOf p
 
-getTreeOf   :: Path -> Handler (Maybe MTimeFSTree)
+getTreeOf   :: Path -> Handler (Maybe MTimeTree)
 getTreeOf p = asLocalPath p >>= \fp ->
                 liftIO $ protect (isPropperFile fp)
                                  (readMTimeTree fp) -- TODO: Should I create a lock here?

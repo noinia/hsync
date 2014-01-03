@@ -23,6 +23,7 @@ library
                        HSync.Common.FSTree
                        HSync.Common.FSTree.Basic
                        HSync.Common.FSTree.Zipper
+                       HSync.Common.TimedFSTree
                        HSync.Common.MTimeTree
                        HSync.Common.DateTime
                        HSync.Common.Notification
