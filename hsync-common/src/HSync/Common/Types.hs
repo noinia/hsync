@@ -1,5 +1,7 @@
-{-# LANGUAGE TemplateHaskell    #-}
+{-# Language TemplateHaskell    #-}
 {-# Language  OverloadedStrings #-}
+{-# Language GeneralizedNewtypeDeriving #-}
+{-# Language DeriveDataTypeable #-}
 module HSync.Common.Types( UserIdent
                          , Password
                          , HashedPassword
@@ -19,19 +21,18 @@ module HSync.Common.Types( UserIdent
 import Prelude
 
 import Data.Aeson.TH
-
-import Data.Text(Text)
-import Yesod.Core
-
+import Data.Data(Data, Typeable)
 import Data.Function(on)
 import Data.List(intercalate, isPrefixOf)
+import Data.SafeCopy(base, deriveSafeCopy)
+import Data.Text(Text)
 
 import Text.Read(readMaybe)
 
+import Yesod.Core
+
 
 import qualified Data.Text as T
-
---readT = read . T.unpack
 
 --------------------------------------------------------------------------------
 
@@ -51,9 +52,10 @@ type SubPath = [FileName]
 data Path = Path { owner   :: UserIdent
                  , subPath :: SubPath
                  }
-            deriving (Show,Read,Eq,Ord)
+            deriving (Show,Read,Eq,Ord,Data,Typeable)
 
 $(deriveJSON defaultOptions ''Path)
+$(deriveSafeCopy 0 'base ''Path)
 
 instance PathMultiPiece Path where
     toPathMultiPiece (Path u ps) = u : ps -- map T.pack ps

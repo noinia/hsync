@@ -1,5 +1,7 @@
 {-# LANGUAGE TemplateHaskell    #-}
 {-# Language  OverloadedStrings #-}
+{-# Language GeneralizedNewtypeDeriving #-}
+{-# Language DeriveDataTypeable #-}
 module HSync.Common.FileIdent( FileIdent(..)
                              , fileIdent
 
@@ -17,10 +19,11 @@ module HSync.Common.FileIdent( FileIdent(..)
                              , checkMTime
                              ) where
 
+import Control.Applicative((<$>),(<*>))
 
 import Data.Aeson.TH
-
-import Control.Applicative((<$>),(<*>))
+import Data.Data(Data, Typeable)
+import Data.SafeCopy(base, deriveSafeCopy)
 import Data.Monoid
 import Data.Text(Text)
 import Yesod.Core
@@ -38,14 +41,13 @@ import qualified Data.Text as T
 
 --------------------------------------------------------------------------------
 
-type HashedFile = Text
-
 data FileIdent = NonExistent
                | Directory DateTime
                | File      DateTime
-               deriving (Show,Read,Eq)
+               deriving (Show,Read,Eq,Data,Typeable)
 
 $(deriveJSON defaultOptions ''FileIdent)
+$(deriveSafeCopy 0 'base ''FileIdent)
 
 getDateTime (Directory t) = t
 getDateTime (File t)      = t
@@ -91,6 +93,9 @@ class HasFileIdent c where
 
 instance HasFileIdent FileIdent where
   toFileIdent = id
+
+instance HasFileIdent a => HasFileIdent (Maybe a) where
+  toFileIdent = maybe NonExistent toFileIdent
 
 --------------------------------------------------------------------------------
 -- | Computing and comparing File Idents

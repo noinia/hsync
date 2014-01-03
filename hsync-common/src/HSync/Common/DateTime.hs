@@ -8,6 +8,8 @@ module HSync.Common.DateTime( DateTime(..)
                             , Day
                             , day
 
+                            , AsDateTime(..)
+
                             , modificationTime
                             ) where
 
@@ -88,3 +90,16 @@ day = utctDay . unDT
 -- | Get the file modification time
 modificationTime    :: MonadIO m => FilePath -> m DateTime
 modificationTime fp = liftIO $ DateTime <$> getModificationTime fp
+
+
+--------------------------------------------------------------------------------
+
+-- | Types that are convertable to datetimes
+class AsDateTime c where
+  toDateTime :: c -> DateTime
+
+instance AsDateTime DateTime where
+  toDateTime = id
+
+instance AsDateTime UTCTime where
+  toDateTime = DateTime

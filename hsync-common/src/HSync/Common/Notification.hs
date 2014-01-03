@@ -1,5 +1,6 @@
-{-# LANGUAGE TemplateHaskell    #-}
-{-# Language  OverloadedStrings #-}
+{-# Language TemplateHaskell    #-}
+{-# Language GeneralizedNewtypeDeriving #-}
+{-# Language DeriveDataTypeable #-}
 module HSync.Common.Notification(-- Events
                                   EventKind(..)
                                 , affectedPaths
@@ -13,8 +14,9 @@ module HSync.Common.Notification(-- Events
 import Data.ByteString(ByteString)
 
 import Data.Aeson.TH
-
+import Data.Data(Data, Typeable)
 import Data.List(intercalate)
+import Data.SafeCopy(base, deriveSafeCopy)
 
 import HSync.Common.Types
 import HSync.Common.DateTime(DateTime)
@@ -32,9 +34,11 @@ data EventKind = FileAdded        Path
                | DirectoryRemoved Path FileIdent
                | DirectoryUpdated Path
                | DirectoryMoved   Path Path
-               deriving (Show,Read,Eq)
+               deriving (Show,Read,Eq,Data,Typeable)
 
 $(deriveJSON defaultOptions ''EventKind)
+$(deriveSafeCopy 0 'base ''EventKind)
+
 
 affectedPaths                        :: EventKind -> [Path]
 affectedPaths (FileAdded p)          = [p]
@@ -63,9 +67,10 @@ data Notification = Notification { event     :: EventKind
                                  , changee   :: ClientIdent
                                  , timestamp :: DateTime
                                  }
-                  deriving (Read,Eq,Show)
+                  deriving (Read,Eq,Show,Data,Typeable)
 
 $(deriveJSON defaultOptions ''Notification)
+$(deriveSafeCopy 0 'base ''Notification)
 
 toLog                          :: Notification -> String
 toLog (Notification evt ci ti) = intercalate ":" $ [show ti, show ci, show evt]
@@ -78,9 +83,6 @@ p `matchesNotification` n = let ps = affectedPaths . event $ n in
                             any (`isSubPathOf` p) ps
 
 
+-- evtS = "FileAdded (Path \"\" [])"
 
-
-
-evtS = "FileAdded (Path \"\" [])"
-
-testS = B.pack "2013-08-23-18:40:59.975000000000-UTC:\"\":FileAdded (Path \"\" [])"
+-- testS = B.pack "2013-08-23-18:40:59.975000000000-UTC:\"\":FileAdded (Path \"\" [])"
