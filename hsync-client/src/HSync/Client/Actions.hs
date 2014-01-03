@@ -22,11 +22,12 @@ import Data.Conduit
 import Data.Conduit.Binary
 import Data.Conduit.Internal(ResumableSource(..))
 
-
+import Data.Text.Encoding(encodeUtf8)
 
 import HSync.Client.Sync(Sync, user, hashedPassword, clientIdent)
 import HSync.Client.ActionT
-import HSync.Client.AcidActions(updateFileIdent, expectedFileIdent)
+import HSync.Client.AcidActions( updateFileIdent, updateFileIdent'
+                               , expectedFileIdent)
 
 import HSync.Common.DateTime(DateTime)
 import HSync.Common.MTimeTree
@@ -68,6 +69,8 @@ import qualified Data.ByteString.Lazy.Char8 as LB
 import qualified Data.Conduit               as C
 import qualified Data.Conduit.List          as CL
 import qualified Data.Text                  as T
+
+
 
 import qualified HSync.Common.FileIdent     as FI
 
@@ -180,14 +183,14 @@ getFile' p lp = do
   resp <- runGetRoute $ FileR p
   lift (responseBody resp C.$$+- sinkFile lp)
   oldFi <- expectedFileIdent p
-  withFIHeader resp p (updateFileIdent p oldFi)
+  withHeader HFileIdent resp (updateFileIdent p oldFi)
 
 --------------------------------------------------------------------------------
 
 -- | run putDir: i.e. create a new directory with path p
 putDir   :: Path -> Action ()
 putDir p = runPostRoute (PutDirR NonExistent p) noData >>= \resp ->
-           withFIHeader resp p (updateFileIdent p NonExistent)
+           withHeader HFileIdent resp (updateFileIdent p NonExistent)
     where
       noData   = sourceLbs LB.empty
 
@@ -208,7 +211,7 @@ putFile fp fi p = do
                      --       ((getHeader hFileIdent . responseHeaders $ resp)
                      --          >>= fromPathPiece) :: Maybe FileIdent
                      -- liftIO $ print x
-                     withFIHeader resp p (updateFileIdent p fi)
+                     withHeader HFileIdent resp (updateFileIdent p fi)
 
 
 -- | Given a local (absolute) file path. Upload the file or directory.
@@ -242,10 +245,9 @@ putUpdate = putFile
 -- | Runs the DeleteR handler: i.e. deletes the file (with path p) on the
 -- server, assuming that the remote file (still) has fileIdent fi.
 deleteRemote      :: FileIdent -> Path -> Action ()
-deleteRemote fi p = runDeleteRoute (DeleteR fi p)
-                    >> return ()
-                    -- TODO: Update the state that we have of the remote server
-
+deleteRemote fi p = runDeleteRoute (DeleteR fi p) >>= \resp ->
+                      withHeader HDeletionTime resp (\dt ->
+                         updateFileIdent' p dt fi NonExistent)
 
 --------------------------------------------------------------------------------
 -- | Local actions
@@ -264,9 +266,9 @@ createDirectoryLocally p = toLocalPath p >>= liftIO . createDirectory
 --------------------------------------------------------------------------------
 -- | Helper functions
 
-
--- | Update the view that we have of the remote tree
-withFIHeader          :: Response b -> Path -> (FileIdent -> Action ()) -> Action ()
-withFIHeader resp p h = maybe (throw $
-                                 InvalidHeader (B.pack "fileIdent header")) h
-                      . headerValue HFileIdent $ responseHeaders resp
+-- | Run a computation with a given header
+withHeader          :: IsTypedHeader h => h -> Response b
+                    -> (HeaderValue h -> Action()) -> Action ()
+withHeader h resp a = let n = encodeUtf8 $ headerName h in
+                      maybe (throw $ InvalidHeader n) a
+                    . headerValue h $ responseHeaders resp
