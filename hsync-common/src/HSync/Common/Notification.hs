@@ -3,8 +3,10 @@
 {-# Language DeriveDataTypeable #-}
 module HSync.Common.Notification(-- Events
                                   EventKind(..)
-                                , affectedPaths
-                                , affectedFromPath
+                                , Event(..)
+                                , fileAdded , fileRemoved, fileUpdated
+                                , directoryAdded, directoryRemoved
+
                                 -- Notifications
                                 , Notification(..)
                                 , toLog
@@ -26,44 +28,48 @@ import qualified Data.ByteString.Char8 as B
 
 --------------------------------------------------------------------------------
 
-data EventKind = FileAdded        Path
-               | FileRemoved      Path FileIdent
-               | FileUpdated      Path FileIdent
-               | FileMoved        Path FileIdent Path
-               | DirectoryAdded   Path
-               | DirectoryRemoved Path FileIdent
-               | DirectoryUpdated Path
-               | DirectoryMoved   Path Path
+data EventKind = FileAdded
+               | FileRemoved
+               | FileUpdated
+               -- | FileMoved
+               | DirectoryAdded
+               | DirectoryRemoved
+               -- | DirectoryMoved
                deriving (Show,Read,Eq,Data,Typeable)
 
 $(deriveJSON defaultOptions ''EventKind)
 $(deriveSafeCopy 0 'base ''EventKind)
 
 
-affectedPaths                        :: EventKind -> [Path]
-affectedPaths (FileAdded p)          = [p]
-affectedPaths (FileRemoved p _)      = [p]
-affectedPaths (FileUpdated p _)      = [p]
-affectedPaths (FileMoved f _ t)      = [f,t]
-affectedPaths (DirectoryAdded p)     = [p]
-affectedPaths (DirectoryRemoved p _) = [p]
-affectedPaths (DirectoryUpdated p)   = [p]
-affectedPaths (DirectoryMoved f t)   = [f,t]
+data Event = Event { kind              :: EventKind
+                   , affectedPath      :: Path
+                   , affectedFileIdent :: Maybe FileIdent
+                   }
+             deriving (Show,Read,Eq,Data,Typeable)
+
+$(deriveJSON defaultOptions ''Event)
+$(deriveSafeCopy 0 'base ''Event)
 
 
-affectedFromPath :: EventKind -> Path
-affectedFromPath = head . affectedPaths
+fileAdded        :: Path -> Event
+fileRemoved      :: Path -> FileIdent -> Event
+fileUpdated      :: Path -> FileIdent -> Event
+
+fileAdded   p    = Event FileAdded p Nothing
+fileRemoved p fi = Event FileRemoved p (Just fi)
+fileUpdated p fi = Event FileUpdated p (Just fi)
+
+directoryAdded        :: Path -> Event
+directoryRemoved      :: Path -> FileIdent -> Event
 
 
-
-affectedFileIdent (FileRemoved _ fi)      = Just fi
-affectedFileIdent (FileUpdated _ fi)      = Just fi
-affectedFileIdent (FileMoved _ fi _)      = Just fi
-affectedFileIdent (DirectoryRemoved _ fi) = Just fi
-affectedFileIdent _                       = Nothing
+directoryAdded   p    = Event DirectoryAdded p Nothing
+directoryRemoved p fi = Event DirectoryRemoved p (Just fi)
 
 
-data Notification = Notification { event     :: EventKind
+--------------------------------------------------------------------------------
+
+data Notification = Notification { event     :: Event
                                  , changee   :: ClientIdent
                                  , timestamp :: DateTime
                                  }
@@ -79,8 +85,7 @@ fromLog :: ByteString -> Maybe Notification
 fromLog = const Nothing --TODO: Implement this
 
 matchesNotification       :: Path -> Notification -> Bool
-p `matchesNotification` n = let ps = affectedPaths . event $ n in
-                            any (`isSubPathOf` p) ps
+p `matchesNotification` n = (affectedPath . event $ n) `isSubPathOf` p
 
 
 -- evtS = "FileAdded (Path \"\" [])"

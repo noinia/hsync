@@ -77,7 +77,7 @@ deleteDeleteR fi p = atomicallyWriteR p "delete" delete'
                         liftIO $ removeFile fp
                         dt <- currentTime
                         addDeletionHeader dt
-                        notification' (FileRemoved p fi) dt
+                        notification' (fileRemoved p fi) dt
 
 postPatchR                :: FileIdent -> Path -> Handler Text
 postPatchR NonExistent _ = invalidArgs ["postPatch: cannot patch a nonexistent file."]
@@ -101,8 +101,8 @@ postPutFileR fi            p = do
                            notification (determineEvent fi p)
 
 
-      determineEvent NonExistent = FileAdded
-      determineEvent (File _)    = flip FileUpdated fi
+      determineEvent NonExistent = fileAdded
+      determineEvent (File _)    = flip fileUpdated fi
       determineEvent _           = error "putFile: unknown event."
 
 
@@ -123,7 +123,7 @@ postPutDirR fi p = asLocalPath p >>= (withNotification . putDir')
       putDir' fp = protectedByFI fi fp "putDir" $ do
                           liftIO $ createDirectory fp
                           addFIHeader p
-                          notification (DirectoryAdded p)
+                          notification (directoryAdded p)
 
 
 -- TODO: Handle Directories!!!
@@ -180,11 +180,11 @@ withNotification h = h >>= \mn -> case mn of
 
 
 -- | Produce a notification with the given arguments and the current data/time
-notification     :: EventKind -> Handler Notification
+notification     :: Event -> Handler Notification
 notification evt = currentTime >>= notification' evt
 
 
-notification'        :: EventKind -> DateTime -> Handler Notification
+notification'        :: Event -> DateTime -> Handler Notification
 notification' evt dt = (\ci -> Notification evt ci dt) <$> clientId
 
 

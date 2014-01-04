@@ -44,7 +44,7 @@ handleNotification n@(Notification e ci t) = do
                                                acid   <- getAcidSync
                                                liftIO $ handleAtomic acid yState sync fp
   where
-    p = affectedFromPath e
+    p = affectedPath e
     -- handleAtomic :: AcidSync -> Sync -> FilePath -> IO ()
     handleAtomic acid yState sync fp = atomicallyWriteIO fp . runResourceT $
                                          runActionTWithClientState yState sync acid act
@@ -54,17 +54,15 @@ handleNotification n@(Notification e ci t) = do
 
 
 
-handleEvent                         :: EventKind -> Action ()
-handleEvent (FileAdded p)           = getFile p
-handleEvent (FileRemoved p fi)      = deleteFileLocally p fi
-handleEvent (FileUpdated p fi)      = getUpdate p fi
-handleEvent (FileMoved f fi t)      = error "handleEvent: moveFile not implemented yet"
+handleEvent                                      :: Event -> Action ()
+handleEvent (Event FileAdded p _)                = getFile p
+handleEvent (Event FileRemoved p (Just fi))      = deleteFileLocally p fi
+handleEvent (Event FileUpdated p (Just fi))      = getUpdate p fi
 
-handleEvent (DirectoryAdded p)      = createDirectoryLocally p
-handleEvent (DirectoryRemoved p fi) = return ()
-handleEvent (DirectoryUpdated p)    = return () -- TODO: not sure what to do here?
-handleEvent (DirectoryMoved f t)    = error "handleEvent: moveDir not implemented yet"
-
+handleEvent (Event DirectoryAdded p _)           = createDirectoryLocally p
+handleEvent (Event DirectoryRemoved p (Just fi)) = return () -- TODO
+handleEvent e                                    = let es = show e in error $
+                                     "handleEvent: inconsistent event: " ++ es
 
 --------------------------------------------------------------------------------
 -- | Conflict Checking
