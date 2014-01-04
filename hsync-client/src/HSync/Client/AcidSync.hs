@@ -32,7 +32,7 @@ data AcidSync = AcidSync { remoteTreeAcid :: AcidState MTimeTreeState
 
 --------------------------------------------------------------------------------
 
-newtype MTimeTreeState = MTimeTreeState { unMTTS :: Maybe MTimeFSTree }
+newtype MTimeTreeState = MTimeTreeState { unMTTS :: Maybe MTimeTree }
                          deriving (Eq,Show,Data,Typeable)
 
 $(deriveSafeCopy 0 'base ''MTimeTreeState)
@@ -41,38 +41,17 @@ instance Default MTimeTreeState where
   def = MTimeTreeState Nothing
 
 -- | Run a function on the tree we are storing
-onMTimeTree   :: (MTimeFSTree -> Maybe MTimeFSTree) -> MTimeTreeState -> MTimeTreeState
+onMTimeTree   :: (MTimeTree -> Maybe MTimeTree) -> MTimeTreeState -> MTimeTreeState
 onMTimeTree f = MTimeTreeState . (>>= f) . unMTTS
 
 
 -- | Get the thing we are actually storing
-queryMTimeTree :: Query MTimeTreeState (Maybe MTimeFSTree)
+queryMTimeTree :: Query MTimeTreeState (Maybe MTimeTree)
 queryMTimeTree = unMTTS <$> ask
 
 
-updateReplaceFull    :: Maybe MTimeFSTree -> Update MTimeTreeState ()
+updateReplaceFull    :: Maybe MTimeTree -> Update MTimeTreeState ()
 updateReplaceFull mt = modify (MTimeTreeState . const mt . unMTTS)
-
-
--- -- | Given a subpath and a tree. Replace that part of the subtree. with the new tree,
--- -- and propagate any updates to its ancestors.
--- updateReplaceMTimeTree       :: SubPath -> MTimeFSTree -> Update MTimeTreeState ()
--- updateReplaceMTimeTree p st = modify (onMTimeTree $
-
-
---                               )
-
---                               (\s ->
---                           MTimeTreeState . Just $ case (unMTTS s, p) of
---     (Nothing, _:_) -> error "replaceMTimeTree: No tree yet!"
---     (Nothing, [])  -> st -- full tree
---     (Just t, _)    -> replaceSubTree p st t
---     ) -- maybe we should Seq the execution of the case statement
-
-
-
-
-
 
 $(makeAcidic ''MTimeTreeState [ 'queryMTimeTree
                               , 'updateReplaceFull
