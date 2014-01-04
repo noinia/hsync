@@ -51,7 +51,7 @@ queryMTimeTree = unMTTS <$> ask
 
 
 updateReplaceFull    :: Maybe MTimeTree -> Update MTimeTreeState ()
-updateReplaceFull mt = modify (MTimeTreeState . const mt . unMTTS)
+updateReplaceFull mt = modify (const $ MTimeTreeState mt)
 
 $(makeAcidic ''MTimeTreeState [ 'queryMTimeTree
                               , 'updateReplaceFull

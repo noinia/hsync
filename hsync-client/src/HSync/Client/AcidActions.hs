@@ -19,7 +19,7 @@ import qualified HSync.Common.FileIdent as FI
 
 --------------------------------------------------------------------------------
 
--- | Run a acid Qury in the Action monad
+-- | Run a acid Query in the Action monad
 queryAcid                   :: QueryEvent ev =>
                                (AcidSync -> AcidState (EventState ev)) ->
                                ev ->
@@ -38,6 +38,8 @@ updateAcid field updateEvent = do
                                acidState <- field <$> getAcidSync
                                update' acidState updateEvent
 
+--------------------------------------------------------------------------------
+
 -- | returns a Maybe MTimeTree that the client *thinks* represents the state
 -- of the filesystem on the server.
 serverTreeState :: Action (Maybe MTimeTree)
@@ -49,6 +51,7 @@ updateTreeState   :: (MTimeTree -> Maybe MTimeTree) -> Action ()
 updateTreeState f = updateTreeState' (>>= f)
 
 
+-- FIXME: This breaks atomicity !!!!
 updateTreeState'   :: (Maybe MTimeTree -> Maybe MTimeTree) -> Action ()
 updateTreeState' f = do
                       mt <- serverTreeState
