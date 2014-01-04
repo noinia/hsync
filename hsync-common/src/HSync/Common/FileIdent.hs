@@ -1,5 +1,4 @@
-{-# LANGUAGE TemplateHaskell    #-}
-{-# Language  OverloadedStrings #-}
+{-# Language TemplateHaskell    #-}
 {-# Language GeneralizedNewtypeDeriving #-}
 {-# Language DeriveDataTypeable #-}
 module HSync.Common.FileIdent( FileIdent(..)

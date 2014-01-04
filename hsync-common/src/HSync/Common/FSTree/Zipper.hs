@@ -140,10 +140,10 @@ path (t,bs,_) = let dir = map name' $ bs in
 
 -- | Read a FSTreeZipper from disk.
 readFSTreeZipper              :: (Functor m, MonadIO m) =>
-                                 FilePath ->
-                                 (FilePath -> m fl) -> -- ^ how to ocmpute a file label
-                                 (FilePath -> m dl) -> -- ^ how to compute a dir label
-                                 m (Maybe (FSTreeZipper fl dl FilePath))
+                                 FilePath
+                              -> (FilePath -> m fl)  -- ^ how to ocmpute a file label
+                              -> (FilePath -> m dl)  -- ^ how to compute a dir label
+                              -> m (Maybe (FSTreeZipper fl dl FilePath))
 readFSTreeZipper baseDir fL dL = fmap (\t -> (t,[],baseDir)) <$> readFSTree baseDir fL dL
 
 

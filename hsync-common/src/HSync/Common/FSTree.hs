@@ -33,11 +33,11 @@ propagateUp lF dL p tF t = atSubTree p t (updateAndPropagate dL lF tF)
 
 
 -- | Variant of the above that just adjusts the tree, i.e. no deletes.
-propagateUp'         :: PropFunc fl dl -> -- ^ label update F
-                        SubPath ->
-                        (FSTree fl dl -> FSTree fl dl) ->
-                        FSTree fl dl ->
-                        FSTree fl dl
+propagateUp'         :: PropFunc fl dl -- ^ label update F
+                     -> SubPath
+                     -> (FSTree fl dl -> FSTree fl dl)
+                     -> FSTree fl dl
+                     -> FSTree fl dl
 propagateUp' lF p tF = fromJust . propagateUp lF undefined p (Just . tF)
                        -- since fTree _ = Just st, we can safely leave
                        -- the default element unspecified.
@@ -58,10 +58,10 @@ adjust :: PropFunc fl dl
        -> FSTree fl dl
 adjust = propagateUp'
 
-replace         :: PropFunc fl dl ->
-                   SubPath ->
-                   FSTree fl dl -> -- ^ New subtree
-                   FSTree fl dl -> FSTree fl dl
+replace         :: PropFunc fl dl
+                -> SubPath
+                -> FSTree fl dl -- ^ New subtree
+                -> FSTree fl dl -> FSTree fl dl
 replace lF p st = adjust lF p (const st)
 
 
