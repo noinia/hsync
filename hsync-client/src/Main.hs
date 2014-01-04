@@ -11,7 +11,8 @@ main :: IO ()
 main = withSocketsDo $ do
   (mode:configPath:rest) <- getArgs
   case mode of
-    "listen"   -> listenMain   configPath
-    "put"      -> putMain      configPath
-    "download" -> downloadMain configPath
-    "upload"   -> uploadMain configPath
+    "listen"    -> listenMain   configPath
+    "put"       -> putMain      configPath
+    "download"  -> downloadMain configPath
+    "upload"    -> uploadMain   configPath
+    "showstate" -> showState    configPath
