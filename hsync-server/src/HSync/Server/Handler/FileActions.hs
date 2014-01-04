@@ -8,14 +8,17 @@ import Data.Aeson(encode)
 import Data.Conduit
 import Data.Conduit.Binary
 import Data.ByteString(ByteString)
-import Data.Text.Encoding(decodeUtf8)
+
 
 import Network.Wai(requestBody)
 
 import HSync.Common.MTimeTree(MTimeTree, readMTimeTree)
 import HSync.Common.Header
+import HSync.Common.Notification
 
 import HSync.Server.Handler.Auth(requireRead,requireWrite)
+import HSync.Server.Notifications(logNotification, notifications)
+
 
 import System.Directory( removeFile , createDirectory )
 

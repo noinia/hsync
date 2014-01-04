@@ -1,49 +1,44 @@
 module HSync.Server.Foundation where
 
-
 import Prelude
 
 import Control.Applicative((<$>))
 
 import Control.Concurrent.STM.TChan
-import Control.Concurrent.STM(atomically)
-
 
 import HSync.Common.DateTime(DateTime)
 import HSync.Common.Types
 import HSync.Common.FileIdent(FileIdent)
 import HSync.Common.Notification
 
-import Data.Text(pack)
 import Data.Default
-import Data.Conduit(Source,yield)
-
-
-import Yesod
-import Yesod.Static
-import Yesod.Auth
-import Yesod.Default.Config
-import Yesod.Default.Util (addStaticContentExternal)
-
-import Yesod.Core.Types(Logger)
-
-import Network.HTTP.Conduit (Manager)
-
+import Data.Text(pack)
 
 import Database.Persist.Sql (SqlPersistT)
-
 
 import HSync.Server.Settings (widgetFile, Extra (..))
 import HSync.Server.Settings.StaticFiles
 import HSync.Server.Settings.Development (development)
 import HSync.Server.Model
+import HSync.Server.AcidSync
+
+import Network.HTTP.Conduit (Manager)
 
 import Text.Jasmine (minifym)
 import Text.Hamlet (hamletFile)
 
+import Yesod
+import Yesod.Auth
+import Yesod.Core.Types(Logger)
+import Yesod.Default.Config
+import Yesod.Default.Util (addStaticContentExternal)
+import Yesod.Static
+
+
 import qualified HSync.Server.Settings as Settings
 import qualified Database.Persist
 
+--------------------------------------------------------------------------------
 
 -- | The site argument for your application. This can be a good place to
 -- keep settings and values requiring initialization before your application
@@ -57,10 +52,12 @@ data HSyncServer = HSyncServer
     , persistConfig    :: Settings.PersistConf
     , appLogger        :: Logger
     , notificationChan :: TChan Notification
+    , acidSync         :: AcidSync
     }
 
 
 instance Default HSyncServer where
+    -- | only use this def instance to create a value of the type HSyncServer
     def = HSyncServer { settings         = undefined
                       , getStatic        = undefined
                       , connPool         = undefined
@@ -68,6 +65,7 @@ instance Default HSyncServer where
                       , persistConfig    = undefined
                       , appLogger        = undefined
                       , notificationChan = undefined
+                      , acidSync         = undefined
                       }
 
 -- Set up i18n messages. See the message folder.
@@ -203,9 +201,6 @@ instance YesodAuth HSyncServer where
 instance RenderMessage HSyncServer FormMessage where
     renderMessage _ _ = defaultFormMessage
 
-
-
-
 -- | Get the 'Extra' value, used to hold data from the settings.yml file.
 getExtra :: Handler Extra
 getExtra = appExtra . settings <$> getYesod
@@ -213,28 +208,9 @@ getExtra = appExtra . settings <$> getYesod
 getFilesDir :: Handler FilePath
 getFilesDir = extraFilesDir <$> getExtra
 
+getAcidSync :: Handler AcidSync
+getAcidSync = acidSync <$> getYesod
 
 asLocalPath   :: Path -> Handler FilePath
 asLocalPath p = flip toFilePath p . pack <$> getFilesDir
                 -- TODO: The packing and unpacking is silly
-
-notifications :: Handler (Source Handler Notification)
-notifications = getYesod >>= notifications'
-
-notifications' :: (Functor m, MonadIO m) => HSyncServer -> m (Source m Notification)
-notifications' = fmap chanToSource . dupChan . notificationChan
-  where
-    dupChan c = liftIO $ atomically (dupTChan c)
-
-
-logNotification   :: Notification -> Handler ()
-logNotification n = do
-                    c <- notificationChan <$> getYesod
-                    lift $ atomically (writeTChan c n)
-
-
-chanToSource   :: MonadIO m => TChan a -> Source m a
-chanToSource c = do
-                   x <- liftIO $ atomically (readTChan c)
-                   yield x
-                   chanToSource c
