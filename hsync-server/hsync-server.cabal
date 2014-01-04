@@ -17,14 +17,18 @@ library
 
     exposed-modules: HSync.Server.Application
                      HSync.Server.Foundation
+                     HSync.Server.AcidSync
+                     HSync.Server.FileSystemState
                      HSync.Server.Import
                      HSync.Server.Model
+                     HSync.Server.Notifications
                      HSync.Server.Settings
                      HSync.Server.Settings.StaticFiles
                      HSync.Server.Settings.Development
                      HSync.Server.Handler.Home
                      HSync.Server.Handler.Auth
                      HSync.Server.Handler.FileActions
+                     HSync.Server.Handler.Acid
 
 
     Extra-Source-Files: config/models
@@ -87,10 +91,12 @@ library
                  , stm                           >= 2.4.2      && < 2.5
                  , wai                           >= 2.0        && < 2.1
                  , wai-logger                    >= 2.0.1      && < 2.1
+                 , acid-state                    >= 0.12.1     && < 0.12.2
+                 , safecopy                      >= 0.8.2      && < 0.8.3
                  , hsync-common                  >= 0.0.0.0    && < 0.2
-                 -- , time
+                 , mtl                           >= 2.1.2      && < 2.2
+                 , transformers                  >= 0.3        && < 0.4
 
-                 -- , old-locale                    >= 1.0.0.5    && < 1.1
 
 executable         hsync-server
     if flag(library-only)
