@@ -13,9 +13,11 @@ maintainer:          frank@fstaals.net
 -- copyright:
 category:            Network
 build-type:          Simple
-cabal-version:       >=1.8
+cabal-version:       >=1.10
 
 library
+  Default-language:    Haskell2010
+
   exposed-modules:     HSync.Common.Types
                        HSync.Common.Import
                        HSync.Common.FileIdent
@@ -56,3 +58,20 @@ library
   hs-source-dirs:      src
 
   extensions: OverloadedStrings
+
+
+Test-suite test
+  Default-language:
+    Haskell2010
+  Type:
+    exitcode-stdio-1.0
+  Hs-source-dirs:
+    tests
+  Main-is:
+    test.hs
+  Build-depends:
+      base                      >= 4      && < 5
+    , tasty                     >= 0.7
+    , tasty-quickcheck          >= 0.3.1
+    , tasty-hunit               >= 0.4.1
+    , hsync-common              == 0.0.0.0
