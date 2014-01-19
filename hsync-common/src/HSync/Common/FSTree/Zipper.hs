@@ -25,12 +25,16 @@ module HSync.Common.FSTree.Zipper( FSTreeZipper
                                  , goTo
                                  , goToNextFile
 
+                                 , propagateUp
+                                 , propagate
                                  , updateAndPropagate
 
                                  , update
                                  , adjust
                                  , replace
                                  , delete
+
+                                 , insertSubTree
                                  ) where
 
 
@@ -230,54 +234,22 @@ fsTreeZipperAt t zs p = fsTreeZipper t zs >>= goTo p
 
 
 
--- | updateAndPropgate defaultL labelL treeF z updates the currently selected
--- subtree using function treeF, and update the labels all ancestors of the
--- current tree with the help of labelF.
---
--- If treeF returns Nothing,the current tree is deleted, and we move up to its
--- parent (if possible). If treeF returns a just t, we replace the current tree
--- with that tree.
---
--- With respect to propagating updates: We update all ancestors of the current
--- tree, starting with the ancestor of the current tree. At each label update,
--- we use the information from it's local children.
---
--- If we delete the current tree, we do update parent of the currently selected
--- tree. We then start the updating process with label 'defaultFl'.
-updateAndPropagate  :: Either fl dl ->
-                       (Either fl dl -> dl -> dl) ->
-                       (FSTree fl dl -> Maybe (FSTree fl dl)) ->
-                       FSTreeZipper fl dl zs -> Maybe (FSTreeZipper fl dl zs)
-updateAndPropagate defaultL labelF treeF z@(t,bs,_) = case treeF t of
-    Nothing -> delete $ prop defaultL z
-    Just t' -> Just . prop (label t')  $  replace t' z
-  where
-    prop el (t,bs,zs) = (t,propagate labelF el bs,zs)
-
-
--- | propagate f el cs Propagates an update f to the crumbs cs. For each crumb
--- we compute the new crumb using function f, and the updated function.
-propagate     :: (Either fl dl -> dl -> dl) ->
-                 Either fl dl ->
-                 [FSCrumb fl dl] -> [FSCrumb fl dl]
-propagate f el = tail . map fst . scanl propagate' (undefined, f el)
-                 -- take the tail, since scanl also saves the intiial value
-                 -- which is undefined
-  where
-    -- Propagate computes the new crumb, and updates the update function
-    propagate' (_,g) c = let c' = adjustFSCrumb g c
-                             g' = f . Right . label' $ c'
-                         in (c',g')
-
-
 -- | Use the given function to update the currentsly selected subtree. If the
 -- function returns nothing we remove the current subtree, and move up to the
 -- parent.
-update :: (FSTree fl dl -> Maybe (FSTree fl dl)) ->
-          FSTreeZipper fl dl zs -> Maybe (FSTreeZipper fl dl zs)
+update             :: (FSTree fl dl -> Maybe (FSTree fl dl))
+                   -> FSTreeZipper fl dl zs -> Maybe (FSTreeZipper fl dl zs)
 update f z@(t,_,_) = case f t of
                        Nothing -> delete z
                        Just t' -> Just $ replace t' z
+
+-- | Variant of update that does not allow deleting the entire tree.
+update'     :: (FSTree fl dl -> Maybe (FSTree fl dl))
+            -> FSTreeZipper fl dl zs -> FSTreeZipper fl dl zs
+update' f z = case update f z of
+                Nothing -> error "update: empty tree after update"
+                Just z' -> z'
+
 
 -- | apply the given function on the currently selected subtree.
 adjust               :: (FSTree fl dl -> FSTree fl dl) ->
@@ -302,44 +274,76 @@ replace   :: FSTree fl dl -> FSTreeZipper fl dl zs -> FSTreeZipper fl dl zs
 replace t = adjust (const t)
 
 
-
-
-
 -- | Delete the currently selected tree. This moves us up to the parent node of
 -- the zipper.
 delete               :: FSTreeZipper fl dl zs -> Maybe (FSTreeZipper fl dl zs)
 delete z@(F f, _, _) = adjust (\(D d') -> D $ removeFile   (fileName f) d') <$> goUp z
 delete z@(D d, _, _) = adjust (\(D d') -> D $ removeSubDir (dirName d)  d') <$> goUp z
 
+-- | Variant of delete that does not allow deleting the entire tree. I.e. only
+-- use this if the currently selected tree is not the root of the tree.
+delete'          :: FSTreeZipper fl dl zs -> FSTreeZipper fl dl zs
+delete' (_,[],_) = error ""
+delete' z        = fromJust $ delete z
 
 
 
+-- | Add/insert the subtree to the currently selected tree.
+insertSubTree       :: FSTree fl dl -> FSTreeZipper fl dl zs -> FSTreeZipper fl dl zs
+insertSubTree (F f) = withTree (addFile f)
+insertSubTree (D d) = withTree (addSubDir d)
+
+--------------------------------------------------------------------------------
+
+-- | updateAndPropgate defaultL labelL treeF z updates the currently selected
+-- subtree using function treeF, and update the labels all ancestors of the
+-- current tree with the help of labelF.
+--
+-- If treeF returns Nothing,the current tree is deleted, and we move up to its
+-- parent (if possible). If treeF returns a just t, we replace the current tree
+-- with that tree.
+--
+-- With respect to propagating updates: We update all ancestors of the current
+-- tree, starting with the ancestor of the current tree. At each label update,
+-- we use the information from it's local children.
+--
+-- If we delete the current tree, we do update parent of the currently selected
+-- tree. We then start the updating process with label 'defaultFl'.
+updateAndPropagate  :: Either fl dl
+                    -> (Either fl dl -> dl -> dl)
+                    -> (FSTree fl dl -> Maybe (FSTree fl dl))
+                    -> FSTreeZipper fl dl zs -> Maybe (FSTreeZipper fl dl zs)
+updateAndPropagate defaultL labelF treeF z@(t,bs,_) = case treeF t of
+    Nothing -> delete . propagateUp labelF defaultL               $ z
+    Just t' -> Just . propagateUp labelF (label t') .  replace t' $ z
+
+-- | propagateUp f el z Propagates an update f to the crumbs in z. For each
+-- crumb we compute the new crumb using function f, and the updated function.
+-- Hence, we can update information of the ancestors of the currently selected
+-- tree. We propatate in order, so we can use the updated information of the
+-- already computed new crumbs.
+propagateUp                :: (Either fl dl -> dl -> dl) -> Either fl dl
+                           -> FSTreeZipper fl dl zs -> FSTreeZipper fl dl zs
+propagateUp f el (t,bs,zs) = (t,propagate f el bs,zs)
 
 
--- -- | adjustAndPropagate adjustLF adjustDL f z adjusts the tree currently selected
--- --   using function f. Furthermore, it propagates the adjust of this tree
--- --   in the labels of the ancestors of this node using the functions adjustFL and adjustDL
--- adjustAndPropagate                      :: (fl -> dl -> dl) ->
---                                            (dl -> dl -> dl) ->
---                                            (FSTree fl dl -> FSTree fl dl) ->
---                                            FSTreeZipper fl dl zs -> FSTreeZipper fl dl zs
--- adjustAndPropagate adjustFL adjustDL f z = case adjust f z of
---   (t, bs, zs) -> let -- adjustL is a function that given a label, computes the new
---                      -- label value.
---                      adjustL = case t of
---                          F t' -> adjustFL (fileLabel t')
---                          D t' -> adjustDL (dirLabel t')
---                  in ( t
---                       -- We traverse all crumbs, left to right, and incrementally adjust
---                       -- all crumbs with their new label. If we have computed a new
---                       -- crumb c, we use it's label in the propagation function in
---                       -- the next step.
---                     , reverse . snd $ foldl (\(adjustF,bs') c ->
---                                               let c' = adjustFSCrumb adjustF c in
---                                               (adjustDL (label' c'), c':bs')
---                                   ) (adjustL, []) bs
---                     , zs)
+-- | propagate f el cs Propagates an update f to the crumbs cs. For each crumb
+-- we compute the new crumb using function f, and the updated function.
+propagate     :: (Either fl dl -> dl -> dl) ->
+                 Either fl dl ->
+                 [FSCrumb fl dl] -> [FSCrumb fl dl]
+propagate f el = tail . map fst . scanl propagate' (undefined, f el)
+                 -- take the tail, since scanl also saves the intiial value
+                 -- which is undefined
+  where
+    -- Propagate computes the new crumb, and updates the update function
+    propagate' (_,g) c = let c' = adjustFSCrumb g c
+                             g' = f . Right . label' $ c'
+                         in (c',g')
 
+
+--------------------------------------------------------------------------------
+-- | Helper functions
 
 -- | Given a function on a FSTree and a zipper. Run the function on the current
 -- zipper (withoug modifying the crumbs of the zipper state)
