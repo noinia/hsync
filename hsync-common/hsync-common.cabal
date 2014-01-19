@@ -57,7 +57,7 @@ library
 
   hs-source-dirs:      src
 
-  extensions: OverloadedStrings
+  Default-Extensions: OverloadedStrings
 
 
 Test-suite test
@@ -74,4 +74,7 @@ Test-suite test
     , tasty                     >= 0.7
     , tasty-quickcheck          >= 0.3.1
     , tasty-hunit               >= 0.4.1
+    , text                      >= 0.11       && < 0.12
     , hsync-common              == 0.0.0.0
+
+  Default-Extensions: OverloadedStrings

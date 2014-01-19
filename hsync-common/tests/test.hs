@@ -6,13 +6,15 @@ import Test.Tasty.HUnit
 import Data.List
 import Data.Ord
 
+import Test.HSync.Common.FSTree
+
 main = defaultMain tests
 
 tests :: TestTree
 tests = testGroup "Tests" [properties] --, unitTests]
 
 properties :: TestTree
-properties = testGroup "Properties" [qcProps]
+properties = testGroup "Properties" [qcProps, basicFSTree]
 
 -- scProps = testGroup "(checked by SmallCheck)"
 --   [ SC.testProperty "sort == sort . reverse" $
