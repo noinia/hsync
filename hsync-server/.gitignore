@@ -7,3 +7,4 @@ files/
 config/keter.yaml
 deploy/
 notificationlog.log
+state/
