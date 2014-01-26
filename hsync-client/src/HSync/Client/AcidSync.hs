@@ -4,7 +4,14 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# Language GeneralizedNewtypeDeriving #-}
 {-# Language DeriveDataTypeable #-}
-module HSync.Client.AcidSync where
+module HSync.Client.AcidSync( AcidSync(..)
+                            , MTimeTreeState
+
+                            , QueryMTimeTree(..)
+                            , ReplaceFull(..)
+                            , UpdateFileIdent(..)
+                            , SetFileIdentOf(..)
+                            ) where
 
 import Control.Applicative
 
@@ -19,10 +26,14 @@ import Data.Data(Data, Typeable)
 import Data.Default
 import Data.SafeCopy(base, deriveSafeCopy)
 
-import HSync.Common.MTimeTree
+import HSync.Common.MTimeTree(MTimeTree)
 
+import HSync.Common.FileIdent(FileIdent)
 import HSync.Common.DateTime(DateTime)
 import HSync.Common.Types
+
+import qualified HSync.Common.MTimeTree as MT
+
 
 --------------------------------------------------------------------------------
 
@@ -40,6 +51,7 @@ $(deriveSafeCopy 0 'base ''MTimeTreeState)
 instance Default MTimeTreeState where
   def = MTimeTreeState Nothing
 
+
 -- | Run a function on the tree we are storing
 onMTimeTree   :: (MTimeTree -> Maybe MTimeTree) -> MTimeTreeState -> MTimeTreeState
 onMTimeTree f = MTimeTreeState . (>>= f) . unMTTS
@@ -49,12 +61,23 @@ onMTimeTree f = MTimeTreeState . (>>= f) . unMTTS
 queryMTimeTree :: Query MTimeTreeState (Maybe MTimeTree)
 queryMTimeTree = unMTTS <$> ask
 
+replaceFull    :: Maybe MTimeTree -> Update MTimeTreeState ()
+replaceFull mt = modify (const $ MTimeTreeState mt)
 
-updateReplaceFull    :: Maybe MTimeTree -> Update MTimeTreeState ()
-updateReplaceFull mt = modify (const $ MTimeTreeState mt)
+-- | Acidized version of MTimeTree.updateFileIdent.
+updateFileIdent          :: DateTime -> SubPath -> FileIdent -> Update MTimeTreeState ()
+updateFileIdent dt sp fi = modify (onMTimeTree $ MT.updateFileIdent dt sp fi)
+
+-- | Specialized version of updateFileIdent that does not allow deletes
+setFileIdentOf :: SubPath -> FileIdent -> Update MTimeTreeState ()
+setFileIdentOf = updateFileIdent undefined
+                  -- Note: We specifically acidize this one to prevent having to
+                  -- serialized the 'undefined' value we pass to updateFileIdent.
 
 $(makeAcidic ''MTimeTreeState [ 'queryMTimeTree
-                              , 'updateReplaceFull
+                              , 'replaceFull
+                              , 'updateFileIdent
+                              , 'setFileIdentOf
                               ])
 
 --------------------------------------------------------------------------------

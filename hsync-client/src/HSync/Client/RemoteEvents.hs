@@ -93,8 +93,8 @@ cloneDownstream   :: Path -> Action ()
 cloneDownstream p = do
                       mt <- getRemoteTree p
                       downloadTree mt
-                      updateTreeState' (const mt) -- store that we have fetched
-                                                  -- a new remote tree.
+                      replaceServerStateBy mt -- store that we have fetched
+                                              -- - a new remote tree.
                       serverTreeState >>= liftIO . print
   where
     downloadTree Nothing      = error "cloneDownStream: no tree"

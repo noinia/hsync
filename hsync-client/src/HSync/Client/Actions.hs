@@ -26,12 +26,13 @@ import Data.Text.Encoding(encodeUtf8)
 
 import HSync.Client.Sync(Sync, user, hashedPassword, clientIdent)
 import HSync.Client.ActionT
-import HSync.Client.AcidActions( updateFileIdent, updateFileIdent'
+import HSync.Client.AcidActions( updateFileIdent, setFileIdentOf
                                , expectedFileIdent)
 
 import HSync.Common.DateTime(DateTime)
-import HSync.Common.MTimeTree
+import HSync.Common.MTimeTree(MTimeTree)
 import HSync.Common.Header
+import HSync.Common.Notification(Notification(..))
 
 import HSync.Server.Import
 
@@ -182,15 +183,14 @@ getFile'      :: Path -> FilePath -> Action ()
 getFile' p lp = do
   resp <- runGetRoute $ FileR p
   lift (responseBody resp C.$$+- sinkFile lp)
-  oldFi <- expectedFileIdent p
-  withHeader HFileIdent resp (updateFileIdent p oldFi)
+  withHeader HFileIdent resp (setFileIdentOf p)
 
 --------------------------------------------------------------------------------
 
 -- | run putDir: i.e. create a new directory with path p
 putDir   :: Path -> Action ()
 putDir p = runPostRoute (PutDirR NonExistent p) noData >>= \resp ->
-           withHeader HFileIdent resp (updateFileIdent p NonExistent)
+           withHeader HFileIdent resp (setFileIdentOf p)
     where
       noData   = sourceLbs LB.empty
 
@@ -211,7 +211,7 @@ putFile fp fi p = do
                      --       ((getHeader hFileIdent . responseHeaders $ resp)
                      --          >>= fromPathPiece) :: Maybe FileIdent
                      -- liftIO $ print x
-                     withHeader HFileIdent resp (updateFileIdent p fi)
+                     withHeader HFileIdent resp (setFileIdentOf p)
 
 
 -- | Given a local (absolute) file path. Upload the file or directory.
@@ -247,7 +247,7 @@ putUpdate = putFile
 deleteRemote      :: FileIdent -> Path -> Action ()
 deleteRemote fi p = runDeleteRoute (DeleteR fi p) >>= \resp ->
                       withHeader HDeletionTime resp (\dt ->
-                         updateFileIdent' p dt fi NonExistent)
+                         updateFileIdent dt p NonExistent)
 
 --------------------------------------------------------------------------------
 -- | Local actions
