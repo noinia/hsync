@@ -7,7 +7,7 @@ import Control.Exception.Lifted(bracket)
 import Control.Monad(when)
 import Control.Monad.IO.Class (liftIO, MonadIO )
 
-import Data.Acid(openLocalState)
+import Data.Acid(openLocalStateFrom)
 import Data.Acid.Local(createCheckpointAndClose)
 
 import Data.Default
@@ -48,13 +48,15 @@ import Data.List(isPrefixOf)
 withSync        :: FilePath -> Action () -> IO ()
 withSync fp act = do
                     esync <- liftIO $ readConfig fp
-                    bracket (openLocalState def)
-                            (createCheckpointAndClose)
-                            (\acid -> withManager $ \mgr -> case esync of
-                                Left errMsg -> liftIO $ print errMsg
-                                Right sync' -> let sync = sync' { httpManager = mgr }
+                    case esync of
+                      Left errMsg -> liftIO $ print errMsg
+                      Right sync' -> bracket (openLocalStateFrom (statePath sync') def)
+                                             (createCheckpointAndClose)
+                                             (\acid -> withManager $ \mgr ->
+                                               let sync = sync' { httpManager = mgr }
                                                in runActionT act sync (AcidSync acid)
-                            )
+                                             )
+
 
 listenMain    :: FilePath -> IO ()
 listenMain fp = withSync fp $ do
