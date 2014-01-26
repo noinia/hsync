@@ -9,6 +9,8 @@ module HSync.Server.FileSystemState( FSState(..)
                                    , fromNotification
 
                                    , updateNotification
+
+                                   , withTimedFSTree
                                    ) where
 
 import Prelude
@@ -25,6 +27,7 @@ import HSync.Common.TimedFSTree
 import HSync.Common.DateTime
 import HSync.Common.FileIdent(FileIdent)
 import HSync.Common.Notification( Event(..)
+                                , involvesFile
                                 , EventKind(..)
                                 , Notification(Notification)
                                 , event
@@ -79,8 +82,9 @@ withTimedFSTree f = FSState . f . fsStateTree
 --------------------------------------------------------------------------------
 
 updateNotification   :: Notification -> FSState -> FSState
-updateNotification n = withTimedFSTree $ adjustLabel p fl
+updateNotification n = withTimedFSTree $ insertOrAdjustLabel p fType (const fl)
   where
-    p' = affectedPath . event $ n
-    p  = (owner p') : subPath p'
-    fl = fromNotification n
+    p'    = affectedPath . event $ n
+    p     = (owner p') : subPath p'
+    fl    = fromNotification n
+    fType = if involvesFile . kind . event $ n then Left undefined else Right undefined

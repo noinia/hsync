@@ -15,11 +15,13 @@ import Data.Acid.Advanced(update')
 import Data.Acid.Local(createCheckpointAndClose)
 
 import HSync.Common.Notification(Notification)
-import HSync.Common.TimedFSTree
-
+import HSync.Common.TimedFSTree(File(..),Directory(..))
 
 import HSync.Server.FileSystemState
 import HSync.Server.Settings(Extra(..))
+
+import qualified HSync.Common.TimedFSTree as T
+
 
 --------------------------------------------------------------------------------
 
@@ -34,16 +36,15 @@ data AcidSync = AcidSync { fsState :: AcidState FSState
 queryFSState :: Query FSState FSState
 queryFSState = ask
 
+replaceFull   :: FSState -> Update FSState ()
+replaceFull t = modify (const t)
 
-updateReplaceFull   :: FSState -> Update FSState ()
-updateReplaceFull t = modify (const t)
-
-updateNewNotification   :: Notification -> Update FSState ()
-updateNewNotification n = modify (updateNotification n)
+newNotification   :: Notification -> Update FSState ()
+newNotification n = modify (updateNotification n)
 
 $(makeAcidic ''FSState [ 'queryFSState
-                       , 'updateReplaceFull
-                       , 'updateNewNotification
+                       , 'replaceFull
+                       , 'newNotification
                        ])
 
 --------------------------------------------------------------------------------
@@ -67,4 +68,4 @@ newFSState' b = print "woei" >> newFSState b
 
 notificationUpdate            :: MonadIO m => AcidSync -> Notification -> m ()
 notificationUpdate acidSync n = let fsStateAcid = fsState acidSync in
-                                update' fsStateAcid (UpdateNewNotification n)
+                                update' fsStateAcid (NewNotification n)

@@ -40,7 +40,7 @@ getFSState = queryAcid fsState (QueryFSState)
 
 updateFSState   :: (FSState -> FSState) -> Handler ()
 updateFSState f = getFSState >>= \t ->
-                    updateAcid fsState (UpdateReplaceFull $ f t)
+                    updateAcid fsState (ReplaceFull $ f t)
 
 
 --updateNotification :: Notification ->
