@@ -29,7 +29,7 @@ library
                        HSync.Common.MTimeTree
                        HSync.Common.DateTime
                        HSync.Common.Notification
-                       HSync.Common.NotificationTree
+--                       HSync.Common.NotificationTree
                        HSync.Common.Header
 
   -- other-modules:

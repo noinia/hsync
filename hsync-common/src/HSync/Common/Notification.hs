@@ -3,6 +3,7 @@
 {-# Language DeriveDataTypeable #-}
 module HSync.Common.Notification(-- Events
                                   EventKind(..)
+                                , involvesFile, involvesDirectory
                                 , Event(..)
                                 , fileAdded , fileRemoved, fileUpdated
                                 , directoryAdded, directoryRemoved
@@ -31,14 +32,23 @@ import qualified Data.ByteString.Char8 as B
 data EventKind = FileAdded
                | FileRemoved
                | FileUpdated
-               -- | FileMoved
                | DirectoryAdded
                | DirectoryRemoved
-               -- | DirectoryMoved
                deriving (Show,Read,Eq,Data,Typeable)
 
 $(deriveJSON defaultOptions ''EventKind)
 $(deriveSafeCopy 0 'base ''EventKind)
+
+
+involvesFile   :: EventKind -> Bool
+involvesFile k = k `elem` [FileAdded, FileRemoved, FileUpdated]
+
+involvesDirectory :: EventKind -> Bool
+involvesDirectory = not . involvesFile
+
+
+
+
 
 
 data Event = Event { kind              :: EventKind
