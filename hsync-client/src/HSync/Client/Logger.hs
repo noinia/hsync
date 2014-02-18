@@ -35,14 +35,11 @@ type LoggerName = String
 type LogMessage = String
 
 
-
-
-
-
+-- | These functions are all specialized versions of the general hsLoggers.
 
 logMIO      :: Maybe ClientIdent -> LoggerName -> Priority -> LogMessage -> IO ()
-logMIO ci n = let cis = maybe "NoClient" T.unpack ci in
-                  Log.logM ("HSync." ++ cis ++ "." ++ n)
+logMIO ci n = let cis = maybe "NoClientIdent" T.unpack ci in
+                  Log.logM ("HSync.Client." ++ cis ++ "." ++ n)
 
 
 logM       :: LoggerName -> Priority -> LogMessage -> Action ()
