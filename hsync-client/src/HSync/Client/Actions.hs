@@ -26,6 +26,7 @@ import Data.Text.Encoding(encodeUtf8)
 
 import HSync.Client.Sync(Sync, user, hashedPassword, clientIdent)
 import HSync.Client.ActionT
+import HSync.Client.Logger
 import HSync.Client.AcidActions( updateFileIdent, setFileIdentOf
                                , expectedFileIdent)
 
@@ -85,11 +86,13 @@ import Debug.Trace
 login :: Action Bool
 login = do
   sync <- getSync
+  infoM "Actions.login" "Sending login"
   resp <- runGetRoute $ MyLoginR (user sync) (hashedPassword sync)
   body <- lift $ responseBody resp C.$$+- sinkLbs
   case LB.unpack body of
-    "VALID"   -> setSessionCreds resp >> return True
-    "INVALID" -> return False
+    "VALID"   -> noticeM    "Actions.login" "Login successful" >>
+                 setSessionCreds resp                          >> return True
+    "INVALID" -> criticalM "Actions.login" "Login failed!"     >> return False
 
 
 setSessionCreds :: Response body -> Action ()
@@ -102,12 +105,14 @@ setSessionCreds = liftYT . updateCookieJar
 changes      :: DateTime -> Path -> Action (ResumableSource SyncBaseMonad Notification)
 changes dt p = do
                  myCi <- clientIdent <$> getSync
+                 infoM "Actions.changes" msg
                  filterChanges myCi <$> changes' dt p
 
     where
       isMyAction    myCi (Notification _ ci _) = ci == myCi
       filterChanges myCi (ResumableSource s final) =
           ResumableSource (s $= CL.filter (not . isMyAction myCi)) final
+      msg = "Getting Changes from" ++ show  dt ++ " on " ++ show p
 
 
 -- | run the ListenR handler and get a source of Notifications.
@@ -151,7 +156,7 @@ remoteFileInfo fp = do
 -- | Runs the getTree Handler: get the FSTree representing the Filestystem at p
 getRemoteTree   :: Path -> Action (Maybe MTimeTree)
 getRemoteTree p = do
-                    liftIO $ print $ "path: " ++ show p
+                    infoM "Actions.getRemoteTree" ("Getting remote tree at: " ++ show p)
                     resp <- runGetRoute $ TreeR p
                     lift $ responseBody resp C.$$+- parseFromJSONSink
 
@@ -181,6 +186,7 @@ getFile p = toLocalPath p >>= getFile' p
 -- that file are written to the (local) file with path lp
 getFile'      :: Path -> FilePath -> Action ()
 getFile' p lp = do
+  infoM "Actions.getFile" ("Downloading " ++ show p ++ " to " ++ lp)
   resp <- runGetRoute $ FileR p
   lift (responseBody resp C.$$+- sinkFile lp)
   withHeader HFileIdent resp (setFileIdentOf p)
@@ -189,8 +195,9 @@ getFile' p lp = do
 
 -- | run putDir: i.e. create a new directory with path p
 putDir   :: Path -> Action ()
-putDir p = runPostRoute (PutDirR NonExistent p) noData >>= \resp ->
-           withHeader HFileIdent resp (setFileIdentOf p)
+putDir p = infoM "Actions.putDir" ("Creating directory at " ++ show p) >>
+           runPostRoute (PutDirR NonExistent p) noData >>= \resp ->
+             withHeader HFileIdent resp (setFileIdentOf p)
     where
       noData   = sourceLbs LB.empty
 
@@ -201,18 +208,15 @@ putFile fp fi p = do
                      let h = PutFileR fi p
                          s = sourceFile fp
                      sync <- getSync
-                     liftIO $ print (fp,fi,p)
-                     liftIO $ print $ toUrl sync h
+                     infoM "Actions.putFile" msg
+                     debugM "Actions.putFile" ("url: " ++ toUrl sync h)
                      resp <- runPostRoute h s
-                     liftIO $ print "woei"
                      -- let mh = headerValue HFileIdent . responseHeaders $ resp
-
-
                      --       ((getHeader hFileIdent . responseHeaders $ resp)
                      --          >>= fromPathPiece) :: Maybe FileIdent
-                     -- liftIO $ print x
                      withHeader HFileIdent resp (setFileIdentOf p)
-
+  where
+    msg = concat [ "Uploading ", fp ," with fileident ", show fi, "to ", show p]
 
 -- | Given a local (absolute) file path. Upload the file or directory.
 putFileOrDir    :: FilePath -> Action ()
@@ -245,23 +249,31 @@ putUpdate = putFile
 -- | Runs the DeleteR handler: i.e. deletes the file (with path p) on the
 -- server, assuming that the remote file (still) has fileIdent fi.
 deleteRemote      :: FileIdent -> Path -> Action ()
-deleteRemote fi p = runDeleteRoute (DeleteR fi p) >>= \resp ->
+deleteRemote fi p = infoM "Actions.deleteRemote" msg >>
+                    runDeleteRoute (DeleteR fi p) >>= \resp ->
                       withHeader HDeletionTime resp (\dt ->
                          updateFileIdent dt p NonExistent)
-
+  where
+    msg = "Deleting " ++ show p ++ " with FileIdent " ++ show fi
 --------------------------------------------------------------------------------
 -- | Local actions
 
 deleteFileLocally               :: Path -> FileIdent -> Action ()
-deleteFileLocally _ NonExistent = error "deleteFileLocally: non existent file"
-deleteFileLocally p fi          = toLocalPath p >>= liftIO . f
+deleteFileLocally _ NonExistent = emergencyM "Actions.deleteFileLocally" "non existent file"
+                                  >> error "deleteFileLocally: non existent file"
+deleteFileLocally p fi          = infoM "Actions.deleteFileLocally" msg >>
+                                  toLocalPath p >>= liftIO . f
   where
     f = if FI.isDirectory fi then removeFile
                              else removeDirectoryRecursive
+    msg = concat [ "Deleting local file with path ", show p
+                 , " and FileIdent " , show fi ]
 
 
 createDirectoryLocally   :: Path -> Action ()
-createDirectoryLocally p = toLocalPath p >>= liftIO . createDirectory
+createDirectoryLocally p = infoM "Actions.createDirectoryLocally"
+                                 ("Creating local directory for" ++ show p) >>
+                           toLocalPath p >>= liftIO . createDirectory
 
 --------------------------------------------------------------------------------
 -- | Helper functions
