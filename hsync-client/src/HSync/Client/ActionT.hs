@@ -15,7 +15,7 @@ import Control.Monad.IO.Class
 
 import Control.Failure
 
-import Data.Conduit(ResourceT)
+import Data.Conduit(ResourceT, runResourceT)
 
 import Data.Data(Data,Typeable)
 import Data.Default
@@ -109,6 +109,20 @@ runActionTWithClientState                         :: Functor m =>
 runActionTWithClientState st sync acid (ActionT a) = evalYesodClientT
                                                      (runReaderT a acid)
                                                      sync st
+
+
+-- | ``Clone'' the current Action so we can run the given action in a new base action.
+-- cloneInIO      :: ActionT acid (ResourceT IO) a -> ActionT acid (ResourceT IO) (IO a)
+cloneInIO     :: MonadBaseControl IO m
+              => ActionT AcidSync (ResourceT m) a
+              -> ActionT AcidSync SyncBaseMonad (m a)
+cloneInIO act = do
+                  sync   <- getSync
+                  yState <- getYesodClientState
+                  acid   <- getAcidSync
+                  let ioA = runResourceT $
+                              runActionTWithClientState yState sync acid act
+                  return ioA
 
 --------------------------------------------------------------------------------
 -- | The instantiated monad we will use to run our actions

@@ -38,19 +38,31 @@ import qualified HSync.Common.FileIdent as FI
 
 handleNotification                         :: Notification -> Action ()
 handleNotification n@(Notification e ci t) = do
-                                               sync   <- getSync
-                                               fp     <- toLocalPath p
-                                               yState <- getYesodClientState
-                                               acid   <- getAcidSync
-                                               liftIO $ handleAtomic acid yState sync fp
+                                               fp  <- toLocalPath p
+                                               ioA <- cloneInIO act
+                                               liftIO $
+                                                 atomicallyWriteIO fp ioA
   where
-    p = affectedPath e
-    -- handleAtomic :: AcidSync -> Sync -> FilePath -> IO ()
-    handleAtomic acid yState sync fp = atomicallyWriteIO fp . runResourceT $
-                                         runActionTWithClientState yState sync acid act
+    p   = affectedPath e
     act = protect (noConflict e t)
                   (handleEvent e)
                   (handleIncomingConflict n)
+
+-- handleNotification                         :: Notification -> Action ()
+-- handleNotification n@(Notification e ci t) = do
+--                                                sync   <- getSync
+--                                                fp     <- toLocalPath p
+--                                                yState <- getYesodClientState
+--                                                acid   <- getAcidSync
+--                                                liftIO $ handleAtomic acid yState sync fp
+--   where
+--     p = affectedPath e
+--     -- handleAtomic :: AcidSync -> Sync -> FilePath -> IO ()
+--     handleAtomic acid yState sync fp = atomicallyWriteIO fp . runResourceT $
+--                                          runActionTWithClientState yState sync acid act
+--     act = protect (noConflict e t)
+--                   (handleEvent e)
+--                   (handleIncomingConflict n)
 
 
 

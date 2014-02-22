@@ -9,10 +9,13 @@ import HSync.Client.SyncActions
 
 main :: IO ()
 main = withSocketsDo $ do
-  (mode:configPath:rest) <- getArgs
-  case mode of
-    "listen"    -> listenMain   configPath
-    "put"       -> putMain      configPath
-    "download"  -> downloadMain configPath
-    "upload"    -> uploadMain   configPath
-    "showstate" -> showState    configPath
+    (configPath:rest) <- getArgs
+    syncMain configPath
+
+  -- (mode:configPath:rest) <- getArgs
+  -- case mode of
+  --   "listen"    -> listenMain   configPath
+  --   "put"       -> putMain      configPath
+  --   "download"  -> downloadMain configPath
+  --   "upload"    -> uploadMain   configPath
+  --   "showstate" -> showState    configPath

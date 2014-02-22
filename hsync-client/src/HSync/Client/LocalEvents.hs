@@ -45,20 +45,20 @@ actionPredicate = do
                     let eventPath' = encodeString . eventPath
                     return $ \e -> all (eventPath' e /~) ignores
 
-syncUpstream   :: Path -> Action ()
-syncUpstream p = do
-                   sync   <- getSync
-                   fp     <- toLocalPath p
-                   yState <- getYesodClientState
-                   acid   <- getAcidSync
-                   let handleEvent'   :: FSN.Event -> IO ()
-                       handleEvent' e = runResourceT $
-                                          runActionTWithClientState
-                                             yState sync acid (handleEvent e)
-                   aPred  <- actionPredicate
-                   liftIO $ do
-                     mgr <- startManager
-                     watchTree mgr (decodeString fp) aPred handleEvent'
-                     print "press retrun to stop"
-                     getLine
-                     stopManager mgr
+
+syncUpstreamUntil           :: IO () -> Path -> Action ()
+syncUpstreamUntil stopAct p = do
+    sync   <- getSync
+    fp     <- toLocalPath p
+    yState <- getYesodClientState
+    acid   <- getAcidSync
+    let handleEvent'   :: FSN.Event -> IO ()
+        handleEvent' e = runResourceT $
+                           runActionTWithClientState
+                             yState sync acid (handleEvent e)
+    aPred  <- actionPredicate
+    liftIO $ do
+      mgr <- startManager
+      watchTree mgr (decodeString fp) aPred handleEvent'
+      stopAct
+      stopManager mgr
