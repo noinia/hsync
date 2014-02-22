@@ -30,7 +30,7 @@ import HSync.Client.Logger
 import HSync.Client.AcidActions( updateFileIdent, setFileIdentOf
                                , expectedFileIdent)
 
-import HSync.Common.DateTime(DateTime)
+import HSync.Common.DateTime(DateTime, toEpochTime)
 import HSync.Common.MTimeTree(MTimeTree)
 import HSync.Common.Header
 import HSync.Common.Notification(Notification(..))
@@ -60,6 +60,7 @@ import Network.Wai(requestBody)
 
 import System.Directory( createDirectory, doesDirectoryExist
                        , removeFile , removeDirectoryRecursive )
+import System.PosixCompat.Files(setFileTimes)
 
 import Yesod.Client
 
@@ -189,7 +190,9 @@ getFile' p lp = do
   infoM "Actions.getFile" ("Downloading " ++ show p ++ " to " ++ lp)
   resp <- runGetRoute $ FileR p
   lift (responseBody resp C.$$+- sinkFile lp)
-  withHeader HFileIdent resp (setFileIdentOf p)
+  -- set the modification time, and update the remote tree state
+  withHeader HFileIdent resp (\fi ->    setModificationTime p fi
+                                     >> setFileIdentOf      p fi )
 
 --------------------------------------------------------------------------------
 
@@ -284,3 +287,7 @@ withHeader          :: IsTypedHeader h => h -> Response b
 withHeader h resp a = let n = encodeUtf8 $ headerName h in
                       maybe (throw $ InvalidHeader n) a
                     . headerValue h $ responseHeaders resp
+
+setModificationTime      :: Path -> FileIdent -> Action ()
+setModificationTime p fi = let t = toEpochTime . getDateTime $ fi in
+  toLocalPath p >>= (\fp -> liftIO $ setFileTimes fp t t )
