@@ -11,6 +11,7 @@ module HSync.Common.DateTime( DateTime(..)
                             , AsDateTime(..)
 
                             , modificationTime
+                            , toEpochTime, fromEpochTime
                             ) where
 
 
@@ -26,10 +27,11 @@ import Data.SafeCopy(base, deriveSafeCopy)
 
 import Data.Time (Day, UTCTime, getCurrentTime , utctDay)
 import Data.Time.Format
-
+import Data.Time.Clock.POSIX(utcTimeToPOSIXSeconds, posixSecondsToUTCTime)
 
 
 import System.Directory(getModificationTime)
+import System.Posix.Types(EpochTime)
 
 import Yesod.Core
 
@@ -91,6 +93,17 @@ day = utctDay . unDT
 modificationTime    :: MonadIO m => FilePath -> m DateTime
 modificationTime fp = liftIO $ DateTime <$> getModificationTime fp
 
+
+-- | Conversion to an EpochTime (CTime) via POSIXTime and Integer Note that the
+-- precision of DateTime is higher than that of epochtime, so the miliseconds
+-- are lost.
+toEpochTime :: DateTime -> EpochTime
+toEpochTime = fromInteger . truncate . utcTimeToPOSIXSeconds . unDT
+              -- based on the conversion in the convert package
+
+-- | Convert from an EpochTime.
+fromEpochTime :: EpochTime -> DateTime
+fromEpochTime = DateTime . posixSecondsToUTCTime . realToFrac
 
 --------------------------------------------------------------------------------
 
