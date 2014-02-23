@@ -24,10 +24,14 @@ import qualified Data.List
 
 --------------------------------------------------------------------------------
 
+-- | Extention to use for partial files
+partialFileExtension :: String
+partialFileExtension = ".hsyncpart"
+
+
 type ServerAddress = Text
 
 type IgnoredPatterns = [GlobPattern]
-
 
 -- | Each Synchronized Tree has its own manager/settings etc
 data Sync = Sync { httpManager     :: Manager

@@ -24,7 +24,9 @@ import Data.Conduit.Internal(ResumableSource(..))
 
 import Data.Text.Encoding(encodeUtf8)
 
-import HSync.Client.Sync(Sync, user, hashedPassword, clientIdent)
+import HSync.Client.Sync(Sync, user, hashedPassword, clientIdent
+                        , partialFileExtension
+                        )
 import HSync.Client.ActionT
 import HSync.Client.Logger
 import HSync.Client.AcidActions( updateFileIdent, setFileIdentOf
@@ -59,7 +61,8 @@ import Network.Wai(requestBody)
 
 
 import System.Directory( createDirectory, doesDirectoryExist
-                       , removeFile , removeDirectoryRecursive )
+                       , removeFile , removeDirectoryRecursive
+                       , renameFile )
 import System.PosixCompat.Files(setFileTimes)
 
 import Yesod.Client
@@ -189,10 +192,16 @@ getFile'      :: Path -> FilePath -> Action ()
 getFile' p lp = do
   infoM "Actions.getFile" ("Downloading " ++ show p ++ " to " ++ lp)
   resp <- runGetRoute $ FileR p
-  lift (responseBody resp C.$$+- sinkFile lp)
+  -- Download the file into a partial file
+  let lpPartial = lp ++ partialFileExtension
+  lift (responseBody resp C.$$+- sinkFile lpPartial)
   -- set the modification time, and update the remote tree state
-  withHeader HFileIdent resp (\fi ->    setModificationTime p fi
-                                     >> setFileIdentOf      p fi )
+  withHeader HFileIdent resp (setFileIdentOf p)
+  liftIO $ renameFile lpPartial lp
+
+  -- Reset the modification time
+  -- setModificationTime p fi
+  --                                    >>
 
 --------------------------------------------------------------------------------
 

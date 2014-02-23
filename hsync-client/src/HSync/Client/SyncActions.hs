@@ -69,7 +69,8 @@ listenMain fp = withSync fp $ do
                                 syncDownstream now $ Path u []
 
 
--- -- | The main method for the sync with config fp
+
+-- | The main method for the sync with config fp
 syncMain    :: FilePath -> IO ()
 syncMain fp = withSync fp $ do
     sync <- getSync

@@ -44,7 +44,7 @@ logMIO ci n = let cis = maybe "NoClientIdent" T.unpack ci in
 
 logM       :: LoggerName -> Priority -> LogMessage -> Action ()
 logM n p m = (Just . clientIdent <$> getSync) >>= \ci ->
-               liftIO $ logMIO ci n p n
+               liftIO $ logMIO ci n p m
 
 
 debugM   :: LoggerName -> LogMessage -> Action ()

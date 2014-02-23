@@ -8,7 +8,7 @@ import Control.Monad.Reader.Class
 import Control.Monad.Reader
 
 
-import Control.Monad.State.Class(get)
+import Control.Monad.State.Class
 
 import Control.Monad.Trans.Class
 import Control.Monad.IO.Class
