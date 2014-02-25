@@ -8,6 +8,7 @@ import Control.Monad(mzero)
 import Data.Default
 import Data.Maybe(fromMaybe)
 import Data.List(intercalate)
+import Data.Set(Set)
 import Data.Yaml
 
 import HSync.Client.Import
@@ -18,6 +19,7 @@ import Network.HTTP.Conduit(Manager)
 
 import System.FilePath.GlobPattern(GlobPattern)
 
+import qualified Data.Set  as S
 import qualified Data.Text as T
 import qualified Data.List
 
@@ -32,6 +34,12 @@ partialFileExtension = ".hsyncpart"
 type ServerAddress = Text
 
 type IgnoredPatterns = [GlobPattern]
+
+
+-- | Files that should be temporarily ignored (in order to avoid reuploading
+--   incoming files)
+type TemporaryIgnoreFiles = Set FilePath
+
 
 -- | Each Synchronized Tree has its own manager/settings etc
 data Sync = Sync { httpManager     :: Manager

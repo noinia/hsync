@@ -1,14 +1,17 @@
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FlexibleContexts #-}
 module HSync.Client.ActionT where
 
+import Control.Concurrent.MVar(MVar)
 import Control.Applicative
 
 import Control.Monad.Reader.Class
 import Control.Monad.Reader
 
-
 import Control.Monad.State.Class
+import Control.Monad.State
 
 import Control.Monad.Trans.Class
 import Control.Monad.IO.Class
@@ -29,7 +32,7 @@ import HSync.Common.Header(HClientId(..), asHeader)
 import HSync.Client.Import
 
 import HSync.Client.AcidSync
-import HSync.Client.Sync(Sync)
+import HSync.Client.Sync(Sync, TemporaryIgnoreFiles)
 
 import Network.HTTP.Conduit(HttpException)
 
@@ -54,84 +57,86 @@ instance IsYesodClient Sync where
 -- | A monad for running Sync Actions
 
 
--- | The ActionT transformer adds the AcidState to the yesodClientMonad
--- transformer
-newtype ActionT acid m a = ActionT { unActionT ::
-                                        ReaderT acid (YesodClientT Sync m) a
-                                   }
+-- | The ActionT transformer adds a state transformer and a reader transformer
+-- to the YesodClient monad transformer.
+newtype ActionT s r m a = ActionT { unActionT ::
+                                       StateT s (
+                                         ReaderT r (
+                                            YesodClientT Sync m
+                                                   )
+                                         ) a
+                                  }
+                          deriving (Functor,Applicative,Monad,MonadIO)
 
-instance Monad m => Monad (ActionT acid m) where
-  return = ActionT . return
-  (ActionT m) >>= f = let f' = unActionT . f in
-                      ActionT $ m >>= f'
-
-instance MonadTrans (ActionT acid) where
-  lift = ActionT . lift . lift
-
-instance MonadIO m => MonadIO (ActionT acid m) where
-  liftIO = ActionT . liftIO
-
-instance Functor m => Functor (ActionT acid m) where
-  fmap f = ActionT . fmap f . unActionT
-
-instance (Functor m, Monad m) => Applicative (ActionT acid m) where
-  pure = ActionT . pure
-  (ActionT f) <*> (ActionT m) = ActionT $ f <*> m
+instance MonadTrans (ActionT s r) where
+  lift = ActionT . lift . lift . lift
 
 
 instance ( MonadResource m
          , MonadBaseControl IO m
          , Failure HttpException m
          ) =>
-         MonadYesodClient Sync (ActionT acid) m where
+         MonadYesodClient Sync (ActionT s r) m where
   runGetRoute r     = liftYT $ runGetRoute r
   runPostRoute r s  = liftYT $ runPostRoute r s
   runDeleteRoute r  = liftYT $ runDeleteRoute r
 
 
--- | Lift a YesodClientT m action into a ActionT m action
-liftYT      :: YesodClientT Sync m a -> ActionT acid m a
-liftYT yAct = ActionT . ReaderT $ (\_ -> yAct)
+-- -- | Lift a YesodClientT m action into a ActionT m action
+liftYT :: (Monad m, Functor m) => YesodClientT Sync m a -> ActionT s r m a
+liftYT = ActionT . lift . lift
+-- liftYT yAct = ActionT . StateT $ (\s -> ReaderT $ (\_ -> (\x -> (x,s)) <$> yAct))
 
-------------------------------
+----------------------------------------
 
--- | Given an action, a sync and an AcidState, run the action
-runActionT               :: Functor m => ActionT acid m a -> Sync -> acid -> m a
-runActionT act sync acid = runActionTWithClientState def sync acid act
 
--- | Given yesod client state, sync, AcidState and an action. Run the action
-runActionTWithClientState                         :: Functor m =>
-                                                     YesodClientState ->
-                                                     Sync ->
-                                                     acid ->
-                                                     ActionT acid m a ->
-                                                     m a
-runActionTWithClientState st sync acid (ActionT a) = evalYesodClientT
-                                                     (runReaderT a acid)
-                                                     sync st
+-- | Run an action and explicitly supply the YesodClient state.
+runActionWithYST                       :: (Functor m, Monad m)
+                                       => YesodClientState -- ^ yesod state
+                                       -> Sync
+                                       -> s    -- ^ state
+                                       -> r    -- ^ reader
+                                       -> ActionT s r m a
+                                       -> m a
+runActionWithYST yst sync s r (ActionT a) = let rm = evalStateT a s
+                                                ym = runReaderT rm r
+                                            in evalYesodClientT ym sync yst
+
+
+-- | Run an action
+runActionT              :: (Functor m, Monad m)
+                        => ActionT s r m a -> Sync -> s -> r -> m a
+runActionT act sync s r = runActionWithYST def sync s r act
 
 
 -- | ``Clone'' the current Action so we can run the given action in a new base action.
--- cloneInIO      :: ActionT acid (ResourceT IO) a -> ActionT acid (ResourceT IO) (IO a)
+
 cloneInIO     :: MonadBaseControl IO m
-              => ActionT AcidSync (ResourceT m) a
-              -> ActionT AcidSync SyncBaseMonad (m a)
+              => ActionT ActionState ActionReader (ResourceT m) a
+              -> Action (m a)
 cloneInIO act = do
                   sync   <- getSync
                   yState <- getYesodClientState
-                  acid   <- getAcidSync
+                  s      <- getActionState
+                  r      <- getActionReader
                   let ioA = runResourceT $
-                              runActionTWithClientState yState sync acid act
+                              runActionWithYST yState sync s r act
                   return ioA
 
 --------------------------------------------------------------------------------
 -- | The instantiated monad we will use to run our actions
 
+-- | The mutable state in our actions
+type ActionState  = MVar TemporaryIgnoreFiles
+
+-- | The immutable state in our actions
+type ActionReader = AcidSync
+
 -- | Our base monad for our computations
 type SyncBaseMonad = ResourceT IO
 
 -- | Shortcut for the Action
-type Action = ActionT AcidSync SyncBaseMonad
+type Action = ActionT ActionState ActionReader SyncBaseMonad
 
 ------------------------------
 
@@ -145,7 +150,14 @@ getYesodClientState = liftYT get
 
 -- | Get the AcidSync itself
 getAcidSync :: Action AcidSync
-getAcidSync = ActionT ask
+getAcidSync = getActionReader
+
+getActionState :: Action ActionState
+getActionState = ActionT get
+
+getActionReader :: Action ActionReader
+getActionReader = ActionT ask
+
 
 ------------------------------
 -- | Something on paths
