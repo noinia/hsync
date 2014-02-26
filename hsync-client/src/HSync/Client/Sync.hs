@@ -19,7 +19,6 @@ import Network.HTTP.Conduit(Manager)
 
 import System.FilePath.GlobPattern(GlobPattern)
 
-import qualified Data.Set  as S
 import qualified Data.Text as T
 import qualified Data.List
 
@@ -30,15 +29,13 @@ import qualified Data.List
 partialFileExtension :: String
 partialFileExtension = ".hsyncpart"
 
+-- | Files that should be temporarily ignored (in order to avoid reuploading
+--   incoming files)
+type TemporaryIgnoreFiles = Set FilePath
 
 type ServerAddress = Text
 
 type IgnoredPatterns = [GlobPattern]
-
-
--- | Files that should be temporarily ignored (in order to avoid reuploading
---   incoming files)
-type TemporaryIgnoreFiles = Set FilePath
 
 
 -- | Each Synchronized Tree has its own manager/settings etc
