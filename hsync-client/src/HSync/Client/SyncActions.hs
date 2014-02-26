@@ -24,6 +24,7 @@ import HSync.Client.Logger
 import HSync.Client.Sync
 import HSync.Client.RemoteEvents
 import HSync.Client.LocalEvents
+import HSync.Client.TemporaryIgnored
 
 
 -- Remove when done debugging
@@ -49,14 +50,17 @@ import Data.List(isPrefixOf)
 -- given action.
 withSync        :: FilePath -> Action () -> IO ()
 withSync fp act = do
-                    esync <- liftIO $ readConfig fp
+                    esync    <- liftIO $ readConfig fp
+                    tIgnores <- initializeTemporaryIgnored
                     case esync of
                       Left errMsg -> liftIO $ print errMsg
                       Right sync' -> bracket (openLocalStateFrom (statePath sync') def)
                                              (createCheckpointAndClose)
                                              (\acid -> withManager $ \mgr ->
                                                let sync = sync' { httpManager = mgr }
-                                               in runActionT act sync (AcidSync acid)
+                                                   s    = tIgnores
+                                                   r    = AcidSync acid
+                                               in runActionT act sync s r
                                              )
 
 

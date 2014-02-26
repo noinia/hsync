@@ -30,10 +30,9 @@ import qualified System.FSNotify as FSN
 -- whenFileHasChanged :: FP.FilePath -> (Path -> FilePath 0-> Action ()) -> Action ()
 whenFileHasChanged fp' act = do
   p       <- toRemotePath fp
-  act p fp
-  -- changed <- fileHasChanged p
-  -- if changed then act p fp
-  --            else return ()
+  changed <- fileHasChanged p
+  if changed then act p fp
+             else return ()
     where
       fp               = encodeString fp'
       fileHasChanged p = do
@@ -80,11 +79,12 @@ syncUpstreamUntil stopAct p = do
     sync   <- getSync
     fp     <- toLocalPath p
     yState <- getYesodClientState
-    acid   <- getAcidSync
+    s      <- getActionState
+    r      <- getActionReader
     let handleEvent'   :: FSN.Event -> IO ()
         handleEvent' e = runResourceT $
-                           runActionTWithClientState
-                             yState sync acid (handleEvent e)
+                           runActionTWithYST
+                             yState sync s r (handleEvent e)
     aPred  <- actionPredicate
     liftIO $ do
       mgr <- startManager
