@@ -4,7 +4,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 module HSync.Client.ActionT where
 
-import Control.Concurrent.MVar(MVar)
+import Control.Concurrent.STM.TVar(TVar)
 import Control.Applicative
 
 import Control.Monad.Reader.Class
@@ -91,22 +91,22 @@ liftYT = ActionT . lift . lift
 
 
 -- | Run an action and explicitly supply the YesodClient state.
-runActionWithYST                       :: (Functor m, Monad m)
-                                       => YesodClientState -- ^ yesod state
-                                       -> Sync
-                                       -> s    -- ^ state
-                                       -> r    -- ^ reader
-                                       -> ActionT s r m a
-                                       -> m a
-runActionWithYST yst sync s r (ActionT a) = let rm = evalStateT a s
-                                                ym = runReaderT rm r
-                                            in evalYesodClientT ym sync yst
+runActionTWithYST                       :: (Functor m, Monad m)
+                                        => YesodClientState -- ^ yesod state
+                                        -> Sync
+                                        -> s    -- ^ state
+                                        -> r    -- ^ reader
+                                        -> ActionT s r m a
+                                        -> m a
+runActionTWithYST yst sync s r (ActionT a) = let rm = evalStateT a s
+                                                 ym = runReaderT rm r
+                                             in evalYesodClientT ym sync yst
 
 
 -- | Run an action
 runActionT              :: (Functor m, Monad m)
                         => ActionT s r m a -> Sync -> s -> r -> m a
-runActionT act sync s r = runActionWithYST def sync s r act
+runActionT act sync s r = runActionTWithYST def sync s r act
 
 
 -- | ``Clone'' the current Action so we can run the given action in a new base action.
@@ -120,14 +120,14 @@ cloneInIO act = do
                   s      <- getActionState
                   r      <- getActionReader
                   let ioA = runResourceT $
-                              runActionWithYST yState sync s r act
+                              runActionTWithYST yState sync s r act
                   return ioA
 
 --------------------------------------------------------------------------------
 -- | The instantiated monad we will use to run our actions
 
 -- | The mutable state in our actions
-type ActionState  = MVar TemporaryIgnoreFiles
+type ActionState  = TVar TemporaryIgnoreFiles
 
 -- | The immutable state in our actions
 type ActionReader = AcidSync
