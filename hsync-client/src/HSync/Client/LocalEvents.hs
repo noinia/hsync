@@ -14,7 +14,9 @@ import HSync.Client.Actions
 import HSync.Client.AcidActions
 import HSync.Client.Logger
 import HSync.Client.Sync(Sync(..), partialFileExtension)
+import HSync.Client.TemporaryIgnored(isTemporarilyIgnored)
 
+import HSync.Common.Import(protect)
 import HSync.Common.Types
 import HSync.Common.FileIdent(checkFileIdent)
 
@@ -28,11 +30,12 @@ import Filesystem.Path.CurrentOS(decodeString, encodeString)
 import qualified System.FSNotify as FSN
 
 -- whenFileHasChanged :: FP.FilePath -> (Path -> FilePath 0-> Action ()) -> Action ()
-whenFileHasChanged fp' act = do
+
+
+whenNotIgnored fp' act =  do
   p       <- toRemotePath fp
-  changed <- fileHasChanged p
-  if changed then act p fp
-             else return ()
+  protect (isTemporarilyIgnored fp) (return ())
+                                    (act p fp)
     where
       fp               = encodeString fp'
       fileHasChanged p = do
@@ -46,11 +49,11 @@ whenFileHasChanged fp' act = do
 
 -- | should we use the time?
 handleEvent                 :: FSN.Event -> Action ()
-handleEvent (FSN.Added fp' _)    = whenFileHasChanged fp' $ \_ fp -> do
+handleEvent (FSN.Added fp' _)    = whenNotIgnored fp' $ \_ fp -> do
                                     liftIO $ print "fileAdded "
                                     liftIO $ print fp
                                     putFileOrDir fp
-handleEvent (FSN.Modified fp' _) = whenFileHasChanged fp' $ \p fp -> do
+handleEvent (FSN.Modified fp' _) = whenNotIgnored fp' $ \p fp -> do
                                     liftIO $ print "fileModified "
                                     fi <- expectedFileIdent p
                                     liftIO $ print (fp,p,fi)
