@@ -2,8 +2,8 @@
 module HSync.Client.Actions where
 
 
-import Control.Failure
 import Control.Exception(throw)
+import Control.Failure
 
 import Control.Monad(when)
 import Control.Monad.IO.Class (liftIO)
@@ -31,7 +31,7 @@ import HSync.Client.ActionT
 import HSync.Client.Logger
 import HSync.Client.AcidActions( updateFileIdent, setFileIdentOf
                                , expectedFileIdent)
-import HSync.Client.TemporaryIgnored(temporarilyIgnore, unIgnore)
+import HSync.Client.TemporaryIgnored(temporarilyIgnore, unIgnoreIn)
 
 
 import HSync.Common.DateTime(DateTime, toEpochTime)
@@ -197,13 +197,19 @@ getFile' p lp = do
   -- Download the file into a partial file
   let lpPartial = lp ++ partialFileExtension
   lift (responseBody resp C.$$+- sinkFile lpPartial)
-  -- set the modification time, and update the remote tree state
-  withHeader HFileIdent resp (setFileIdentOf p)
   -- This file is incoming, so temporarily ignore listening for local changes
   -- of this file:
+  debugM "Actions.getFile" $ "Ignoring " ++ show lp
   temporarilyIgnore lp
   liftIO $ renameFile lpPartial lp
-  unIgnore lp -- not sure if we should do this here or when the local event fires
+  -- set the modification time, and update the remote tree state
+  withHeader HFileIdent resp (\fi ->    setModificationTime p fi
+                                     >> setFileIdentOf p fi
+                             )
+  -- Unignore lp in 1 second (1 000 000  micro seconds)
+  debugM "Actions.getFile" $ "Unignoring " ++ show lp ++ " in 1 second."
+  unIgnoreIn 1000000 lp -- not sure if we should do this here or when the local event fires
+
 
 --------------------------------------------------------------------------------
 
