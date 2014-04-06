@@ -2,24 +2,27 @@
 {-# Language  FlexibleContexts #-}
 module HSync.Client.RemoteEvents where
 
-import Control.Monad.IO.Class(MonadIO(..))
-
-import Control.Monad.Trans.Class(lift)
+import Control.Applicative((<$>))
 import Control.Concurrent(forkIO)
 import Control.Failure
+import Control.Monad(when)
+import Control.Monad.IO.Class(MonadIO(..))
+import Control.Monad.Trans.Class(lift)
 
+import Data.Maybe(isNothing)
+import Data.Monoid(mconcat)
 
 import Data.Conduit
 import Data.Conduit.Internal(ResumableSource(..))
 
 import HSync.Client.ActionT
 import HSync.Client.Actions
-import HSync.Client.Sync(Sync)
+import HSync.Client.Sync(Sync, clientIdent)
 import HSync.Client.AcidActions
 
 import HSync.Common.Import
 import HSync.Common.AtomicIO
-import HSync.Common.DateTime(DateTime)
+import HSync.Common.DateTime(DateTime(..), showDateTime, modificationTime)
 import HSync.Common.Notification
 
 import HSync.Common.FSTree
@@ -27,8 +30,10 @@ import HSync.Common.Types
 
 import Network.HTTP.Conduit( HttpException(..) )
 
-import System.Directory( doesDirectoryExist)
+import System.Directory(doesDirectoryExist, renameFile, renameDirectory)
+import System.FilePath(takeBaseName, replaceBaseName)
 
+import qualified Data.Text              as T
 import qualified HSync.Common.FileIdent as FI
 
 
@@ -44,54 +49,64 @@ handleNotification n@(Notification e ci t) = do
                                                  atomicallyWriteIO fp ioA
   where
     p   = affectedPath e
-    act = protect (noConflict e t)
+    act = protect (noConflict e)
                   (handleEvent e)
-                  (handleIncomingConflict n)
+                  (handleConflict p t)
 
--- handleNotification                         :: Notification -> Action ()
--- handleNotification n@(Notification e ci t) = do
---                                                sync   <- getSync
---                                                fp     <- toLocalPath p
---                                                yState <- getYesodClientState
---                                                acid   <- getAcidSync
---                                                liftIO $ handleAtomic acid yState sync fp
---   where
---     p = affectedPath e
---     -- handleAtomic :: AcidSync -> Sync -> FilePath -> IO ()
---     handleAtomic acid yState sync fp = atomicallyWriteIO fp . runResourceT $
---                                          runActionTWithClientState yState sync acid act
---     act = protect (noConflict e t)
---                   (handleEvent e)
---                   (handleIncomingConflict n)
+handleEvent                                         :: Event -> Action ()
+handleEvent (Event FileAdded p FI.NonExistent)      = getFile p
+handleEvent (Event FileRemoved p fi)                = deleteFileLocally p fi
+handleEvent (Event FileUpdated p fi)                = getUpdate p fi
 
-
-
-handleEvent                                      :: Event -> Action ()
-handleEvent (Event FileAdded p _)                = getFile p
-handleEvent (Event FileRemoved p (Just fi))      = deleteFileLocally p fi
-handleEvent (Event FileUpdated p (Just fi))      = getUpdate p fi
-
-handleEvent (Event DirectoryAdded p _)           = createDirectoryLocally p
-handleEvent (Event DirectoryRemoved p (Just fi)) = return () -- TODO
-handleEvent e                                    = let es = show e in error $
-                                     "handleEvent: inconsistent event: " ++ es
+handleEvent (Event DirectoryAdded p FI.NonExistent) = createDirectoryLocally p
+handleEvent (Event DirectoryRemoved p fi)           = return () -- TODO
+handleEvent e                                       = let es = show e in
+          error $  "handleEvent: inconsistent event: " ++ es
 
 --------------------------------------------------------------------------------
 -- | Conflict Checking
 
-noConflict e t = return True --TODO
-
-
-conflictsLocal         :: Path -> Maybe FI.FileIdent -> DateTime -> Action Bool
-conflictsLocal p mfi t = return False -- TODO!!
-
-
-
+noConflict   :: Event -> Action Bool
+noConflict e = let p   = affectedPath e
+                   rfi = affectedFileIdent e
+               in isNothing <$> (toLocalPath p >>= FI.checkFileIdent rfi)
 
 --------------------------------------------------------------------------------
 -- | Conflict Handling
 
-handleIncomingConflict _ = return ()
+handleConflict      :: Path
+                    -> DateTime  -- Time when the file was changed at the server
+                    -> Action ()
+handleConflict p rt = do
+  fp <- toLocalPath p
+  -- Move the local file or directory if it exists and then just download the
+  -- tree anew from the server
+  (b,_) <- exists fp
+  when b $ do
+             ci <- clientIdent <$> getSync
+             mt <- modificationTime fp
+             liftIO $ renameFileOrDir fp (conflictedFp fp ci mt rt)
+  cloneDownstream p
+
+
+-- | Rename function that works both for files and directories
+renameFileOrDir        :: FilePath -> FilePath -> IO ()
+renameFileOrDir fp fp' = atomicallyIO fp $ do
+                           b <- doesDirectoryExist fp
+                           let rename = if b then renameDirectory else renameFile
+                           rename fp fp'
+
+
+-- | Construct the filename to use for conflicted copies
+conflictedFp             :: FilePath -> ClientIdent -> DateTime -> DateTime -> FilePath
+conflictedFp fp ci lt rt = replaceBaseName fp $ mconcat [ takeBaseName fp
+                                                        , "_conflicted_copy_"
+                                                        , T.unpack ci
+                                                        , "_local_modified_"
+                                                        , showDateTime . unDT $ lt
+                                                        , "_remote_modified_"
+                                                        , showDateTime . unDT $ rt
+                                                        ]
 
 --------------------------------------------------------------------------------
 -- | Cloning

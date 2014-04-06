@@ -167,6 +167,17 @@ checkMTime' a b
   | a == b    = Nothing
   | otherwise = Just ["modification date mismatch."]
 
+
+
+
+-- data FileIdentComparison = Same FileIdent
+--                          | ModificationTimeMismatch FileIdent
+--                          | WrongType { found :: FileIdent
+--                                      , expected :: FileIdent
+--                                      }
+--                            deriving (Show,Read,Eq,Data,Typeable)
+
+
 --------------------------------------------------------------------------------
 
 
