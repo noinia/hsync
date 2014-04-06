@@ -31,7 +31,7 @@ import Network.Wai.Middleware.RequestLogger
     ( mkRequestLogger, outputFormat, OutputFormat (..), IPAddrSource (..), destination
     )
 
-import System.Log.FastLogger (newLoggerSet, defaultBufSize)
+import System.Log.FastLogger (newStdoutLoggerSet, defaultBufSize)
 
 import Yesod.Default.Config
 import Yesod.Default.Handlers
@@ -41,7 +41,6 @@ import Yesod.Core.Types (loggerSet, Logger (Logger))
 import qualified Database.Persist
 
 import qualified HSync.Server.Settings                as Settings
-import qualified GHC.IO.FD
 
 import qualified Network.Wai.Middleware.RequestLogger as RequestLogger
 
@@ -90,7 +89,7 @@ makeFoundation acid conf = do
     p           <- Database.Persist.createPoolConfig (dbconf :: Settings.PersistConf)
 
     nots        <- newBroadcastTChanIO
-    loggerSet'  <- newLoggerSet defaultBufSize GHC.IO.FD.stdout
+    loggerSet'  <- newStdoutLoggerSet defaultBufSize
     (getter, _) <- clockDateCacher
 
     let logger     = Yesod.Core.Types.Logger loggerSet' getter
