@@ -53,8 +53,8 @@ instance AsDateTime FileLabel where
 
 
 
-fromNotification                                      :: Notification -> FileLabel
-fromNotification (Notification (Event ek _ mfi) ci t) = FileLabel ek ci t mfi
+fromNotification                                     :: Notification -> FileLabel
+fromNotification (Notification (Event ek _ fi) ci t) = FileLabel ek ci t (Just fi)
 
 --------------------------------------------------------------------------------
 

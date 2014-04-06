@@ -53,7 +53,7 @@ involvesDirectory = not . involvesFile
 
 data Event = Event { kind              :: EventKind
                    , affectedPath      :: Path
-                   , affectedFileIdent :: Maybe FileIdent
+                   , affectedFileIdent :: FileIdent
                    }
              deriving (Show,Read,Eq,Data,Typeable)
 
@@ -65,16 +65,16 @@ fileAdded        :: Path -> Event
 fileRemoved      :: Path -> FileIdent -> Event
 fileUpdated      :: Path -> FileIdent -> Event
 
-fileAdded   p    = Event FileAdded p Nothing
-fileRemoved p fi = Event FileRemoved p (Just fi)
-fileUpdated p fi = Event FileUpdated p (Just fi)
+fileAdded   p    = Event FileAdded p   NonExistent
+fileRemoved p fi = Event FileRemoved p fi
+fileUpdated p fi = Event FileUpdated p fi
 
 directoryAdded        :: Path -> Event
 directoryRemoved      :: Path -> FileIdent -> Event
 
 
-directoryAdded   p    = Event DirectoryAdded p Nothing
-directoryRemoved p fi = Event DirectoryRemoved p (Just fi)
+directoryAdded   p    = Event DirectoryAdded p   NonExistent
+directoryRemoved p fi = Event DirectoryRemoved p fi
 
 
 --------------------------------------------------------------------------------
