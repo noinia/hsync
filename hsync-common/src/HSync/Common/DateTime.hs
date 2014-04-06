@@ -7,6 +7,7 @@ module HSync.Common.DateTime( DateTime(..)
                             , currentTime
                             , Day
                             , day
+                            , showDateTime
 
                             , AsDateTime(..)
 
