@@ -60,8 +60,8 @@ instance IsTypedHeader HClientId where
   type HeaderValue HClientId = ClientIdent
 
   headerName        _ = "clientId"
-  parseHeaderValue  _ = Just . decodeUtf8
-  encodeHeaderValue _ = id
+  parseHeaderValue  _ = Just . ClientIdent . decodeUtf8
+  encodeHeaderValue _ = unCI
 
 
 ------------------------------

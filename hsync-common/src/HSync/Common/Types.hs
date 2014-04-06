@@ -2,10 +2,10 @@
 {-# Language  OverloadedStrings #-}
 {-# Language GeneralizedNewtypeDeriving #-}
 {-# Language DeriveDataTypeable #-}
-module HSync.Common.Types( UserIdent
-                         , Password
-                         , HashedPassword
-                         , ClientIdent
+module HSync.Common.Types( UserIdent(..)
+                         , Password(..)
+                         , HashedPassword(..)
+                         , ClientIdent(..)
                          -- Paths
                          , Path(..)
                          , toFilePath
@@ -24,7 +24,7 @@ import Data.Aeson.TH
 import Data.Data(Data, Typeable)
 import Data.Function(on)
 import Data.List(intercalate, isPrefixOf)
-import Data.SafeCopy(base, deriveSafeCopy)
+import Data.SafeCopy(SafeCopy(..), base, deriveSafeCopy)
 import Data.Text(Text)
 
 import Text.Read(readMaybe)
@@ -36,11 +36,21 @@ import qualified Data.Text as T
 
 --------------------------------------------------------------------------------
 
-type UserIdent = Text
-type Password = Text
-type HashedPassword = Text
+newtype UserIdent = UserIdent { unUI :: Text }
+                    deriving (Show,Read,Eq,Ord,Data,Typeable,
+                              SafeCopy,PathPiece,FromJSON,ToJSON)
 
-type ClientIdent = Text
+newtype Password = Password { unPassword :: Text }
+                    deriving (Show,Read,Eq,Ord,Data,Typeable,
+                              SafeCopy,PathPiece,FromJSON,ToJSON)
+
+newtype HashedPassword = HashedPassword { unHashedPassword :: Text }
+                    deriving (Show,Read,Eq,Ord,Data,Typeable,
+                              SafeCopy,PathPiece,FromJSON,ToJSON)
+
+newtype ClientIdent = ClientIdent { unCI :: Text }
+                    deriving (Show,Read,Eq,Ord,Data,Typeable,
+                              SafeCopy,PathPiece,FromJSON,ToJSON)
 
 --------------------------------------------------------------------------------
 
@@ -58,12 +68,12 @@ $(deriveJSON defaultOptions ''Path)
 $(deriveSafeCopy 0 'base ''Path)
 
 instance PathMultiPiece Path where
-    toPathMultiPiece (Path u ps) = u : ps -- map T.pack ps
-    fromPathMultiPiece (u:ps) = Just $ Path u ps -- . map T.unpack
+    toPathMultiPiece (Path u ps) = toPathPiece u : ps -- map T.pack ps
+    fromPathMultiPiece (u:ps) = Just $ Path (UserIdent u) ps -- . map T.unpack
     fromPathMultiPiece _      = Nothing
 
-toFilePath                     :: Text -> Path -> FilePath
-toFilePath baseDir (Path u ps) = intercalate "/" . map T.unpack $ baseDir:u:ps
+toFilePath                                 :: Text -> Path -> FilePath
+toFilePath baseDir (Path (UserIdent u) ps) = intercalate "/" . map T.unpack $ baseDir:u:ps
 
 isSubPathOf       :: Path -> Path -> Bool
 p `isSubPathOf` q = let fp = toFilePath "" p
