@@ -116,8 +116,9 @@ type ErrorDescription = [Text]
 -- the file ident of fp is fi. If this is not the case, an error message is
 -- generated that includes the name hName of the action/computation that we
 -- wanted to run.
-protectedByFI               :: MonadIO m => FileIdent -> FilePath -> Text -> m a ->
-                               m (Either ErrorDescription a)
+protectedByFI               :: (Functor m, MonadIO m)
+                            => FileIdent -> FilePath -> Text -> m a
+                            -> m (Either ErrorDescription a)
 protectedByFI fi fp hName h = do
   me <- checkFileIdent fi fp
   case me of
@@ -131,34 +132,40 @@ protectedByFI fi fp hName h = do
 
 -- | Check the fileId. If the result is 'Nothing' then there were no errors found
 -- otherwise, we give a description of the error
-checkFileIdent                :: MonadIO m => FileIdent -> FilePath ->
-                                   m (Maybe ErrorDescription)
-checkFileIdent exp p = exists p >>= \(dir,file) -> iError p exp dir file
+
+checkFileIdent       :: (Functor m, MonadIO m)
+                     => FileIdent -> FilePath -> m (Maybe ErrorDescription)
+checkFileIdent exp p = do
+  (f,d) <- exists p
+  t     <- if f then modificationTime p else return undefined
+  return $ checkFileIdent' f d t exp
 
 
--- | determine the error depending on the path, expected ident, and the result of
--- the file and directory tests
-iError                             :: MonadIO m =>
-                                      FilePath -> FileIdent ->
-                                      Bool -> Bool -> m (Maybe ErrorDescription)
-iError _ NonExistent   False False = noError
-iError _ NonExistent   True  False = err "File found, no file or directory expected."
-iError _ NonExistent   _     True  = err "Directory found, no file or directory expected."
-
-iError _ (Directory _) False False = err "Nothing found, directory expected."
-iError _ (Directory _) True  False = err "File found, directory expected."
-iError p (Directory d) _     True  = checkMTime p d
-
-iError _ (File _)      False False = err "Nothing found, file expected."
-iError p (File d)      True  False = checkMTime p d
-iError _ (File _)      _     True  = err "Directory found, file expected."
+checkFileIdent' :: Bool       -- ^ isFile           fp
+                -> Bool       -- ^ isDirectory      fp
+                -> DateTime   -- ^ modificationTime fp
+                -> FileIdent  -- ^ Expected file ident
+                -> Maybe ErrorDescription
+checkFileIdent' False False _ NonExistent    = Nothing
+checkFileIdent' True  False _ NonExistent    = Just ["File found, no file or directory expected."]
+checkFileIdent' True  _     _ NonExistent    = Just ["Directory found, no file or directory expected."]
+checkFileIdent' False False _ (Directory _)  = Just ["Nothing found, directory expected."]
+checkFileIdent' True  False _ (Directory _)  = Just ["File found, directory expected."]
+checkFileIdent' _     True  t (Directory t') = checkMTime' t t'
+checkFileIdent' False False _ (File _)       = Just ["Nothing found, file expected."]
+checkFileIdent' True  False t (File t')      = checkMTime' t t'
+checkFileIdent' True  _     _ (File _)       = Just ["Directory found, file expected."]
 
 
 -- | Check the modification time of a file.
-checkMTime     :: MonadIO m => FilePath -> DateTime -> m (Maybe ErrorDescription)
-checkMTime p d = liftIO (modificationTime p) >>= \td ->
-                 if td == d then noError
-                            else err "Modification date mismatch."
+checkMTime     :: (Functor m, MonadIO m)
+               => FilePath -> DateTime -> m (Maybe ErrorDescription)
+checkMTime p d = checkMTime' d <$> liftIO (modificationTime p)
+
+checkMTime' :: DateTime -> DateTime -> Maybe ErrorDescription
+checkMTime' a b
+  | a == b    = Nothing
+  | otherwise = Just ["modification date mismatch."]
 
 --------------------------------------------------------------------------------
 
