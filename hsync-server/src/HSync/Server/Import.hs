@@ -11,7 +11,6 @@ import Control.Applicative  as HSync.Server.Import (pure, (<$>), (<*>))
 import Data.Text            as HSync.Server.Import (Text)
 
 import HSync.Server.Foundation           as HSync.Server.Import
-import HSync.Server.Model                as HSync.Server.Import
 import HSync.Server.Settings             as HSync.Server.Import
 import HSync.Server.Settings.Development as HSync.Server.Import
 import HSync.Server.Settings.StaticFiles as HSync.Server.Import

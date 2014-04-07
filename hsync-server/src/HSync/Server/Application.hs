@@ -8,7 +8,6 @@ module HSync.Server.Application
 
 import Control.Concurrent(forkIO, ThreadId)
 import Control.Concurrent.STM.TChan
-import Control.Monad.Logger (runLoggingT)
 
 import Data.Default (def)
 
@@ -33,9 +32,6 @@ import System.Log.FastLogger (newStdoutLoggerSet, defaultBufSize)
 import Yesod.Default.Config
 import Yesod.Default.Handlers
 import Yesod.Core.Types (loggerSet, Logger (Logger))
-
-
-import qualified HSync.Server.Settings                as Settings
 
 import qualified Network.Wai.Middleware.RequestLogger as RequestLogger
 

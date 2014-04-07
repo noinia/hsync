@@ -22,7 +22,6 @@ library
                      HSync.Server.FileSystemState
                      HSync.Server.Import
                      HSync.Server.User
-                     -- HSync.Server.Model
                      HSync.Server.Notifications
                      HSync.Server.Settings
                      HSync.Server.Settings.StaticFiles
@@ -30,8 +29,7 @@ library
                      HSync.Server.Handler.Home
                      HSync.Server.Handler.Auth
                      HSync.Server.Handler.FileActions
-                     HSync.Server.Handler.Acid
-
+                     -- HSync.Server.Handler.Acid
 
     Extra-Source-Files: config/models
                         config/routes
