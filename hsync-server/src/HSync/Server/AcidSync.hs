@@ -65,7 +65,7 @@ lookupUser ui = U.lookupUser ui <$> ask
 
 insertUser   :: User -> Update UserIndex (Maybe ErrorMessage)
 insertUser u = do
-                 eix <- U.insert u <$> get
+                 eix <- U.insertUser u <$> get
                  case eix of
                    Left err -> return $ Just err
                    Right ix -> put ix >> return Nothing
@@ -76,7 +76,6 @@ $(makeAcidic ''UserIndex [ 'queryUserIndex
                          , 'insertUser
                          ])
 
-
 --------------------------------------------------------------------------------
 
 withAcidSync        :: Extra
@@ -86,7 +85,7 @@ withAcidSync conf f = do
                         let baseDir = extraFilesDir conf
                         -- Get a blank copy of the of the FSTree. This is only used if
                         -- there is no acidious state yet.
-                        blankFSS <- newFSState' baseDir
+                        blankFSS <- newFSState baseDir
                         -- Start/open Acid state
                         withState blankFSS $ \fsState ->
                           withState def $ \users ->
@@ -95,8 +94,6 @@ withAcidSync conf f = do
     withState init g = bracket (openLocalState init)
                                (createCheckpointAndClose)
                                g
-
-newFSState' b = print "woei" >> newFSState b
 
 --------------------------------------------------------------------------------
 

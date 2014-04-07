@@ -11,7 +11,6 @@ import Data.Acid(AcidState, Update, Query,
 import Data.Acid.Advanced(query', update')
 
 --------------------------------------------------------------------------------
-
 --- Using acid state from an arbitrary monad
 
 

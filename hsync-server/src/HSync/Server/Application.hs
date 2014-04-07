@@ -12,8 +12,6 @@ import Control.Monad.Logger (runLoggingT)
 
 import Data.Default (def)
 
--- import Database.Persist.Sql (runMigration)
-
 import HSync.Server.Import
 import HSync.Server.AcidSync(AcidSync)
 import HSync.Server.Notifications(storeNotifications)
@@ -22,7 +20,6 @@ import HSync.Server.Notifications(storeNotifications)
 -- Don't forget to add new modules to your cabal file!
 import HSync.Server.Handler.Home
 import HSync.Server.Handler.Auth
--- import HSync.Server.Handler.Acid
 import HSync.Server.Handler.FileActions
 
 import Network.HTTP.Conduit (newManager, conduitManagerSettings)
@@ -37,8 +34,6 @@ import Yesod.Default.Config
 import Yesod.Default.Handlers
 import Yesod.Core.Types (loggerSet, Logger (Logger))
 
-
--- import qualified Database.Persist
 
 import qualified HSync.Server.Settings                as Settings
 
@@ -83,22 +78,12 @@ makeFoundation           :: AcidSync -> AppConfig DefaultEnv Extra -> IO HSyncSe
 makeFoundation acid conf = do
     manager     <- newManager conduitManagerSettings
     s           <- staticSite
-    -- dbconf      <- withYamlEnvironment "config/sqlite.yml" (appEnv conf)
-    --                  Database.Persist.loadConfig >>=
-    --                  Database.Persist.applyEnv
-    -- p           <- Database.Persist.createPoolConfig (dbconf :: Settings.PersistConf)
-
     nots        <- newBroadcastTChanIO
     loggerSet'  <- newStdoutLoggerSet defaultBufSize
     (getter, _) <- clockDateCacher
 
     let logger     = Yesod.Core.Types.Logger loggerSet' getter
         foundation = HSyncServer conf s manager logger nots acid
-
-    -- -- Perform database migration using our application's logging settings.
-    -- runLoggingT
-    --   (Database.Persist.runPool dbconf (runMigration migrateAll) p)
-    --   (messageLoggerSource foundation logger)
 
     return foundation
 
@@ -119,24 +104,3 @@ startNotificationLogger hss = forkIO start
   where
     start :: IO ()
     start = storeNotifications hss
-
--- storeNotifications hss = notifications' hss >>= ($$ notificationSink hss)
-
-      -- return ()
-
-
-
-
-
--- startNotificationLogger     :: HSyncServer -> IO ThreadId
--- startNotificationLogger hss = forkIO start
---     where
---       dir   = extraNotificationLogDir . appExtra . settings $ hss
-
-
--- -- | A Sink that simply logs all notifcations to the given file
--- simpleNotificationFileSink   :: (MonadResource m, MonadIO m) =>
---                                 FilePath -> Sink Notification m ()
--- simpleNotificationFileSink f = L.map printNotification =$ sinkFile f
---   where
---     printNotification = B.pack . (++"\n") . toLog

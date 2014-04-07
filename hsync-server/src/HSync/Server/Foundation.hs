@@ -12,15 +12,11 @@ import HSync.Common.Types
 import HSync.Common.FileIdent(FileIdent)
 import HSync.Common.Notification
 
---import Data.Default
 import Data.Text(pack)
-
--- import Database.Persist.Sql (SqlPersistT)
 
 import HSync.Server.Settings (widgetFile, Extra (..))
 import HSync.Server.Settings.StaticFiles
 import HSync.Server.Settings.Development (development)
--- import HSync.Server.Model
 import HSync.Server.AcidState
 import HSync.Server.AcidSync
 import HSync.Server.FileSystemState(FSState)
@@ -38,9 +34,7 @@ import Yesod.Default.Config
 import Yesod.Default.Util (addStaticContentExternal)
 import Yesod.Static
 
-
-import qualified HSync.Server.Settings as Settings
--- import qualified Database.Persist
+import qualified HSync.Server.Settings                as Settings
 
 --------------------------------------------------------------------------------
 
@@ -51,26 +45,11 @@ import qualified HSync.Server.Settings as Settings
 data HSyncServer = HSyncServer
     { settings         :: AppConfig DefaultEnv Extra
     , getStatic        :: Static -- ^ Settings for static file serving.
-    -- , connPool         :: Database.Persist.PersistConfigPool Settings.PersistConf -- ^ Database connection pool.
     , httpManager      :: Manager
-    -- , persistConfig    :: Settings.PersistConf
     , appLogger        :: Logger
     , notificationChan :: TChan Notification
     , acidSync         :: AcidSync
     }
-
-
--- instance Default HSyncServer where
---     -- | only use this def instance to create a value of the type HSyncServer
---     def = HSyncServer { settings         = undefined
---                       , getStatic        = undefined
---                       -- , connPool         = undefined
---                       , httpManager      = undefined
---                       -- , persistConfig    = undefined
---                       , appLogger        = undefined
---                       , notificationChan = undefined
---                       , acidSync         = undefined
---                       }
 
 -- Set up i18n messages. See the message folder.
 mkMessage "HSyncServer" "messages" "en"
@@ -168,21 +147,13 @@ instance Yesod HSyncServer where
 
 
 -- How to access the stuff that we store using acid state
-
 instance HasAcidState (HandlerT HSyncServer IO) FSState where
   getAcidState = fsState <$> getAcidSync
 
 instance HasAcidState (HandlerT HSyncServer IO) UserIndex where
   getAcidState = users <$> getAcidSync
 
-
--- How to run database actions.
--- instance YesodPersist HSyncServer where
---     type YesodPersistBackend HSyncServer = SqlPersistT
---     runDB = defaultRunDB persistConfig connPool
--- instance YesodPersistRunner HSyncServer where
---     getDBRunner = defaultGetDBRunner connPool
-
+-- How to authenticate
 instance YesodAuth HSyncServer where
     type AuthId HSyncServer = UserIdent
 
