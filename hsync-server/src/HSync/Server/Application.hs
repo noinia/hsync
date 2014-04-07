@@ -12,7 +12,7 @@ import Control.Monad.Logger (runLoggingT)
 
 import Data.Default (def)
 
-import Database.Persist.Sql (runMigration)
+-- import Database.Persist.Sql (runMigration)
 
 import HSync.Server.Import
 import HSync.Server.AcidSync(AcidSync)
@@ -38,7 +38,7 @@ import Yesod.Default.Handlers
 import Yesod.Core.Types (loggerSet, Logger (Logger))
 
 
-import qualified Database.Persist
+-- import qualified Database.Persist
 
 import qualified HSync.Server.Settings                as Settings
 
@@ -83,22 +83,22 @@ makeFoundation           :: AcidSync -> AppConfig DefaultEnv Extra -> IO HSyncSe
 makeFoundation acid conf = do
     manager     <- newManager conduitManagerSettings
     s           <- staticSite
-    dbconf      <- withYamlEnvironment "config/sqlite.yml" (appEnv conf)
-                     Database.Persist.loadConfig >>=
-                     Database.Persist.applyEnv
-    p           <- Database.Persist.createPoolConfig (dbconf :: Settings.PersistConf)
+    -- dbconf      <- withYamlEnvironment "config/sqlite.yml" (appEnv conf)
+    --                  Database.Persist.loadConfig >>=
+    --                  Database.Persist.applyEnv
+    -- p           <- Database.Persist.createPoolConfig (dbconf :: Settings.PersistConf)
 
     nots        <- newBroadcastTChanIO
     loggerSet'  <- newStdoutLoggerSet defaultBufSize
     (getter, _) <- clockDateCacher
 
     let logger     = Yesod.Core.Types.Logger loggerSet' getter
-        foundation = HSyncServer conf s p manager dbconf logger nots acid
+        foundation = HSyncServer conf s manager logger nots acid
 
-    -- Perform database migration using our application's logging settings.
-    runLoggingT
-      (Database.Persist.runPool dbconf (runMigration migrateAll) p)
-      (messageLoggerSource foundation logger)
+    -- -- Perform database migration using our application's logging settings.
+    -- runLoggingT
+    --   (Database.Persist.runPool dbconf (runMigration migrateAll) p)
+    --   (messageLoggerSource foundation logger)
 
     return foundation
 

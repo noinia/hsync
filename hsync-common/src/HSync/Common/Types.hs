@@ -1,5 +1,5 @@
 {-# Language TemplateHaskell    #-}
-{-# Language  OverloadedStrings #-}
+{-# Language OverloadedStrings #-}
 {-# Language GeneralizedNewtypeDeriving #-}
 {-# Language DeriveDataTypeable #-}
 module HSync.Common.Types( UserIdent(..)

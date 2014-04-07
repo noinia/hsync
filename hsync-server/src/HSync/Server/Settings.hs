@@ -8,7 +8,7 @@ module HSync.Server.Settings where
 import Prelude
 import Text.Shakespeare.Text (st)
 import Language.Haskell.TH.Syntax
-import Database.Persist.Sqlite (SqliteConf)
+-- import Database.Persist.Sqlite (SqliteConf)
 import Yesod.Default.Config
 import Yesod.Default.Util
 import Data.Text (Text)
@@ -21,7 +21,7 @@ import Text.Hamlet
 import qualified Data.Text as T
 
 -- | Which Persistent backend this site is using.
-type PersistConf = SqliteConf
+-- type PersistConf = SqliteConf
 
 
 -- Static setting below. Changing these requires a recompile

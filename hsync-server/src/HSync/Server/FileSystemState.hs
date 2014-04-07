@@ -72,7 +72,8 @@ newFSState baseDir = readTimedFSTree baseDir f >>=
                        maybe (error "newFSState") -- TODO: fix
                              (return . FSState)
   where
-    f fp = (\dt -> FileLabel FileAdded "unknown" dt Nothing) <$> (modificationTime fp)
+    f fp       = mkLabel <$> (modificationTime fp)
+    mkLabel dt = FileLabel FileAdded (ClientIdent "unknown") dt Nothing
 
 
 withTimedFSTree   :: (TimedFSTree FileLabel -> TimedFSTree FileLabel)
@@ -85,6 +86,6 @@ updateNotification   :: Notification -> FSState -> FSState
 updateNotification n = withTimedFSTree $ insertOrAdjustLabel p fType (const fl)
   where
     p'    = affectedPath . event $ n
-    p     = (owner p') : subPath p'
+    p     = (unUI $ owner p') : subPath p'
     fl    = fromNotification n
     fType = if involvesFile . kind . event $ n then Left undefined else Right undefined

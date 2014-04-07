@@ -18,6 +18,7 @@ library
     exposed-modules: HSync.Server.Application
                      HSync.Server.Foundation
                      HSync.Server.AcidSync
+                     HSync.Server.AcidState
                      HSync.Server.FileSystemState
                      HSync.Server.Import
                      HSync.Server.User

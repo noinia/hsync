@@ -6,9 +6,6 @@ module HSync.Server.User where
 
 import Prelude
 
-
-import Data.Monoid
-
 import Data.Data(Data, Typeable)
 import Data.Default
 import Data.IxSet
@@ -23,15 +20,14 @@ import qualified Data.IxSet as I
 
 --------------------------------------------------------------------------------
 
-newtype FullName = FullName { unFullName :: Text }
+newtype RealName = RealName { unRealName :: Text }
                  deriving (Show,Read,Eq,Ord,Data,Typeable,SafeCopy)
 
 
 
-data User = User { userId   :: UserIdent
-                 , fullName :: FullName
-                 , password :: HashedPassword
-
+data User = User { userIdent :: UserIdent
+                 , realName  :: RealName
+                 , password  :: HashedPassword
                  }
             deriving (Show,Read,Eq,Ord,Data,Typeable)
 
@@ -41,8 +37,8 @@ $(deriveSafeCopy 0 'base ''User)
 
 
 instance Indexable User where
-  empty = ixSet [ ixFun $ \u -> [ userId u ]
-                , ixFun $ \u -> [ fullName u ]
+  empty = ixSet [ ixFun $ \u -> [ userIdent u ]
+                , ixFun $ \u -> [ realName  u ]
                 ]
 
 -- | Users have a unique userId
@@ -56,7 +52,7 @@ instance Default UserIndex where
 type ErrorMessage = Text
 
 insert                 :: User -> UserIndex -> Either ErrorMessage UserIndex
-insert u (UserIndex s) = case I.getOne $ s @= (userId u) of
+insert u ui@(UserIndex s) = case lookupUser (userIdent u) ui of
   Nothing -> Right $ UserIndex (I.insert u s)
   Just _  -> Left    "Username already taken."
 

@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleInstances #-}
 module HSync.Server.Foundation where
 
 import Prelude
@@ -11,16 +12,19 @@ import HSync.Common.Types
 import HSync.Common.FileIdent(FileIdent)
 import HSync.Common.Notification
 
-import Data.Default
+--import Data.Default
 import Data.Text(pack)
 
-import Database.Persist.Sql (SqlPersistT)
+-- import Database.Persist.Sql (SqlPersistT)
 
 import HSync.Server.Settings (widgetFile, Extra (..))
 import HSync.Server.Settings.StaticFiles
 import HSync.Server.Settings.Development (development)
-import HSync.Server.Model
+-- import HSync.Server.Model
+import HSync.Server.AcidState
 import HSync.Server.AcidSync
+import HSync.Server.FileSystemState(FSState)
+import HSync.Server.User(User(..),UserIndex)
 
 import Network.HTTP.Conduit (Manager)
 
@@ -36,7 +40,7 @@ import Yesod.Static
 
 
 import qualified HSync.Server.Settings as Settings
-import qualified Database.Persist
+-- import qualified Database.Persist
 
 --------------------------------------------------------------------------------
 
@@ -47,26 +51,26 @@ import qualified Database.Persist
 data HSyncServer = HSyncServer
     { settings         :: AppConfig DefaultEnv Extra
     , getStatic        :: Static -- ^ Settings for static file serving.
-    , connPool         :: Database.Persist.PersistConfigPool Settings.PersistConf -- ^ Database connection pool.
+    -- , connPool         :: Database.Persist.PersistConfigPool Settings.PersistConf -- ^ Database connection pool.
     , httpManager      :: Manager
-    , persistConfig    :: Settings.PersistConf
+    -- , persistConfig    :: Settings.PersistConf
     , appLogger        :: Logger
     , notificationChan :: TChan Notification
     , acidSync         :: AcidSync
     }
 
 
-instance Default HSyncServer where
-    -- | only use this def instance to create a value of the type HSyncServer
-    def = HSyncServer { settings         = undefined
-                      , getStatic        = undefined
-                      , connPool         = undefined
-                      , httpManager      = undefined
-                      , persistConfig    = undefined
-                      , appLogger        = undefined
-                      , notificationChan = undefined
-                      , acidSync         = undefined
-                      }
+-- instance Default HSyncServer where
+--     -- | only use this def instance to create a value of the type HSyncServer
+--     def = HSyncServer { settings         = undefined
+--                       , getStatic        = undefined
+--                       -- , connPool         = undefined
+--                       , httpManager      = undefined
+--                       -- , persistConfig    = undefined
+--                       , appLogger        = undefined
+--                       , notificationChan = undefined
+--                       , acidSync         = undefined
+--                       }
 
 -- Set up i18n messages. See the message folder.
 mkMessage "HSyncServer" "messages" "en"
@@ -163,12 +167,21 @@ instance Yesod HSyncServer where
     maximumContentLength _ _          = Just $ 2 * 1024 * 1024 -- 2 megabytes
 
 
+-- How to access the stuff that we store using acid state
+
+instance HasAcidState (HandlerT HSyncServer IO) FSState where
+  getAcidState = fsState <$> getAcidSync
+
+instance HasAcidState (HandlerT HSyncServer IO) UserIndex where
+  getAcidState = users <$> getAcidSync
+
+
 -- How to run database actions.
-instance YesodPersist HSyncServer where
-    type YesodPersistBackend HSyncServer = SqlPersistT
-    runDB = defaultRunDB persistConfig connPool
-instance YesodPersistRunner HSyncServer where
-    getDBRunner = defaultGetDBRunner connPool
+-- instance YesodPersist HSyncServer where
+--     type YesodPersistBackend HSyncServer = SqlPersistT
+--     runDB = defaultRunDB persistConfig connPool
+-- instance YesodPersistRunner HSyncServer where
+--     getDBRunner = defaultGetDBRunner connPool
 
 instance YesodAuth HSyncServer where
     type AuthId HSyncServer = UserIdent
@@ -178,11 +191,8 @@ instance YesodAuth HSyncServer where
     -- Where to send a user after logout
     logoutDest _ = HomeR
 
-    getAuthId creds = runDB $ do
-        x <- getBy $ UniqueUser $ credsIdent creds
-        return $ case x of
-            Just (Entity _ (User uid _)) -> Just uid
-            Nothing                      -> Nothing
+    getAuthId creds = let ui = UserIdent $ credsIdent creds in
+        fmap userIdent <$> (queryAcid $ LookupUser ui)
 
     maybeAuthId = do
       m <- lookupSession credsKey

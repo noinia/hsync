@@ -1,36 +1,44 @@
 {-# Language TemplateHaskell #-}
-{-# LANGUAGE FlexibleInstances #-}
+{-# Language FlexibleInstances #-}
 module HSync.Server.AcidSync where
 
 import Prelude
 
+import Control.Applicative((<$>))
 import Control.Exception.Base(bracket)
 import Control.Monad.Reader.Class
-import Control.Monad.State.Class(modify)
+import Control.Monad.State.Class
 import Control.Monad.IO.Class(MonadIO(..))
 
+import Data.Default(def)
 import Data.Acid(AcidState, Update, Query,
                  makeAcidic, openLocalState)
-import Data.Acid.Advanced(update')
+import Data.Acid.Advanced(query', update')
 import Data.Acid.Local(createCheckpointAndClose)
 
+import HSync.Common.Types(UserIdent(..))
 import HSync.Common.Notification(Notification)
 import HSync.Common.TimedFSTree(File(..),Directory(..))
 
+import HSync.Server.User(User(..),UserIndex(..),ErrorMessage)
 import HSync.Server.FileSystemState
 import HSync.Server.Settings(Extra(..))
 
 import qualified HSync.Common.TimedFSTree as T
+import qualified HSync.Server.User as U
 
 
 --------------------------------------------------------------------------------
 
 -- | A single type that collects everything that we acidize
 data AcidSync = AcidSync { fsState :: AcidState FSState
+                         , users   :: AcidState UserIndex
                          }
 
 --------------------------------------------------------------------------------
 -- | The acidic operations
+
+---------------------------------------- FSState
 
 -- | Get the thing we are actually storing
 queryFSState :: Query FSState FSState
@@ -47,6 +55,28 @@ $(makeAcidic ''FSState [ 'queryFSState
                        , 'newNotification
                        ])
 
+---------------------------------------- Users
+
+queryUserIndex :: Query UserIndex UserIndex
+queryUserIndex = ask
+
+lookupUser    :: UserIdent -> Query UserIndex (Maybe User)
+lookupUser ui = U.lookupUser ui <$> ask
+
+insertUser   :: User -> Update UserIndex (Maybe ErrorMessage)
+insertUser u = do
+                 eix <- U.insert u <$> get
+                 case eix of
+                   Left err -> return $ Just err
+                   Right ix -> put ix >> return Nothing
+
+
+$(makeAcidic ''UserIndex [ 'queryUserIndex
+                         , 'lookupUser
+                         , 'insertUser
+                         ])
+
+
 --------------------------------------------------------------------------------
 
 withAcidSync        :: Extra
@@ -58,9 +88,13 @@ withAcidSync conf f = do
                         -- there is no acidious state yet.
                         blankFSS <- newFSState' baseDir
                         -- Start/open Acid state
-                        bracket (openLocalState blankFSS)
-                                (createCheckpointAndClose)
-                                (f . AcidSync)
+                        withState blankFSS $ \fsState ->
+                          withState def $ \users ->
+                            f $ AcidSync fsState users
+  where
+    withState init g = bracket (openLocalState init)
+                               (createCheckpointAndClose)
+                               g
 
 newFSState' b = print "woei" >> newFSState b
 
