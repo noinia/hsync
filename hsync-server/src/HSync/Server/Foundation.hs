@@ -162,8 +162,9 @@ instance YesodAuth HSyncServer where
     -- Where to send a user after logout
     logoutDest _ = HomeR
 
-    getAuthId creds = let ui = UserIdent $ credsIdent creds in
-        fmap userIdent <$> (queryAcid $ LookupUser ui)
+    getAuthId creds = case userIdent . credsIdent $ creds of
+                        Left _   -> return Nothing
+                        Right ui -> fmap userId <$> (queryAcid $ LookupUser ui)
 
     maybeAuthId = do
       m <- lookupSession credsKey

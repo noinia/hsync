@@ -8,12 +8,6 @@ import HSync.Server.AcidState
 
 import HSync.Server.User(User(..),RealName(..))
 
-import Data.Digest.Pure.SHA(sha1, showDigest)
-
-import qualified Data.Text                  as T
-import qualified Data.ByteString.Lazy.Char8 as B
-
-
 getMyLoginR      :: UserIdent -> HashedPassword -> Handler Text
 getMyLoginR u hp = protect (validateUser u hp)
                            (do
@@ -25,12 +19,6 @@ getMyLoginR u hp = protect (validateUser u hp)
 
 --------------------------------------------------------------------------------
 -- | Registration
-
-hash :: Text -> Text
-hash = T.pack . showDigest . sha1 . B.pack . T.unpack
-
-hashedPassword :: Text -> HashedPassword
-hashedPassword = HashedPassword . hash
 
 userExists   :: UserIdent -> Handler Bool
 userExists u = isJust <$> queryAcid (LookupUser u)
@@ -52,14 +40,15 @@ postRegisterR = do
 
 
 userForm :: Html -> MForm Handler (FormResult User, Widget)
-userForm = renderDivs $ mkUser
-                        <$> areq textField     "username" Nothing
+userForm = renderDivs $ do mkUser
+                        <$> areq userIdField   "username" Nothing
                         <*> areq textField     "realname" Nothing
                         <*> areq passwordField "password" Nothing
   where
-    mkUser i n p = User (UserIdent i) (RealName n) (hashedPassword p)
+    mkUser i n p = User i (RealName n) (hashedPassword $ Password p)
 
-
+userIdField :: Monad m => RenderMessage (HandlerSite m) FormMessage => Field m UserIdent
+userIdField = checkMMap (return . userIdent) unUI textField
 
 getRegisterR :: Handler Html
 getRegisterR = do
@@ -76,10 +65,8 @@ getRegisterR = do
 --------------------------------------------------------------------------------
 -- | Permissions
 
-requireRead             :: Path -> Handler Bool
-requireRead (Path u ps) = do
-                            ui <- requireAuthId'
-                            return $ u == ui
+requireRead            :: Path -> Handler Bool
+requireRead (Path u _) = (u ==) <$> requireAuthId'
 
 -- | For now require the same thing as reading
 requireWrite :: Path -> Handler Bool

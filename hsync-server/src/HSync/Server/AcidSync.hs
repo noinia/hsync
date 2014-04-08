@@ -13,18 +13,18 @@ import Control.Monad.IO.Class(MonadIO(..))
 import Data.Default(def)
 import Data.Acid(AcidState, Update, Query,
                  makeAcidic, openLocalState)
-import Data.Acid.Advanced(query', update')
+import Data.Acid.Advanced(update')
 import Data.Acid.Local(createCheckpointAndClose)
 
-import HSync.Common.Types(UserIdent(..))
+import HSync.Common.Types(UserIdent, ErrorMessage)
 import HSync.Common.Notification(Notification)
-import HSync.Common.TimedFSTree(File(..),Directory(..))
+--import HSync.Common.TimedFSTree(File(..),Directory(..))
 
-import HSync.Server.User(User(..),UserIndex(..),ErrorMessage)
+import HSync.Server.User(User(..),UserIndex(..))
 import HSync.Server.FileSystemState
 import HSync.Server.Settings(Extra(..))
 
-import qualified HSync.Common.TimedFSTree as T
+-- import qualified HSync.Common.TimedFSTree as T
 import qualified HSync.Server.User as U
 
 
@@ -87,11 +87,11 @@ withAcidSync conf f = do
                         -- there is no acidious state yet.
                         blankFSS <- newFSState baseDir
                         -- Start/open Acid state
-                        withState blankFSS $ \fsState ->
-                          withState def $ \users ->
-                            f $ AcidSync fsState users
+                        withState blankFSS $ \fsState' ->
+                          withState def $ \users' ->
+                            f $ AcidSync fsState' users'
   where
-    withState init g = bracket (openLocalState init)
+    withState init' g = bracket (openLocalState init')
                                (createCheckpointAndClose)
                                g
 
