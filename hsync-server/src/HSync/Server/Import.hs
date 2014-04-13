@@ -10,6 +10,7 @@ import Yesod.Auth           as HSync.Server.Import
 import Control.Applicative  as HSync.Server.Import (pure, (<$>), (<*>))
 import Data.Text            as HSync.Server.Import (Text)
 
+import HSync.Server                      as HSync.Server.Import
 import HSync.Server.Foundation           as HSync.Server.Import
 import HSync.Server.Settings             as HSync.Server.Import
 import HSync.Server.Settings.Development as HSync.Server.Import

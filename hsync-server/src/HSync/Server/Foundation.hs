@@ -14,6 +14,8 @@ import HSync.Common.Notification
 
 import Data.Text(pack)
 
+import HSync.Server
+
 import HSync.Server.Settings (widgetFile, Extra (..))
 import HSync.Server.Settings.StaticFiles
 import HSync.Server.Settings.Development (development)
@@ -42,14 +44,21 @@ import qualified HSync.Server.Settings                as Settings
 -- keep settings and values requiring initialization before your application
 -- starts running, such as database connections. Every handler will have
 -- access to the data present here.
-data HSyncServer = HSyncServer
+data HSyncServerImplementation = HSyncServerImplementation
     { settings         :: AppConfig DefaultEnv Extra
-    , getStatic        :: Static -- ^ Settings for static file serving.
+    , getStatic'       :: Static -- ^ Settings for static file serving.
     , httpManager      :: Manager
     , appLogger        :: Logger
     , notificationChan :: TChan Notification
     , acidSync         :: AcidSync
     }
+
+
+type instance Implementation HSyncServer = HSyncServerImplementation
+
+instance IsHSyncServerImplementation HSyncServerImplementation where
+  getStaticSubSite = getStatic'
+
 
 -- Set up i18n messages. See the message folder.
 mkMessage "HSyncServer" "messages" "en"
@@ -73,14 +82,14 @@ mkMessage "HSyncServer" "messages" "en"
 -- for our application to be in scope. However, the handler functions
 -- usually require access to the HSyncServerRoute datatype. Therefore, we
 -- split these actions into two functions and place them in separate files.
-mkYesodData "HSyncServer" $(parseRoutesFile "config/routes")
+-- mkYesodData "HSyncServer" $(parseRoutesFile "config/routes")
 
 type Form x = Html -> MForm (HandlerT HSyncServer IO) (FormResult x, Widget)
 
 -- Please see the documentation for the Yesod typeclass. There are a number
 -- of settings which can be configured by overriding methods here.
 instance Yesod HSyncServer where
-    approot = ApprootMaster $ appRoot . settings
+    approot = ApprootMaster $ appRoot . settings . implementation
 
     -- Store session data on the client in encrypted cookies,
     -- default session idle timeout is 120 minutes
@@ -89,7 +98,7 @@ instance Yesod HSyncServer where
         "config/client_session_key.aes"
 
     defaultLayout widget = do
-        master <- getYesod
+        master <- getImplementation
         mmsg <- getMessage
 
         -- We break up the default layout into two components:
@@ -109,7 +118,9 @@ instance Yesod HSyncServer where
     -- This is done to provide an optimization for serving static files from
     -- a separate domain. Please see the staticRoot setting in Settings.hs
     urlRenderOverride y (StaticR s) =
-        Just $ uncurry (joinPath y (Settings.staticRoot $ settings y)) $ renderRoute s
+              Just $ uncurry (joinPath y root) $ renderRoute s
+      where
+        root = Settings.staticRoot . settings . implementation $ y
     urlRenderOverride _ _ = Nothing
 
     -- The page to be redirected to when authentication is required.
@@ -135,7 +146,7 @@ instance Yesod HSyncServer where
     shouldLog _ _source level =
         development || level == LevelWarn || level == LevelError
 
-    makeLogger = return . appLogger
+    makeLogger = return . appLogger . implementation
 
     maximumContentLength _ (Just r)
                      | postsBigFile r = Nothing
@@ -173,7 +184,7 @@ instance YesodAuth HSyncServer where
     -- You can add other plugins like BrowserID, email or OAuth here
     authPlugins _ = []
 
-    authHttpManager = httpManager
+    authHttpManager = httpManager . implementation
 
 -- credsKey :: Text
 -- credsKey = "_ID"
@@ -183,15 +194,19 @@ instance YesodAuth HSyncServer where
 instance RenderMessage HSyncServer FormMessage where
     renderMessage _ _ = defaultFormMessage
 
+
+getImplementation :: Handler HSyncServerImplementation
+getImplementation = implementation <$> getYesod
+
 -- | Get the 'Extra' value, used to hold data from the settings.yml file.
 getExtra :: Handler Extra
-getExtra = appExtra . settings <$> getYesod
+getExtra = appExtra . settings <$> getImplementation
 
 getFilesDir :: Handler FilePath
 getFilesDir = extraFilesDir <$> getExtra
 
 getAcidSync :: Handler AcidSync
-getAcidSync = acidSync <$> getYesod
+getAcidSync = acidSync <$> getImplementation
 
 asLocalPath   :: Path -> Handler FilePath
 asLocalPath p = flip toFilePath p . pack <$> getFilesDir

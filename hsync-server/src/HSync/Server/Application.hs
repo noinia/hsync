@@ -11,6 +11,8 @@ import Control.Concurrent.STM.TChan
 
 import Data.Default (def)
 
+import HSync.Server
+
 import HSync.Server.Import
 import HSync.Server.AcidSync(AcidSync)
 import HSync.Server.Notifications(storeNotifications)
@@ -41,7 +43,15 @@ import qualified Network.Wai.Middleware.RequestLogger as RequestLogger
 -- This line actually creates our YesodDispatch instance. It is the second half
 -- of the call to mkYesodData which occurs in Foundation.hs. Please see the
 -- comments there for more details.
+
 mkYesodDispatch "HSyncServer" resourcesHSyncServer
+
+-- instance YesodDispatch HSyncServer where
+--   --  yesodDispatch :: YesodRunnerEnv HSyncServer -> Application
+--      -- Application ~ Request -> IO Response
+--   yesodDispatch yre request = return undefined
+
+
 
 -- This function allocates resources (such as a database connection pool),
 -- performs initialization and creates a WAI application. This is also the
@@ -49,7 +59,8 @@ mkYesodDispatch "HSyncServer" resourcesHSyncServer
 -- migrations handled by Yesod.
 makeApplication           :: AcidSync -> AppConfig DefaultEnv Extra -> IO Application
 makeApplication acid conf = do
-    foundation <- makeFoundation acid conf
+    foundation' <- makeFoundation acid conf
+    let foundation = implementation foundation'
 
     -- Initialize the logging middleware
     logWare <- mkRequestLogger def
@@ -63,7 +74,7 @@ makeApplication acid conf = do
     _ <- startNotificationLogger foundation
 
     -- Create the WAI application and apply middlewares
-    app <- toWaiAppPlain foundation
+    app <- toWaiAppPlain foundation' -- vs toWaiApp
     return $ logWare app
 
 
@@ -79,9 +90,9 @@ makeFoundation acid conf = do
     (getter, _) <- clockDateCacher
 
     let logger     = Yesod.Core.Types.Logger loggerSet' getter
-        foundation = HSyncServer conf s manager logger nots acid
+        foundation = HSyncServerImplementation conf s manager logger nots acid
 
-    return foundation
+    return $ HSyncServer foundation
 
 
 -- -- for yesod devel
@@ -95,7 +106,7 @@ makeFoundation acid conf = do
 
 
 
-startNotificationLogger :: HSyncServer -> IO ThreadId
+startNotificationLogger :: HSyncServerImplementation -> IO ThreadId
 startNotificationLogger hss = forkIO start
   where
     start :: IO ()

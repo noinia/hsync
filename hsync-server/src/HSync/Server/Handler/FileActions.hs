@@ -5,6 +5,7 @@ import HSync.Server.Import
 
 import Data.Aeson(encode)
 
+import Control.Monad.Trans.Resource(runResourceT)
 import Data.Conduit
 import Data.Conduit.Binary
 import Data.ByteString(ByteString)

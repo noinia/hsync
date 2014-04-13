@@ -12,6 +12,7 @@ import Data.Conduit
 
 import HSync.Common.Notification
 
+import HSync.Server
 import HSync.Server.AcidSync(AcidSync, notificationUpdate)
 import HSync.Server.Foundation
 
@@ -23,12 +24,13 @@ import Yesod
 -- | Log the given notification.
 logNotification   :: Notification -> Handler ()
 logNotification n = do
-                    c <- notificationChan <$> getYesod
+                    c <- notificationChan <$> getImplementation
                     lift $ atomically (writeTChan c n)
 
 
 -- | Consume notifications by storing them in our FSState tree
-notificationSink     :: MonadIO m => HSyncServer -> Sink Notification m ()
+notificationSink     :: MonadIO m
+                     => HSyncServerImplementation -> Sink Notification m ()
 notificationSink hss = let acid = acidSync hss in
                        awaitForever $ lift . notificationUpdate acid
 
@@ -37,11 +39,12 @@ notificationSink hss = let acid = acidSync hss in
 
 -- | Get a stream of notifications in the Handler monad
 notifications :: Handler (Source Handler Notification)
-notifications = getYesod >>= notifications'
+notifications = getImplementation >>= notifications'
 
 
 -- | Get a stream of notifications
-notifications' :: (Functor m, MonadIO m) => HSyncServer -> m (Source m Notification)
+notifications' :: (Functor m, MonadIO m)
+               => HSyncServerImplementation -> m (Source m Notification)
 notifications' = fmap chanToSource . dupChan . notificationChan
   where
     dupChan c = liftIO $ atomically (dupTChan c)
@@ -57,5 +60,6 @@ chanToSource c = do
 
 -- | Keep track of all notifications in the given HSyncServer. I.e. log all
 --  notifications produced into our FSState tree
-storeNotifications     :: (Functor m, MonadIO m) => HSyncServer -> m ()
+storeNotifications     :: (Functor m, MonadIO m)
+                       => HSyncServerImplementation -> m ()
 storeNotifications hss = notifications' hss >>= ($$ notificationSink hss)
