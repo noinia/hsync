@@ -1,5 +1,6 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# Language TemplateHaskell  #-}
+{-# Language FlexibleContexts #-}
 module HSync.Server where
 
 import Yesod.Auth(Auth)
@@ -21,11 +22,21 @@ import HSync.Common.DateTime(DateTime)
 -- the implementation of the server.
 newtype HSyncServer = HSyncServer { implementation :: Implementation HSyncServer }
 
-
 -- | The type family that expresses that a server of type `server` can be
 -- implemented through something of type `Implementation server`.
 type family Implementation server :: *
 
 
+-- | The (Implementation HSyncServer) type should implement the following
+--  typeclass.
+class IsHSyncServerImplementation implementation where
+  getStaticSubSite :: implementation -> Static
+
+
 -- | Generate the routes for a HSyncServer
 mkYesodData "HSyncServer" $(parseRoutesFile "routes")
+
+-- | The getStatic function used in our routes
+getStatic :: IsHSyncServerImplementation (Implementation HSyncServer)
+          => HSyncServer -> Static
+getStatic = getStaticSubSite . implementation

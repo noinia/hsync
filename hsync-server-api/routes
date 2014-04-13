@@ -1,5 +1,5 @@
-/static                           StaticR Static getStatic
-/auth                             AuthR   Auth   getAuth
+/static                           StaticR Static  getStatic
+/auth                             AuthR   Auth    getAuth
 
 
 /favicon.ico                      FaviconR        GET
