@@ -29,6 +29,7 @@ import Network.HTTP.Conduit (Manager)
 import Text.Jasmine (minifym)
 import Text.Hamlet (hamletFile)
 
+
 import Yesod
 import Yesod.Auth
 import Yesod.Core.Types(Logger)
@@ -37,6 +38,8 @@ import Yesod.Default.Util (addStaticContentExternal)
 import Yesod.Static
 
 import qualified HSync.Server.Settings                as Settings
+
+import qualified Yesod.JoinPath as Y
 
 --------------------------------------------------------------------------------
 
@@ -125,6 +128,8 @@ instance Yesod HSyncServer where
 
     -- The page to be redirected to when authentication is required.
     authRoute _ = Just $ AuthR LoginR
+
+    joinPath = Y.joinPath
 
     -- This function creates static content files in the static folder
     -- and names them based on a hash of their content. This allows
