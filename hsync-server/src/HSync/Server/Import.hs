@@ -11,6 +11,9 @@ import Control.Applicative  as HSync.Server.Import (pure, (<$>), (<*>))
 import Data.Text            as HSync.Server.Import (Text)
 
 import HSync.Server                      as HSync.Server.Import
+
+
+
 import HSync.Server.Foundation           as HSync.Server.Import
 import HSync.Server.Settings             as HSync.Server.Import
 import HSync.Server.Settings.Development as HSync.Server.Import
@@ -23,15 +26,6 @@ import HSync.Common.AtomicIO     as HSync.Server.Import
 import HSync.Common.DateTime     as HSync.Server.Import
 
 
-#if __GLASGOW_HASKELL__ >= 704
 import           Data.Monoid          as HSync.Server.Import
                                                  (Monoid (mappend, mempty, mconcat),
                                                  (<>))
-#else
-import           Data.Monoid          as HSync.Server.Import
-                                                 (Monoid (mappend, mempty, mconcat))
-
-infixr 5 <>
-(<>) :: Monoid m => m -> m -> m
-(<>) = mappend
-#endif
