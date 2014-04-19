@@ -4,7 +4,7 @@ module HSync.Client.RemoteEvents where
 
 import Control.Applicative((<$>))
 import Control.Concurrent(forkIO)
-import Control.Failure
+
 import Control.Monad(when)
 import Control.Monad.IO.Class(MonadIO(..))
 import Control.Monad.Trans.Class(lift)
@@ -101,7 +101,7 @@ renameFileOrDir fp fp' = atomicallyIO fp $ do
 conflictedFp             :: FilePath -> ClientIdent -> DateTime -> DateTime -> FilePath
 conflictedFp fp ci lt rt = replaceBaseName fp $ mconcat [ takeBaseName fp
                                                         , "_conflicted_copy_"
-                                                        , T.unpack ci
+                                                        , T.unpack . unCI $ ci
                                                         , "_local_modified_"
                                                         , showDateTime . unDT $ lt
                                                         , "_remote_modified_"

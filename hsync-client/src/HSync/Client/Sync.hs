@@ -44,41 +44,41 @@ data Sync = Sync { httpManager     :: Manager
                  , ignore          :: IgnoredPatterns
                  }
 
-data SyncConfig = SyncConfig { localBaseDir'    :: FilePath -- without trailing /
-                             , serverAddress'   :: ServerAddress
-                             , user'            :: UserIdent
-                             , hashedPassword'  :: HashedPassword
-                             , remoteBaseDir'   :: SubPath
-                             , clientIdent'     :: ClientIdent
-                             , ignorePath'      :: FilePath
-                             , statePath'       :: Maybe FilePath
+data SyncConfig = SyncConfig { localBaseDir'   :: FilePath -- without trailing /
+                             , serverAddress'  :: ServerAddress
+                             , user'           :: UserIdent
+                             , password'       :: HashedPassword
+                             , remoteBaseDir'  :: SubPath
+                             , clientIdent'    :: ClientIdent
+                             , ignorePath'     :: FilePath
+                             , statePath'      :: Maybe FilePath
                              }
                   deriving (Show,Eq)
 
 
 -- Shortcuts for some of the things we need often from a sync
 
-localBaseDir   = localBaseDir' . syncConfig
-serverAddress  = serverAddress' . syncConfig
-user           = user' . syncConfig
-hashedPassword = hashedPassword' . syncConfig
-remoteBaseDir  = remoteBaseDir' . syncConfig
-clientIdent    = clientIdent' . syncConfig
+localBaseDir  = localBaseDir' . syncConfig
+serverAddress = serverAddress' . syncConfig
+user          = user' . syncConfig
+password      = password' . syncConfig
+remoteBaseDir = remoteBaseDir' . syncConfig
+clientIdent   = clientIdent' . syncConfig
 
 
 instance Default SyncConfig where
     def = SyncConfig { localBaseDir'    = "/Users/frank/tmp/synced/"
                      , serverAddress'   = "http://localhost:3000"
-                     , user'            = "nobody"
-                     , hashedPassword'  = "hashed-secret"
+                     , user'            = let Right u = userIdent "nobody" in u
+                     , password'  = HashedPassword "hashed-secret"
                      , remoteBaseDir'   = []
-                     , clientIdent'     = "client-ident"
+                     , clientIdent'     = ClientIdent "client-ident"
                      , ignorePath'      = "config/ignore"
                      , statePath'       = Nothing
                      }
 
 
-statePath s = let p = "state/" ++ (T.unpack $ clientIdent s)
+statePath s = let p = "state/" ++ (T.unpack . unCI $ clientIdent s)
               in fromMaybe p . statePath' . syncConfig $ s
 
 toLocalPath               :: Sync -> Path -> FilePath
@@ -118,22 +118,22 @@ instance FromJSON SyncConfig where
                                     <*> v .:? "statePath"
     where
       fromConfig lbd s u hp rbd ci iPath mStatePath =
-        def { localBaseDir'   = lbd
-            , serverAddress'  = s
-            , user'           = u
-            , hashedPassword' = hp
-            , remoteBaseDir'  = if T.null rbd
-                                then []
-                                else T.split (== '/') rbd
-            , clientIdent'    = ci
-            , ignorePath'     = T.unpack iPath
-            , statePath'      = T.unpack <$> mStatePath
+        def { localBaseDir'  = lbd
+            , serverAddress' = s
+            , user'          = u
+            , password'      = hp
+            , remoteBaseDir' = if T.null rbd
+                               then []
+                               else T.split (== '/') rbd
+            , clientIdent'   = ci
+            , ignorePath'    = T.unpack iPath
+            , statePath'     = T.unpack <$> mStatePath
             }
 
   parseJSON _          = mzero
 
 
-type ErrorMessage = String
+--type ErrorMessage = String
 
 
 readIgnore      :: Sync -> IO Sync
@@ -146,4 +146,8 @@ readConfig fp = decodeFileEither fp >>= \es -> case es of
                   Right sc        -> let s = Sync undefined sc []
                                      in Right <$> readIgnore s
   where
-    showError pe = "Error parsing sync config file " ++ show fp ++ ":\n" ++ show pe
+    showError pe = mconcat [ "Error parsing sync config file "
+                           , showT fp
+                           , ":\n"
+                           , showT pe
+                           ]

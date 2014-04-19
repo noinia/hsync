@@ -7,12 +7,14 @@ import Control.Exception.Lifted(bracket)
 
 import Control.Monad(when)
 import Control.Monad.IO.Class (liftIO, MonadIO )
+import Control.Monad.Catch(MonadThrow(..))
+import Control.Monad.Trans.Resource(ResourceT, runResourceT)
+import Control.Monad.Trans.Control(MonadBaseControl)
 
 import Data.Acid(openLocalStateFrom)
 import Data.Acid.Local(createCheckpointAndClose)
 
 import Data.Default
-import Data.Conduit(ResourceT, runResourceT, MonadThrow, MonadUnsafeIO, MonadBaseControl)
 import Data.Either
 import Data.Maybe(isNothing)
 

@@ -13,7 +13,7 @@ import Control.Applicative((<$>))
 import Control.Monad.IO.Class(liftIO)
 
 
-import HSync.Common.Types(ClientIdent)
+import HSync.Common.Types(ClientIdent(..))
 import HSync.Client.ActionT
 import HSync.Client.Sync(clientIdent)
 
@@ -38,7 +38,7 @@ type LogMessage = String
 -- | These functions are all specialized versions of the general hsLoggers.
 
 logMIO      :: Maybe ClientIdent -> LoggerName -> Priority -> LogMessage -> IO ()
-logMIO ci n = let cis = maybe "NoClientIdent" T.unpack ci in
+logMIO ci n = let cis = maybe "NoClientIdent" (T.unpack . unCI) ci in
                   Log.logM ("HSync.Client." ++ cis ++ "." ++ n)
 
 

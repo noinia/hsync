@@ -14,11 +14,8 @@ import Control.Monad.State.Class
 import Control.Monad.State
 
 import Control.Monad.Trans.Class
+import Control.Monad.Trans.Resource(ResourceT, runResourceT)
 import Control.Monad.IO.Class
-
-import Control.Failure
-
-import Data.Conduit(ResourceT, runResourceT)
 
 import Data.Data(Data,Typeable)
 import Data.Default
@@ -47,11 +44,14 @@ import qualified HSync.Client.Sync as S
 instance IsYesodClient Sync where
     type YesodServer Sync = HSyncServer
     serverAppRoot = S.serverAddress
-    server   _    = def
+    server   _    = undefined
     manager       = S.httpManager
 
     defaultRequestModifier sync = let ci = S.clientIdent sync in
                                   addRequestHeader $ asHeader HClientId ci
+
+
+
 
 --------------------------------------------------------------------------------
 -- | A monad for running Sync Actions
@@ -74,7 +74,6 @@ instance MonadTrans (ActionT s r) where
 
 instance ( MonadResource m
          , MonadBaseControl IO m
-         , Failure HttpException m
          ) =>
          MonadYesodClient Sync (ActionT s r) m where
   runGetRoute r     = liftYT $ runGetRoute r

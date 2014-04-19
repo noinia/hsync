@@ -3,9 +3,9 @@ module HSync.Client.Actions where
 
 
 import Control.Exception(throw)
-import Control.Failure
 
 import Control.Monad(when)
+import Control.Monad.Catch(MonadThrow(..))
 import Control.Monad.IO.Class (liftIO)
 
 
@@ -24,26 +24,25 @@ import Data.Conduit.Internal(ResumableSource(..))
 
 import Data.Text.Encoding(encodeUtf8)
 
-import HSync.Client.Sync(Sync, user, hashedPassword, clientIdent
+import HSync.Client.Sync(Sync, user, password, clientIdent
                         , partialFileExtension
                         )
 import HSync.Client.ActionT
+import HSync.Client.Import
 import HSync.Client.Logger
 import HSync.Client.AcidActions( updateFileIdent, setFileIdentOf
                                , expectedFileIdent)
 import HSync.Client.TemporaryIgnored(temporarilyIgnore, unIgnoreIn)
 
 
-import HSync.Common.DateTime(DateTime, toEpochTime)
+import HSync.Common.DateTime(DateTime, toEpochTime, currentTime)
 import HSync.Common.MTimeTree(MTimeTree)
 import HSync.Common.Header
 import HSync.Common.Notification(Notification(..))
 
-import HSync.Server.Import
+-- import HSync.Server.Handler.Auth(requireRead,requireWrite)
 
-
-
-import HSync.Server.Handler.Auth(requireRead,requireWrite)
+import HSync.Server
 
 
 import Network.HTTP.Conduit( Request
@@ -93,7 +92,7 @@ login :: Action Bool
 login = do
   sync <- getSync
   infoM "Actions.login" "Sending login"
-  resp <- runGetRoute $ MyLoginR (user sync) (hashedPassword sync)
+  resp <- runGetRoute $ MyLoginR (user sync) (password sync)
   body <- lift $ responseBody resp C.$$+- sinkLbs
   case LB.unpack body of
     "VALID"   -> noticeM    "Actions.login" "Login successful" >>

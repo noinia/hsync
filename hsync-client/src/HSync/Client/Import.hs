@@ -6,8 +6,8 @@ import Yesod.Core           as HSync.Client.Import -- hiding (Route (..))
 import Control.Applicative  as HSync.Client.Import (pure, (<$>), (<*>))
 import Data.Text            as HSync.Client.Import (Text)
 
--- import HSync.Server.Foundation as HSync.Client.Import hiding (HSyncServer(..))
-import HSync.Server.Foundation as HSync.Client.Import (HSyncServer)
+
+import HSync.Server         as HSync.Client.Import
 
 
 import           Data.Monoid             as HSync.Client.Import

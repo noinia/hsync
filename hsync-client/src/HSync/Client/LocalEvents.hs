@@ -5,7 +5,7 @@ import Control.Monad(when)
 import Control.Monad.IO.Class(MonadIO(..))
 
 
-import Data.Conduit(runResourceT)
+import Control.Monad.Trans.Resource(runResourceT)
 import Data.Maybe
 import Data.List(isSuffixOf)
 
