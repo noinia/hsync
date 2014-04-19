@@ -3,14 +3,15 @@
 {-# Language FlexibleContexts #-}
 module HSync.Server where
 
-import Yesod.Auth(Auth)
-import Yesod.Static(Static)
-
-import Yesod.Core
-
 import HSync.Common.Types
 import HSync.Common.FileIdent(FileIdent)
 import HSync.Common.DateTime(DateTime)
+
+
+import Yesod.Auth(Auth)
+import Yesod.Core
+import Yesod.Static(Static)
+import Yesod.JoinPath
 
 --------------------------------------------------------------------------------
 
@@ -32,6 +33,8 @@ type family Implementation server :: *
 class IsHSyncServerImplementation implementation where
   getStaticSubSite :: implementation -> Static
 
+
+instance HasJoinPath HSyncServer
 
 -- | Generate the routes for a HSyncServer
 mkYesodData "HSyncServer" $(parseRoutesFile "routes")
