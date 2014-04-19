@@ -15,9 +15,6 @@ category:            Network
 build-type:          Simple
 cabal-version:       >=1.8
 
-hs-source-dirs: src ../common
-
-
 executable hsync-client
 
     hs-source-dirs: src
@@ -26,38 +23,50 @@ executable hsync-client
   -- other-modules:
 
     build-depends: base                          >= 4          && < 5
-                 , yesod-core                    >= 1.2        && < 1.3
+
+                 , hsync-server-api              == 0.1.0.0
+
+                 , hsync-common                  >= 0.0.0.0    && < 0.2
+
+                 , yesod-core                    >= 1.2.5.2    && < 1.3
+                 , wai                           >= 2.1.0.1    && < 2.2
+
                  , bytestring                    >= 0.9        && < 0.11
                  , text                          >= 0.11       && < 0.12
-                 , http-conduit                  >= 2.0        && < 2.1
-                 , conduit                       >= 1.0
-                 , SHA                           >= 1.6.1      && < 1.7
-                 , fsnotify                      >= 0.0.11     && < 0.1
-                 , transformers                  >= 0.3        && < 0.4
-                 , network                       >= 2.4.1.2    && < 2.5
-                 , mtl                           >= 2.1.2      && < 2.2
-                 , blaze-builder                 >= 0.3.1.1    && < 0.4
-                 , http-types                    >= 0.8        && < 0.9
                  , data-default                  >= 0.5.3      && < 0.6
-                 , failure                       >= 0.2.0.1    && < 0.3
-                 , hsync-common                  >= 0.0.0.0    && < 0.2
-                 , hsync-server                  >= 0.0.0      && < 0.2
-                 , directory                     >= 1.2        && < 1.3
-                 , wai                           >= 2.0        && < 3.0
                  , aeson                         >= 0.6.2.0    && < 0.7
-                 , attoparsec-conduit            >= 1.0.1.2    && < 1.1
-                 , attoparsec                    >= 0.10.4.0   && < 0.11
                  , containers                    >= 0.5.0.0    && < 0.6
                  , yaml                          >= 0.8.5.2    && < 0.9
-                 , acid-state                    >= 0.12.1     && < 0.12.2
-                 , safecopy                      >= 0.8.2      && < 0.8.3
-                 , lifted-base                   >= 0.2.1.0    && < 0.3
+
+                 , http-conduit                  >= 2.1        && < 2.2
+                 , resourcet                     >= 1.1.1      && < 1.2
+                 , conduit                       >= 1.1
+                 , conduit-extra                 >= 1.1
+                 , http-types                    >= 0.8        && < 0.9
+                 , network                       >= 2.4.1.2    && < 2.5
+                 -- , attoparsec-conduit            >= 1.0.1.2    && < 1.1
+                 , attoparsec                    >= 0.10.4.0   && < 0.11
+
+                 , fsnotify                      >= 0.0.11     && < 0.1
+                 , directory                     >= 1.2        && < 1.3
                  , filemanip                     >= 0.3.6.2    && < 0.3.7
                  , system-filepath               >= 0.4.7      && < 0.5
-                 , hslogger                      >= 1.2.3      && < 1.3
                  , unix-compat                   >= 0.4.1      && < 0.5
-                 , stm                           >= 2.4.2      && < 2.5
                  , filepath                      >= 1.3.0.1    && < 1.4
+
+                 , transformers                  >= 0.3        && < 0.4
+                 , monad-control                 >= 0.3.2.3    && < 0.4
+                 , mtl                           >= 2.1.2      && < 2.2
+                 -- , failure                       >= 0.2.0.1    && < 0.3
+                 , lifted-base                   >= 0.2.1.0    && < 0.3
+                 , exceptions                    >= 0.5        && < 0.6
+
+                 , blaze-builder                 >= 0.3.1.1    && < 0.4
+                 , hslogger                      >= 1.2.3      && < 1.3
+                 , stm                           >= 2.4.2      && < 2.5
+
+                 , acid-state                    >= 0.12.1     && < 0.12.2
+                 , safecopy                      >= 0.8.2      && < 0.8.3
 
     extensions: OverloadedStrings
                 MultiParamTypeClasses

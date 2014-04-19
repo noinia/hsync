@@ -1,12 +1,11 @@
-{-# Language   TypeOperators
-             , TypeFamilies
-             , ConstraintKinds
-             , Rank2Types
-             , FlexibleContexts
-             , FlexibleInstances
-             , MultiParamTypeClasses
-             , FunctionalDependencies
-  #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 module Yesod.Client where
 
 import Control.Applicative((<$>),(<*>),Applicative(..))
@@ -17,6 +16,7 @@ import Blaze.ByteString.Builder( -- Builder
                                 toLazyByteString
                                )
 
+
 import Control.Monad.Reader(MonadReader(..),ReaderT,runReaderT)
 import Control.Monad.State( MonadState(..)
                           , StateT(..)
@@ -24,14 +24,12 @@ import Control.Monad.State( MonadState(..)
                           , modify
                           )
 
-
-
-import Control.Failure
-
+import Control.Monad.Catch(MonadThrow(..))
+import Control.Monad.Trans.Resource(ResourceT)
 
 import Data.ByteString(ByteString, empty)
 
-import Data.Conduit(Source, ResumableSource, mapOutput, ResourceT, transPipe)
+import Data.Conduit(Source, ResumableSource, mapOutput, transPipe)
 import Data.Default
 import Data.Monoid((<>))
 import Data.Text(Text)
@@ -44,7 +42,7 @@ import Network.HTTP.Conduit( Request
                            , Manager
                            , CookieJar
                            , RequestBody(..)
-                           , HttpException(..)
+                           -- , HttpException(..)
                            , http
                            , parseUrl
                            , createCookieJar
@@ -64,6 +62,8 @@ import qualified Network.HTTP.Conduit       as HC
 
 import qualified Network.HTTP.Types.Header  as H
 
+import qualified Yesod.JoinPath             as Y
+
 --------------------------------------------------------------------------------
 
 -- | Specifies what type of operations a yesodClient should support
@@ -82,9 +82,8 @@ class IsYesodClient client where
 
 class ( MonadResource m
       , MonadBaseControl IO m
-      , Failure HttpException m
       , IsYesodClient client
-      , Yesod (YesodServer client)
+      , RenderRoute (YesodServer client)
       ) =>
       MonadYesodClient client yt m | yt -> client where
 
@@ -107,22 +106,23 @@ class ( MonadResource m
 -- | A monad transformer that implements the MonadYesodClient actions
 newtype YesodClientT cli m a =
     YesodClientT { unYCT :: StateT YesodClientState (ReaderT cli m) a }
+    deriving (Monad, Functor,Applicative, MonadIO, MonadThrow)
 
 
--- | A yesodClientMonadT is a monad.
-instance Monad m => Monad (YesodClientT cli m) where
-    return                      = YesodClientT . return
-    (YesodClientT m) >>= f = let f' = unYCT . f in
-                                  YesodClientT $ m >>= f'
+-- -- | A yesodClientMonadT is a monad.
+-- instance Monad m => Monad (YesodClientT cli m) where
+--     return                      = YesodClientT . return
+--     (YesodClientT m) >>= f = let f' = unYCT . f in
+--                                   YesodClientT $ m >>= f'
 
--- | ... a functor,
-instance Functor m => Functor (YesodClientT cli m) where
-    fmap f = YesodClientT . fmap f . unYCT
+-- -- | ... a functor,
+-- instance Functor m => Functor (YesodClientT cli m) where
+--     fmap f = YesodClientT . fmap f . unYCT
 
--- | ... an applicative,
-instance (Functor m, Monad m) => Applicative (YesodClientT cli m) where
-    pure = YesodClientT . pure
-    (YesodClientT f) <*> (YesodClientT x) = YesodClientT $ f <*> x
+-- -- | ... an applicative,
+-- instance (Functor m, Monad m) => Applicative (YesodClientT cli m) where
+--     pure = YesodClientT . pure
+--     (YesodClientT f) <*> (YesodClientT x) = YesodClientT $ f <*> x
 
 -- | .. a monad transformer,
 instance MonadTrans (YesodClientT cli) where
@@ -134,9 +134,12 @@ instance Monad m => MonadReader cli (YesodClientT cli m) where
     local f = YesodClientT . StateT . fmap (local f) . runStateT . unYCT
 
 
---- and we can do IO if required.
-instance MonadIO m => MonadIO (YesodClientT cli m) where
-    liftIO = YesodClientT . liftIO
+-- --- and we can do IO if required.
+-- instance MonadIO m => MonadIO (YesodClientT cli m) where
+--     liftIO = YesodClientT . liftIO
+
+
+
 
 --------------------------------------------------------------------------------
 
@@ -186,9 +189,10 @@ updateCookieJar r = modify $ \st -> st {cookieJar' = Just . responseCookieJar $ 
 -- | The MonadYesodClient instance for the YesodClientT
 instance ( MonadResource m
          , MonadBaseControl IO m
-         , Failure HttpException m
+           -- client `IsYesodClientFor` (YesodServer client):
          , IsYesodClient client
-         , Yesod (YesodServer client)
+         , RenderRoute (YesodServer client)
+         , Y.HasJoinPath (YesodServer client)
          ) =>
          MonadYesodClient client (YesodClientT client) m where
 
@@ -208,7 +212,8 @@ instance ( MonadResource m
 -- | Relating the Client to the server
 
 type IsYesodClientFor client server = ( IsYesodClient client
-                                      , Yesod server
+                                      , RenderRoute server
+                                      , Y.HasJoinPath server
                                       , YesodServer client ~ server
                                       )
 
@@ -217,14 +222,14 @@ toUrl     :: (client `IsYesodClientFor` server) =>
              client -> Route server -> String
 toUrl cli r = let root     = serverAppRoot cli
                   (pcs,qs) = renderRoute r
-                  urlBldr  = joinPath (server cli) root pcs qs in
+                  urlBldr  = Y.joinPath (server cli) root pcs qs in
               LC.unpack . toLazyByteString $ urlBldr
 
 
 
 toReq   :: (client `IsYesodClientFor` server,
             Functor m,
-            Failure HttpException m ) =>
+            MonadThrow m ) =>
            Route server -> YesodClientT client m Request
 toReq r = do
   cli <- clientInstance
@@ -239,7 +244,6 @@ toReq r = do
 -- this route, modify it with f, and then run the request.
 runRouteWith   :: ( client `IsYesodClientFor` server
                , MonadResource m, MonadBaseControl IO m
-               , Failure HttpException m
                ) =>
                Route server ->
                (Request -> Request) ->
