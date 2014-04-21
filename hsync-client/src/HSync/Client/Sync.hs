@@ -32,7 +32,7 @@ import qualified Filesystem.Path.CurrentOS as FP
 
 -- | Extention to use for partial files
 partialFileExtension :: Text
-partialFileExtension = ".hsyncpart"
+partialFileExtension = "hsyncpart"
 
 isPartialFile :: FilePath -> Bool
 isPartialFile = flip hasExtension partialFileExtension
@@ -80,7 +80,7 @@ instance Default SyncConfig where
     def = SyncConfig { localBaseDir'    = fromText "/Users/frank/tmp/synced/"
                      , serverAddress'   = "http://localhost:3000"
                      , user'            = let Right u = userIdent "nobody" in u
-                     , password'  = HashedPassword "hashed-secret"
+                     , password'        = HashedPassword "hashed-secret"
                      , remoteBaseDir'   = []
                      , clientIdent'     = ClientIdent "client-ident"
                      , ignorePath'      = fromText "config/ignore"
@@ -136,7 +136,7 @@ instance FromJSON SyncConfig where
                                     <*> v .:? "statePath"
     where
       fromConfig lbd s u hp rbd ci iPath mStatePath =
-        def { localBaseDir'  = FP.decode lbd
+        def { localBaseDir'  = FP.decode $ lbd <> "/"
             , serverAddress' = s
             , user'          = u
             , password'      = hp
@@ -145,7 +145,7 @@ instance FromJSON SyncConfig where
                                else T.split (== '/') rbd
             , clientIdent'   = ci
             , ignorePath'    = FP.decode iPath
-            , statePath'     = FP.decode <$> mStatePath
+            , statePath'     = (\p -> FP.decode $ p <> "/") <$> mStatePath
             }
 
   parseJSON _          = mzero
