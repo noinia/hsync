@@ -3,6 +3,7 @@ module HSync.Client.TemporaryIgnored( initializeTemporaryIgnored
                                     , temporarilyIgnore
                                     , unIgnoreIn
                                     , unIgnore
+                                    , withTemporarilyIgnored
                                     ) where
 
 
@@ -31,6 +32,10 @@ import qualified Data.Set  as S
 initializeTemporaryIgnored :: IO (TVar TemporaryIgnoreFiles)
 initializeTemporaryIgnored = newTVarIO mempty
 
+
+
+
+-- | Check if a file is on the temporarily ignored list
 isTemporarilyIgnored    :: FilePath -> Action Bool
 isTemporarilyIgnored fp = getActionState >>= liftIO . isIgnored
   where
@@ -39,6 +44,27 @@ isTemporarilyIgnored fp = getActionState >>= liftIO . isIgnored
                      print s
                      return $ S.member fp s
 
+
+-- | Temporarily ignore a file and run an action in the mean time
+withTemporarilyIgnored        :: FilePath  -- ^ the path to the file in question
+                              -> Int       -- ^ the time (in microseconds) to
+                                           -- wait until unignoring the file
+                              -> Action () -- ^ the action that to run in the meantime
+                              -> Action ()
+withTemporarilyIgnored fp t a = do
+    debugM "TemporaryIgnored" $ "Ignoring " ++ show fp
+    temporarilyIgnore fp
+    a
+    liftIO $ print "OK!!!"
+    debugM "TemporaryIgnored" $ mconcat [ "Unignoring "
+                                        , show fp
+                                        , " in "
+                                        , show t
+                                        , "microseconds."
+                                        ]
+    unIgnoreIn t fp
+
+-- | Add to the temporary ignore list
 temporarilyIgnore    :: FilePath -> Action ()
 temporarilyIgnore fp = getActionState >>= liftIO . atomically . add
   where

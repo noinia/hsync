@@ -35,7 +35,7 @@ import HSync.Client.Import
 import HSync.Client.Logger
 import HSync.Client.AcidActions( updateFileIdent, setFileIdentOf
                                , expectedFileIdent)
-import HSync.Client.TemporaryIgnored(temporarilyIgnore, unIgnoreIn)
+import HSync.Client.TemporaryIgnored(withTemporarilyIgnored)
 
 
 import HSync.Common.DateTime(DateTime, toEpochTime, currentTime)
@@ -200,18 +200,13 @@ getFile' p lp = do
   let lpPartial = encodeString $ lp <.> partialFileExtension
   lift (responseBody resp C.$$+- sinkFile lpPartial)
   -- This file is incoming, so temporarily ignore listening for local changes
-  -- of this file:
-  debugM "Actions.getFile" $ "Ignoring " ++ show lp
-  temporarilyIgnore lp
-  liftIO $ renameFile lpPartial (encodeString lp)
-  -- set the modification time, and update the remote tree state
-  withHeader HFileIdent resp (\fi ->    setModificationTime p fi
-                                     >> setFileIdentOf p fi
-                             )
-  -- Unignore lp in 1 second (1 000 000  micro seconds)
-  debugM "Actions.getFile" $ "Unignoring " ++ show lp ++ " in 1 second."
-  unIgnoreIn 1000000 lp -- not sure if we should do this here or when the local event fires
-
+  -- of this file. (unignore in 1 second = 1e6 microseconds)
+  withTemporarilyIgnored lp 1000000 $ do
+    liftIO $ renameFile lpPartial (encodeString lp)
+    -- set the modification time, and update the remote tree state
+    withHeader HFileIdent resp (\fi ->    setModificationTime p fi
+                                       >> setFileIdentOf p fi
+                               )
 
 --------------------------------------------------------------------------------
 
@@ -300,9 +295,11 @@ deleteFileLocally p fi          = infoM "Actions.deleteFileLocally" msg >>
 
 
 createDirectoryLocally   :: Path -> Action ()
-createDirectoryLocally p = infoM "Actions.createDirectoryLocally"
-                                 ("Creating local directory for" ++ show p) >>
-                           toLocalPath p >>= liftIO . createDirectory . encodeString
+createDirectoryLocally p = do
+  infoM "Actions.createDirectoryLocally"
+        ("Creating local directory for" ++ show p)
+  lp <- toLocalPath p
+  withTemporarilyIgnored lp 1000000 $ (liftIO . createDirectory . encodeString $ lp)
 
 --------------------------------------------------------------------------------
 -- | Helper functions
