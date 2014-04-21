@@ -55,12 +55,11 @@ withTemporarilyIgnored fp t a = do
     debugM "TemporaryIgnored" $ "Ignoring " ++ show fp
     temporarilyIgnore fp
     a
-    liftIO $ print "OK!!!"
     debugM "TemporaryIgnored" $ mconcat [ "Unignoring "
                                         , show fp
                                         , " in "
                                         , show t
-                                        , "microseconds."
+                                        , " microseconds."
                                         ]
     unIgnoreIn t fp
 

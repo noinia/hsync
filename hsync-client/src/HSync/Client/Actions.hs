@@ -25,7 +25,7 @@ import Data.Conduit.Internal(ResumableSource(..))
 
 import Data.Text.Encoding(encodeUtf8)
 
-import Filesystem.Path.CurrentOS(FilePath, (<.>), encodeString)
+import Filesystem.Path.CurrentOS(FilePath, (<.>), encodeString, encode, decode)
 
 import HSync.Client.Sync(Sync, user, password, clientIdent
                         , partialFileExtension
@@ -297,9 +297,13 @@ deleteFileLocally p fi          = infoM "Actions.deleteFileLocally" msg >>
 createDirectoryLocally   :: Path -> Action ()
 createDirectoryLocally p = do
   infoM "Actions.createDirectoryLocally"
-        ("Creating local directory for" ++ show p)
+        ("Creating local directory for " ++ show p)
   lp <- toLocalPath p
-  withTemporarilyIgnored lp 1000000 $ (liftIO . createDirectory . encodeString $ lp)
+  withTemporarilyIgnored (asDirectory lp) 1000000 $
+    (liftIO . createDirectory . encodeString $ lp)
+
+asDirectory    :: FilePath -> FilePath
+asDirectory fp = decode $ encode fp <> "/"
 
 --------------------------------------------------------------------------------
 -- | Helper functions
