@@ -9,7 +9,7 @@ import Control.Monad.Trans.Control
 import Control.Applicative(pure, (<$>), (<*>))
 import Control.Monad.IO.Class(liftIO, MonadIO(..))
 
-import System.Directory( doesDirectoryExist)
+import System.Directory( doesDirectoryExist, removeFile )
 
 import System.IO(writeFile)
 import System.IO.Error(isDoesNotExistErrorType, ioeGetErrorType)
@@ -25,7 +25,17 @@ import System.Lock.FLock
 atomicallyWriteIO        :: (MonadIO m, MonadBaseControl IO m) => FilePath -> m a -> m a
 atomicallyWriteIO fp act = catchJust doesNotExistException
                            (atomicallyIO fp act)
-                           (\_ -> liftIO (writeFile fp "") >> atomicallyWriteIO fp act)
+                           (\_ ->    createFile fp
+                                  >> atomicallyWriteIO fp (deleteFile fp >> act)
+                           )
+
+
+createFile :: MonadIO m => FilePath -> m ()
+createFile = liftIO . flip writeFile ""
+
+deleteFile :: MonadIO m => FilePath -> m ()
+deleteFile = liftIO . removeFile
+
 
 
 
