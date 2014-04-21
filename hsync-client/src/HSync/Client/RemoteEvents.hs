@@ -2,6 +2,8 @@
 {-# Language  FlexibleContexts #-}
 module HSync.Client.RemoteEvents where
 
+import Prelude hiding (FilePath)
+
 import Control.Applicative((<$>))
 import Control.Concurrent(forkIO)
 
@@ -14,6 +16,11 @@ import Data.Monoid(mconcat)
 
 import Data.Conduit
 import Data.Conduit.Internal(ResumableSource(..))
+import Data.Text(Text)
+
+import Filesystem.Path.CurrentOS( FilePath, (<.>), (</>)
+                                , addExtensions, splitExtensions, basename
+                                , splitDirectories, encode, decode, encodeString)
 
 import HSync.Client.ActionT
 import HSync.Client.Actions
@@ -31,11 +38,10 @@ import HSync.Common.Types
 import Network.HTTP.Conduit( HttpException(..) )
 
 import System.Directory(doesDirectoryExist, renameFile, renameDirectory)
-import System.FilePath(takeBaseName, replaceBaseName)
 
-import qualified Data.Text              as T
-import qualified HSync.Common.FileIdent as FI
-
+import qualified Data.Text                 as T
+import qualified HSync.Common.FileIdent    as FI
+import qualified Filesystem.Path.CurrentOS as FP
 
 --------------------------------------------------------------------------------
 -- | Handle Notifications
@@ -43,7 +49,7 @@ import qualified HSync.Common.FileIdent as FI
 
 handleNotification                         :: Notification -> Action ()
 handleNotification n@(Notification e ci t) = do
-                                               fp  <- toLocalPath p
+                                               fp  <- encodeString <$> toLocalPath p
                                                ioA <- cloneInIO act
                                                liftIO $
                                                  atomicallyWriteIO fp ioA
@@ -69,7 +75,7 @@ handleEvent e                                       = let es = show e in
 noConflict   :: Event -> Action Bool
 noConflict e = let p   = affectedPath e
                    rfi = affectedFileIdent e
-               in isNothing <$> (toLocalPath p >>= FI.checkFileIdent rfi)
+               in isNothing <$> (toLocalPath p >>= FI.checkFileIdent rfi . encodeString)
 
 --------------------------------------------------------------------------------
 -- | Conflict Handling
@@ -79,18 +85,19 @@ handleConflict      :: Path
                     -> Action ()
 handleConflict p rt = do
   fp <- toLocalPath p
+  let fp' = encodeString fp
   -- Move the local file or directory if it exists and then just download the
   -- tree anew from the server
-  (b,_) <- exists fp
+  (b,_) <- exists fp'
   when b $ do
              ci <- clientIdent <$> getSync
-             mt <- modificationTime fp
-             liftIO $ renameFileOrDir fp (conflictedFp fp ci mt rt)
+             mt <- modificationTime fp'
+             liftIO $ renameFileOrDir fp' (encodeString $ conflictedFp fp ci mt rt)
   cloneDownstream p
 
 
 -- | Rename function that works both for files and directories
-renameFileOrDir        :: FilePath -> FilePath -> IO ()
+renameFileOrDir        :: String -> String -> IO ()
 renameFileOrDir fp fp' = atomicallyIO fp $ do
                            b <- doesDirectoryExist fp
                            let rename = if b then renameDirectory else renameFile
@@ -99,14 +106,21 @@ renameFileOrDir fp fp' = atomicallyIO fp $ do
 
 -- | Construct the filename to use for conflicted copies
 conflictedFp             :: FilePath -> ClientIdent -> DateTime -> DateTime -> FilePath
-conflictedFp fp ci lt rt = replaceBaseName fp $ mconcat [ takeBaseName fp
+conflictedFp fp ci lt rt = replaceBaseName fp $ mconcat [ encode . basename $ fp
                                                         , "_conflicted_copy_"
-                                                        , T.unpack . unCI $ ci
+                                                        , unCI $ ci
                                                         , "_local_modified_"
-                                                        , showDateTime . unDT $ lt
+                                                        , T.pack . showDateTime . unDT $ lt
                                                         , "_remote_modified_"
-                                                        , showDateTime . unDT $ rt
+                                                        , T.pack . showDateTime . unDT $ rt
                                                         ]
+
+replaceBaseName       :: FilePath -> Text -> FilePath
+replaceBaseName fp n' = let dirs      = splitDirectories fp
+                            dirs'     = FP.concat $ init dirs
+                            n         = last dirs
+                            (bn,exts) = splitExtensions n
+                        in dirs' </> n `addExtensions` exts
 
 --------------------------------------------------------------------------------
 -- | Cloning
@@ -137,7 +151,7 @@ cloneDirectoryDownstream p dir = protect dirExists
                                          elseAct
   where
     (sds,fs)      = (subDirectories dir, files dir)
-    dirExists     = toLocalPath p >>= liftIO . doesDirectoryExist
+    dirExists     = toLocalPath p >>= liftIO . doesDirectoryExist . encodeString
     ifAct         = downloadDirs >> downloadFiles
     downloadDirs  = mapM_ (\d -> let p' = append . dirName $ d in
                                 cloneDirectoryDownstream p' d) sds

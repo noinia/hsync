@@ -1,6 +1,8 @@
 {-# LANGUAGE FlexibleContexts #-}
 module HSync.Client.SyncActions where
 
+import Prelude hiding (FilePath)
+
 import Control.Applicative((<$>))
 import Control.Concurrent(forkIO, killThread)
 import Control.Exception.Lifted(bracket)
@@ -18,6 +20,7 @@ import Data.Default
 import Data.Either
 import Data.Maybe(isNothing)
 
+import Filesystem.Path.CurrentOS(FilePath, encodeString)
 
 import HSync.Client.Actions(login, forcePutFile)
 import HSync.Client.ActionT(Action, runActionT, getSync, cloneInIO)
@@ -56,7 +59,7 @@ withSync fp act = do
                     tIgnores <- initializeTemporaryIgnored
                     case esync of
                       Left errMsg -> liftIO $ print errMsg
-                      Right sync' -> bracket (openLocalStateFrom (statePath sync') def)
+                      Right sync' -> bracket (openLocalStateFrom (statePath' sync') def)
                                              (createCheckpointAndClose)
                                              (\acid -> withManager $ \mgr ->
                                                let sync = sync' { httpManager = mgr }
@@ -64,6 +67,8 @@ withSync fp act = do
                                                    r    = AcidSync acid
                                                in runActionT act sync s r
                                              )
+  where
+    statePath' = encodeString . statePath
 
 
 listenMain    :: FilePath -> IO ()
@@ -114,13 +119,13 @@ firstRun = do
 
 
 
-putMain fp = withSync fp $ do
-  sync <- getSync
-  fs' <- liftIO $ getDirectoryContents "/Users/frank/tmp/synced/tls"
-  let fs = map ("/Users/frank/tmp/synced/tls/" ++) . filter (not . isPrefixOf ".") $ fs'
-  login
-  liftIO $ mapM_ print fs
-  mapM_ forcePutFile fs
+-- putMain fp = withSync fp $ do
+--  sync <- getSync
+--  fs' <- liftIO $ getDirectoryContents "/Users/frank/tmp/synced/tls"
+--  let fs = map ("/Users/frank/tmp/synced/tls/" ++) . filter (not . isPrefixOf ".") $ fs'
+--  login
+--  liftIO $ mapM_ print fs
+--  mapM_ forcePutFile fs
 
 downloadMain fp = withSync fp $ do
   sync <- getSync

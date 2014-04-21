@@ -6,6 +6,8 @@ module HSync.Client.TemporaryIgnored( initializeTemporaryIgnored
                                     ) where
 
 
+import Prelude hiding (FilePath)
+
 import Control.Applicative
 import Control.Concurrent(forkIO, threadDelay)
 import Control.Concurrent.STM(atomically)
@@ -14,6 +16,9 @@ import Control.Monad.IO.Class
 
 import Data.Monoid
 import Data.Set(Set)
+
+
+import Filesystem.Path.CurrentOS
 
 import HSync.Client.ActionT(Action, getActionState)
 import HSync.Client.Logger

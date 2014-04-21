@@ -4,6 +4,9 @@
 {-# LANGUAGE FlexibleContexts #-}
 module HSync.Client.ActionT where
 
+import Prelude hiding (FilePath)
+
+
 import Control.Concurrent.STM.TVar(TVar)
 import Control.Applicative
 
@@ -21,6 +24,7 @@ import Data.Data(Data,Typeable)
 import Data.Default
 import Data.Text.Encoding(encodeUtf8)
 
+import Filesystem.Path.CurrentOS
 
 import HSync.Common.DateTime(DateTime)
 import HSync.Common.MTimeTree

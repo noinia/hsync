@@ -1,7 +1,8 @@
-{-# Language  OverloadedStrings
-            , TypeFamilies
-  #-}
+{-# LANGUAGE  OverloadedStrings #-}
+{-# LANGUAGE TypeFamilies #-}
 module HSync.Client.Sync where
+
+import Prelude hiding (FilePath)
 
 import Control.Monad(mzero)
 
@@ -11,8 +12,10 @@ import Data.List(intercalate)
 import Data.Set(Set)
 import Data.Yaml
 
-import HSync.Client.Import
+import Filesystem.Path.CurrentOS
 
+
+import HSync.Client.Import
 import HSync.Common.DateTime(DateTime)
 
 import Network.HTTP.Conduit(Manager)
@@ -22,12 +25,19 @@ import System.FilePath.GlobPattern(GlobPattern)
 import qualified Data.Text as T
 import qualified Data.List
 
+import qualified Filesystem.Path.CurrentOS as FP
+
 
 --------------------------------------------------------------------------------
 
 -- | Extention to use for partial files
-partialFileExtension :: String
+partialFileExtension :: Text
 partialFileExtension = ".hsyncpart"
+
+isPartialFile :: FilePath -> Bool
+isPartialFile = flip hasExtension partialFileExtension
+
+
 
 -- | Files that should be temporarily ignored (in order to avoid reuploading
 --   incoming files)
@@ -67,25 +77,27 @@ clientIdent   = clientIdent' . syncConfig
 
 
 instance Default SyncConfig where
-    def = SyncConfig { localBaseDir'    = "/Users/frank/tmp/synced/"
+    def = SyncConfig { localBaseDir'    = fromText "/Users/frank/tmp/synced/"
                      , serverAddress'   = "http://localhost:3000"
                      , user'            = let Right u = userIdent "nobody" in u
                      , password'  = HashedPassword "hashed-secret"
                      , remoteBaseDir'   = []
                      , clientIdent'     = ClientIdent "client-ident"
-                     , ignorePath'      = "config/ignore"
+                     , ignorePath'      = fromText "config/ignore"
                      , statePath'       = Nothing
                      }
 
 
-statePath s = let p = "state/" ++ (T.unpack . unCI $ clientIdent s)
+
+statePath   :: Sync -> FilePath
+statePath s = let p = fromText $ "state/" <> (unCI $ clientIdent s)
               in fromMaybe p . statePath' . syncConfig $ s
 
 toLocalPath               :: Sync -> Path -> FilePath
 toLocalPath s (Path _ ps) = toLocalPath' s ps
 
-toLocalPath'   :: Sync -> SubPath -> FilePath
-toLocalPath' s = intercalate "/" . (localBaseDir s :) . map T.unpack
+toLocalPath'      :: Sync -> SubPath -> FilePath
+toLocalPath' s sp =  localBaseDir s </> FP.concat (map fromText sp)
 
 -- |TODO Switch to the FilePath package
 -- | given a local file path, create a (remote) Path corresponding to it
@@ -93,12 +105,18 @@ toLocalPath' s = intercalate "/" . (localBaseDir s :) . map T.unpack
 -- Precondition: localBaseDir cli is a basedir of the given file path.
 -- this is not checked.
 toRemotePath        :: Sync -> FilePath -> Path
-toRemotePath sync fp = let lbd = localBaseDir sync
-                           rbd = remoteBaseDir sync
-                           Just lp = Data.List.stripPrefix lbd fp
-                           fp' = T.pack . Data.List.dropWhile (=='/') $ lp -- drop init /
-                           p   = rbd <> T.split (== '/') fp'
-                       in toRemotePath' sync p
+toRemotePath sync fp = toRemotePath' sync sp
+  where
+    lbd = localBaseDir sync
+    rbd = remoteBaseDir sync
+    lp  = fromMaybe (error err) $ stripPrefix lbd fp
+    sp  = map FP.encode . splitDirectories $ lp
+    err = mconcat ["toRemotePath: Local basedir '"
+                  , show lbd
+                  , "' is not a prefix of '"
+                  , show fp
+                  , "'"
+                  ]
 
 toRemotePath'   :: Sync -> SubPath -> Path
 toRemotePath' s = Path (user s)
@@ -118,7 +136,7 @@ instance FromJSON SyncConfig where
                                     <*> v .:? "statePath"
     where
       fromConfig lbd s u hp rbd ci iPath mStatePath =
-        def { localBaseDir'  = lbd
+        def { localBaseDir'  = FP.decode lbd
             , serverAddress' = s
             , user'          = u
             , password'      = hp
@@ -126,8 +144,8 @@ instance FromJSON SyncConfig where
                                then []
                                else T.split (== '/') rbd
             , clientIdent'   = ci
-            , ignorePath'    = T.unpack iPath
-            , statePath'     = T.unpack <$> mStatePath
+            , ignorePath'    = FP.decode iPath
+            , statePath'     = FP.decode <$> mStatePath
             }
 
   parseJSON _          = mzero
@@ -137,15 +155,19 @@ instance FromJSON SyncConfig where
 
 
 readIgnore      :: Sync -> IO Sync
-readIgnore sync = (fmap lines . readFile . ignorePath' . syncConfig $ sync) >>= \ps ->
+readIgnore sync = (readLines . ignorePath' . syncConfig $ sync) >>= \ps ->
                     return $ sync { ignore = ps }
+  where
+    -- readLines :: FilePath -> IO IgnoredPattern
+    readLines = fmap lines . readFile . FP.encodeString
 
 readConfig    :: FilePath -> IO (Either ErrorMessage Sync)
-readConfig fp = decodeFileEither fp >>= \es -> case es of
+readConfig fp = decodeFileEither fp' >>= \es -> case es of
                   Left parseError -> return . Left . showError $ parseError
                   Right sc        -> let s = Sync undefined sc []
                                      in Right <$> readIgnore s
   where
+    fp'          = FP.encodeString fp
     showError pe = mconcat [ "Error parsing sync config file "
                            , showT fp
                            , ":\n"

@@ -1,6 +1,7 @@
 {-# Language  FlexibleContexts #-}
 module HSync.Client.Actions where
 
+import Prelude hiding (FilePath)
 
 import Control.Exception(throw)
 
@@ -23,6 +24,8 @@ import Data.Conduit.Binary
 import Data.Conduit.Internal(ResumableSource(..))
 
 import Data.Text.Encoding(encodeUtf8)
+
+import Filesystem.Path.CurrentOS(FilePath, (<.>), encodeString)
 
 import HSync.Client.Sync(Sync, user, password, clientIdent
                         , partialFileExtension
@@ -191,16 +194,16 @@ getFile p = toLocalPath p >>= getFile' p
 -- that file are written to the (local) file with path lp
 getFile'      :: Path -> FilePath -> Action ()
 getFile' p lp = do
-  infoM "Actions.getFile" ("Downloading " ++ show p ++ " to " ++ lp)
+  infoM "Actions.getFile" ("Downloading " ++ show p ++ " to " ++ show lp)
   resp <- runGetRoute $ FileR p
   -- Download the file into a partial file
-  let lpPartial = lp ++ partialFileExtension
+  let lpPartial = encodeString $ lp <.> partialFileExtension
   lift (responseBody resp C.$$+- sinkFile lpPartial)
   -- This file is incoming, so temporarily ignore listening for local changes
   -- of this file:
   debugM "Actions.getFile" $ "Ignoring " ++ show lp
   temporarilyIgnore lp
-  liftIO $ renameFile lpPartial lp
+  liftIO $ renameFile lpPartial (encodeString lp)
   -- set the modification time, and update the remote tree state
   withHeader HFileIdent resp (\fi ->    setModificationTime p fi
                                      >> setFileIdentOf p fi
@@ -225,7 +228,7 @@ putDir p = infoM "Actions.putDir" ("Creating directory at " ++ show p) >>
 putFile         :: FilePath -> FileIdent -> Path -> Action ()
 putFile fp fi p = do
                      let h = PutFileR fi p
-                         s = sourceFile fp
+                         s = sourceFile $ encodeString fp
                      sync <- getSync
                      infoM "Actions.putFile" msg
                      debugM "Actions.putFile" ("url: " ++ toUrl sync h)
@@ -235,12 +238,19 @@ putFile fp fi p = do
                      --          >>= fromPathPiece) :: Maybe FileIdent
                      withHeader HFileIdent resp (setFileIdentOf p)
   where
-    msg = concat [ "Uploading ", fp ," with fileident ", show fi, "to ", show p]
+    msg = concat [ "Uploading "
+                 , show fp
+                 , " with fileident '"
+                 , show fi
+                 , "' to '"
+                 , show p
+                 , "'"
+                 ]
 
 -- | Given a local (absolute) file path. Upload the file or directory.
 putFileOrDir    :: FilePath -> Action ()
 putFileOrDir fp = do
-                    isDir <- liftIO $ doesDirectoryExist fp
+                    isDir <- liftIO $ doesDirectoryExist (encodeString fp)
                     p     <- toRemotePath fp
                     if isDir then putDir p
                              else expectedFileIdent p >>= \fi -> putFile fp fi p
@@ -281,7 +291,7 @@ deleteFileLocally               :: Path -> FileIdent -> Action ()
 deleteFileLocally _ NonExistent = emergencyM "Actions.deleteFileLocally" "non existent file"
                                   >> error "deleteFileLocally: non existent file"
 deleteFileLocally p fi          = infoM "Actions.deleteFileLocally" msg >>
-                                  toLocalPath p >>= liftIO . f
+                                  toLocalPath p >>= liftIO . f . encodeString
   where
     f = if FI.isDirectory fi then removeFile
                              else removeDirectoryRecursive
@@ -292,7 +302,7 @@ deleteFileLocally p fi          = infoM "Actions.deleteFileLocally" msg >>
 createDirectoryLocally   :: Path -> Action ()
 createDirectoryLocally p = infoM "Actions.createDirectoryLocally"
                                  ("Creating local directory for" ++ show p) >>
-                           toLocalPath p >>= liftIO . createDirectory
+                           toLocalPath p >>= liftIO . createDirectory . encodeString
 
 --------------------------------------------------------------------------------
 -- | Helper functions
@@ -306,4 +316,4 @@ withHeader h resp a = let n = encodeUtf8 $ headerName h in
 
 setModificationTime      :: Path -> FileIdent -> Action ()
 setModificationTime p fi = let t = toEpochTime . getDateTime $ fi in
-  toLocalPath p >>= (\fp -> liftIO $ setFileTimes fp t t )
+  toLocalPath p >>= (\fp -> liftIO $ setFileTimes (encodeString fp) t t )
