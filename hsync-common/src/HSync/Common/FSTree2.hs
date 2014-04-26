@@ -16,6 +16,9 @@ module HSync.Common.FSTree( File(..)
                           , addFileAt
                           , addDirectoryAt
 
+                          , updateFileAt
+                          , updateDirectoryAt
+
                           -- , readFSTree
 
                           -- , labelBottomUp
@@ -24,20 +27,21 @@ module HSync.Common.FSTree( File(..)
                           , deleteFile
                           , deleteDirectory
 
+                          , deleteFileAt
+                          , deleteDirectoryAt
+
                           -- , prettyPrintTree
                           ) where
 
 
 import Control.Applicative((<$>))
-import Control.Monad.IO.Class(liftIO, MonadIO)
+import Control.Monad.IO.Class(MonadIO(..))
 
 import Data.Aeson
 import Data.Aeson.TH
 import Data.Data(Data, Typeable)
 
-
-import Data.List(break)
-import Data.Maybe(catMaybes, fromMaybe)
+import Data.Maybe(fromMaybe)
 
 import Data.Ord(comparing)
 import Data.Semigroup
@@ -100,22 +104,6 @@ instance Functor (Directory m) where
 
 
 
--- | Roll out some very basic lenses to modify the directories
-type Lens a b = (a -> b, b -> a -> a)
-
-get = fst
-set = snd
-
-filesL :: Lens (Directory m a) (Seq (File m a))
-filesL = ( files
-          ,  \fs' (Directory n a m sd fs) -> Directory n a m sd fs'
-          )
-dirsL :: Lens (Directory m a) (Seq (Directory m a))
-dirsL = ( subDirectories
-         ,  \sd' (Directory n a m sd fs) -> Directory n a m sd' fs
-         )
-
-
 -- Parse/write Sequences as normal lists
 instance ToJSON a => ToJSON (Seq a) where
   toJSON = toJSON . F.foldr (:) []
@@ -126,8 +114,9 @@ instance FromJSON a => FromJSON (Seq a) where
 $(deriveJSON defaultOptions ''Directory)
 $(deriveSafeCopy 0 'base ''Directory)
 
-------------------------------
--- | Some simple operations on files/directories
+
+--------------------------------------------------------------------------------
+-- | Some functions that work on both files and directories
 
 class IsFileOrDirectory c where
   name        :: c m a -> FileName
@@ -157,14 +146,40 @@ instance IsFileOrDirectory Directory where
              )
 
 
+--------------------------------------------------------------------------------
+-- | Roll out some very basic lenses to modify the directories
+
+
+type Lens a b = (a -> b, b -> a -> a)
+
+get = fst
+set = snd
+
+filesL :: Lens (Directory m a) (Seq (File m a))
+filesL = ( files
+          ,  \fs' (Directory n a m sd fs) -> Directory n a m sd fs'
+          )
+dirsL :: Lens (Directory m a) (Seq (Directory m a))
+dirsL = ( subDirectories
+         ,  \sd' (Directory n a m sd fs) -> Directory n a m sd' fs
+         )
+
+
+--------------------------------------------------------------------------------
+-- | Basic Operations on Files and Directories
+
 
 hasName       :: IsFileOrDirectory t => t m a -> FileName -> Bool
 x `hasName` n = (== n) . name $ x
 
 
+-- | Create an empty directory
 emptyDirectory     :: Measured m a => FileName -> a -> Directory m a
 emptyDirectory n x = Directory n x (measure x) mempty mempty
 
+
+----------------------------------------
+-- | Adding files and Directories
 
 -- | Adds a file to the directory
 addFile :: Measured m a => File m a -> Directory m a -> Directory m a
@@ -176,6 +191,42 @@ addDirectory :: Measured m a
              -> Directory m a -- ^ The directory in which we add (the previous argument)
              -> Directory m a
 addDirectory = addByName dirsL
+
+
+-- | addFileAt sp f d, adds file f to the subdirectory indicated by sp.
+--
+--  prec: the directory indicated by sp exists
+addFileAt :: Measured m a => SubPath -> File m a -> Directory m a -> Directory m a
+addFileAt = addAt filesL
+
+-- | addDirecotryAt sp d' d adds directory d' to the subdirectory indicated by sp
+addDirectoryAt :: Measured m a => SubPath -> Directory m a -> Directory m a -> Directory m a
+addDirectoryAt = addAt dirsL
+
+----------------------------------------
+-- | Updates
+
+-- | Given a path sp to a file, and a function f, apply f to the file indicated
+-- by sp.
+updateFileAt    :: Measured m a
+                => SubPath      -- ^ The (full) path to the file that we want to update
+                -> (File m a -> File m a) -- ^ The update function
+                -> Directory m a
+                -> Directory m a
+updateFileAt sp = let (sp',n) = andLast sp in
+                  updateAt filesL sp' n
+
+-- | Update a directory. See updateFileAt
+updateDirectoryAt    :: Measured m a
+                     => SubPath
+                     -> (Directory m a -> Directory m a)
+                     -> Directory m a
+                     -> Directory m a
+updateDirectoryAt sp = let (sp',n) = andLast sp in
+                       updateAt dirsL sp' n
+
+----------------------------------------
+-- | Deleting files and directories
 
 -- | Given a measurement and a file, delete that file from the directory. The
 -- measurement is used when updating the measurement of the directory
@@ -191,37 +242,13 @@ deleteDirectory      :: Measured m a
 deleteDirectory m sd = deleteByName dirsL (Just m) (name sd)
 
 
+deleteFileAt        :: Measured m a
+                    => SubPath -> FileName -> m -> Directory m a -> Directory m a
+deleteFileAt sp n m = deleteAt filesL sp n (Just m)
 
--- | addFileAt sp f d, adds file f to the subdirectory indicated by sp.
---
---  prec: the directory indicated by sp exists
-addFileAt :: Measured m a => SubPath -> File m a -> Directory m a -> Directory m a
-addFileAt = addAt filesL
-
--- | addDirecotryAt sp d' d adds directory d' to the subdirectory indicated by sp
-addDirectoryAt :: Measured m a => SubPath -> Directory m a -> Directory m a -> Directory m a
-addDirectoryAt = addAt dirsL
-
-
--- | Given a path sp to a file, and a function f, apply f to the file indicated
--- by sp.
-updateFileAt    :: Measured m a
-                => SubPath      -- ^ The (full) path to the file that we want to update
-                -> (File m a -> File m a) -- ^ The update function
-                -> Directory m a
-                -> Directory m a
-updateFileAt sp = let (sp',n) = andLast sp in
-                  updateAt filesL sp' n
-
--- | Update a directory. See updateFileAt
-updateDirAt    :: Measured m a
-               => SubPath
-               -> (Directory m a -> Directory m a)
-               -> Directory m a
-               -> Directory m a
-updateDirAt sp = let (sp',n) = andLast sp in
-                  updateAt dirsL sp' n
-
+deleteDirectoryAt        :: Measured m a
+                         => SubPath -> FileName -> m -> Directory m a -> Directory m a
+deleteDirectoryAt sp n m = deleteAt dirsL sp n (Just m)
 
 --------------------------------------------------------------------------------
 -- | Medium level functions to manipulate directory structures
@@ -239,7 +266,6 @@ addAt l []     t = addByName l t
 addAt l (n:sp) t = updateByName dirsL (addAt l sp t) n
 
 
-
 updateAt               :: (Measured m a, IsFileOrDirectory t)
                        => Lens (Directory m a) (Seq (t m a))
                        -> SubPath       -- ^ Path to the directory containing
@@ -254,6 +280,18 @@ updateAt               :: (Measured m a, IsFileOrDirectory t)
 updateAt l []      n f = updateByName l f n
 updateAt l (dn:sp) n f = updateByName dirsL (updateAt l sp n f) dn
 
+
+deleteAt               :: (Measured m a, IsFileOrDirectory t)
+                       => Lens (Directory m a) (Seq (t m a))
+                       -> SubPath    -- ^ Path to the directory containing the
+                                     -- thing that we want to delete
+                       -> FileName   -- ^ Name of the file that we want to remove
+                       -> Maybe m    -- ^ measured value to use at the place of of
+                                     -- the deleted file
+                       -> Directory m a
+                       -> Directory m a
+deleteAt l []      n mm = deleteByName l mm n
+deleteAt l (dn:sp) n mm = updateByName dirsL (deleteAt l sp n mm) dn
 
 --------------------------------------------------------------------------------
 -- | Some low level functons for maniuplating directories. I.e. adding or deleting
