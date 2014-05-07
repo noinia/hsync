@@ -23,13 +23,9 @@ library
                        HSync.Common.FileIdent
                        HSync.Common.AtomicIO
                        HSync.Common.FSTree
-                       HSync.Common.FSTree.Basic
-                       HSync.Common.FSTree.Zipper
                        HSync.Common.TimedFSTree
-                       HSync.Common.MTimeTree
                        HSync.Common.DateTime
                        HSync.Common.Notification
---                       HSync.Common.NotificationTree
                        HSync.Common.Header
 
   -- other-modules:
@@ -55,6 +51,7 @@ library
     , containers                    >= 0.5        && < 0.6
     , monad-control                 >= 0.3.2.1    && < 0.4
     , lifted-base                   >= 0.2.1.0    && < 0.3
+    , semigroups                    >= 0.12       && < 0.14
 
     , directory                     >= 1.1        && < 1.3
     , filepath                      >= 1.3        && < 1.4
