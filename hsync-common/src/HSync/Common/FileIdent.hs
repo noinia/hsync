@@ -96,6 +96,9 @@ instance HasFileIdent FileIdent where
 instance HasFileIdent a => HasFileIdent (Maybe a) where
   toFileIdent = maybe NonExistent toFileIdent
 
+instance (HasFileIdent a, HasFileIdent b) => HasFileIdent (Either a b) where
+  toFileIdent = either toFileIdent toFileIdent
+
 --------------------------------------------------------------------------------
 -- | Computing and comparing File Idents
 
