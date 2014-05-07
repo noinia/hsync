@@ -24,6 +24,7 @@ import Data.Data(Data, Typeable)
 import Data.SafeCopy(base, deriveSafeCopy)
 
 import HSync.Common.TimedFSTree
+import HSync.Common.FSTree
 import HSync.Common.DateTime
 import HSync.Common.FileIdent(FileIdent)
 import HSync.Common.Notification( Event(..)
@@ -34,7 +35,7 @@ import HSync.Common.Notification( Event(..)
                                 )
 import HSync.Common.Types
 
-
+import qualified HSync.Common.Notification as N
 
 --------------------------------------------------------------------------------
 
@@ -68,11 +69,11 @@ $(deriveSafeCopy 0 'base ''FSState)
 -- the kind 'fileAdded', and have the file modification time as the associated
 -- datetime.
 newFSState         :: (MonadIO m, Functor m) => FilePath -> m FSState
-newFSState baseDir = readTimedFSTree baseDir f >>=
+newFSState baseDir = readDirectory baseDir f >>=
                        maybe (error "newFSState") -- TODO: fix
-                             (return . FSState)
+                             (return . FSState . FSTree)
   where
-    f fp       = mkLabel <$> (modificationTime fp)
+    f fp       = (\d -> FileData (mkLabel d) d) <$> (modificationTime fp)
     mkLabel dt = FileLabel FileAdded (ClientIdent "unknown") dt Nothing
 
 
@@ -83,9 +84,23 @@ withTimedFSTree f = FSState . f . fsStateTree
 --------------------------------------------------------------------------------
 
 updateNotification   :: Notification -> FSState -> FSState
-updateNotification n = withTimedFSTree $ insertOrAdjustLabel p fType (const fl)
+updateNotification n = withTimedFSTree (FSTree . f p . unTree)
   where
-    p'    = affectedPath . event $ n
-    p     = (unUI $ owner p') : subPath p'
-    fl    = fromNotification n
-    fType = if involvesFile . kind . event $ n then Left undefined else Right undefined
+    f = case kind . event $ n of
+         FileAdded        -> flip addFileAt newFile
+         FileRemoved      -> (\p -> deleteFileAt p fName (Max dt))
+         FileUpdated      -> flip updateFileAt g
+         DirectoryAdded   -> flip addDirectoryAt newDir
+         DirectoryRemoved -> (\p -> deleteDirectoryAt p fName (Max dt))
+
+    g file = file { fileData = fData }
+
+    fData   = FileData (fromNotification n) dt
+    dt      = N.timestamp n
+    newFile = File fName fData (measure fData)
+    newDir  = emptyDirectory fName fData
+
+
+    p'          = affectedPath . event $ n
+    (p'',fName) = andLast $ subPath p'
+    p           = (unUI $ owner p') : p''

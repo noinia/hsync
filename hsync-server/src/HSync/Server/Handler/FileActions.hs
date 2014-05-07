@@ -13,7 +13,7 @@ import Data.ByteString(ByteString)
 
 import Network.Wai(requestBody)
 
-import HSync.Common.MTimeTree(MTimeTree, readMTimeTree)
+import HSync.Common.TimedFSTree(MTimeTree, readMTimeTree)
 import HSync.Common.Header
 import HSync.Common.Notification
 
@@ -21,7 +21,7 @@ import HSync.Server.Handler.Auth(requireRead,requireWrite)
 import HSync.Server.Notifications(logNotification, notifications)
 
 
-import System.Directory( removeFile , createDirectory )
+import System.Directory( removeFile , createDirectory , doesDirectoryExist )
 
 
 import qualified Data.Conduit.List as C
@@ -56,7 +56,7 @@ getTreeR p = protectRead p "tree" $
 
 getTreeOf   :: Path -> Handler (Maybe MTimeTree)
 getTreeOf p = asLocalPath p >>= \fp ->
-                liftIO $ protect (isPropperFile fp)
+                liftIO $ protect (doesDirectoryExist fp)
                                  (readMTimeTree fp) -- TODO: Should I create a lock here?
                                  (return Nothing)
 
