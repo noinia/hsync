@@ -85,8 +85,14 @@ data Notification = Notification { event     :: Event
                                  }
                   deriving (Read,Eq,Show,Data,Typeable)
 
+-- | Notifications are ordered on timestamp
+instance Ord Notification where
+  (Notification _ c t) <= (Notification _ c' t') = (t,c) <= (t',c')
+
+
 $(deriveJSON defaultOptions ''Notification)
 $(deriveSafeCopy 0 'base ''Notification)
+
 
 toLog                          :: Notification -> String
 toLog (Notification evt ci ti) = intercalate ":" $ [show ti, show ci, show evt]
