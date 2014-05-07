@@ -14,8 +14,10 @@ import Control.Monad.Trans.Class(lift)
 import Data.Maybe(isNothing)
 import Data.Monoid(mconcat)
 
+
 import Data.Conduit
 import Data.Conduit.Internal(ResumableSource(..))
+
 import Data.Text(Text)
 
 import Filesystem.Path.CurrentOS( FilePath, (<.>), (</>)
@@ -33,12 +35,14 @@ import HSync.Common.DateTime(DateTime(..), showDateTime, modificationTime)
 import HSync.Common.Notification
 
 import HSync.Common.FSTree
+import HSync.Common.TimedFSTree
 import HSync.Common.Types
 
 import Network.HTTP.Conduit( HttpException(..) )
 
 import System.Directory(doesDirectoryExist, renameFile, renameDirectory)
 
+import qualified Data.Foldable             as F
 import qualified Data.Text                 as T
 import qualified HSync.Common.FileIdent    as FI
 import qualified Filesystem.Path.CurrentOS as FP
@@ -61,13 +65,16 @@ handleNotification n@(Notification e ci t) = do
 
 handleEvent                                         :: Event -> Action ()
 handleEvent (Event FileAdded p FI.NonExistent)      = getFile p
-handleEvent (Event FileRemoved p fi)                = deleteFileLocally p fi
+handleEvent (Event FileRemoved p fi)                = deleteFileLocally' p fi
 handleEvent (Event FileUpdated p fi)                = getUpdate p fi
 
 handleEvent (Event DirectoryAdded p FI.NonExistent) = createDirectoryLocally p
 handleEvent (Event DirectoryRemoved p fi)           = return () -- TODO
 handleEvent e                                       = let es = show e in
           error $  "handleEvent: inconsistent event: " ++ es
+
+
+deleteFileLocally' = return () -- TODO: Ignore file and then remove it
 
 --------------------------------------------------------------------------------
 -- | Conflict Checking
@@ -138,19 +145,17 @@ cloneDownstream p = do
                                               -- - a new remote tree.
                       serverTreeState >>= liftIO . print
   where
-    downloadTree Nothing      = error "cloneDownStream: no tree"
-                                  -- TODO: fix the error stuff
-    downloadTree (Just (F _)) = getFile p
-    downloadTree (Just (D d)) = cloneDirectoryDownstream p d
+    downloadTree = maybe (error "cloneDownstream: no tree")
+                   (cloneDirectoryDownstream p . unTree)
 
 
-
-cloneDirectoryDownstream       :: Path -> Directory fl dl -> Action ()
+cloneDirectoryDownstream       :: Path -> Directory m a -> Action ()
 cloneDirectoryDownstream p dir = protect dirExists
                                          ifAct
                                          elseAct
   where
-    (sds,fs)      = (subDirectories dir, files dir)
+    toList        = F.foldr (:) []
+    (sds,fs)      = (toList $ subDirectories dir, toList $ files dir)
     dirExists     = toLocalPath p >>= liftIO . doesDirectoryExist . encodeString
     ifAct         = downloadDirs >> downloadFiles
     downloadDirs  = mapM_ (\d -> let p' = append . dirName $ d in

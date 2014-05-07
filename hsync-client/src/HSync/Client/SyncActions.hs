@@ -34,7 +34,6 @@ import HSync.Client.TemporaryIgnored
 
 -- Remove when done debugging
 import HSync.Client.AcidActions(serverTreeState)
-import HSync.Common.FSTree.Basic(prettyPrintTree)
 --
 
 
@@ -141,4 +140,4 @@ uploadMain fp = withSync fp $ do
 
 showState fp = withSync fp $ do
                                Just t <- serverTreeState
-                               liftIO . putStr $ prettyPrintTree t
+                               liftIO . putStr $ show t

@@ -9,8 +9,9 @@ module HSync.Client.AcidSync( AcidSync(..)
 
                             , QueryMTimeTree(..)
                             , ReplaceFull(..)
-                            , UpdateFileIdent(..)
-                            , SetFileIdentOf(..)
+                            , AddByFileIdent(..)
+                            , DeleteByFileIdent(..)
+                            , UpdateByFileIdent(..)
                             ) where
 
 import Control.Applicative
@@ -26,13 +27,13 @@ import Data.Data(Data, Typeable)
 import Data.Default
 import Data.SafeCopy(base, deriveSafeCopy)
 
-import HSync.Common.MTimeTree(MTimeTree)
+import HSync.Common.TimedFSTree(MTimeTree)
 
 import HSync.Common.FileIdent(FileIdent)
 import HSync.Common.DateTime(DateTime)
 import HSync.Common.Types
 
-import qualified HSync.Common.MTimeTree as MT
+import qualified HSync.Common.TimedFSTree as FST
 
 
 --------------------------------------------------------------------------------
@@ -43,41 +44,35 @@ data AcidSync = AcidSync { remoteTreeAcid :: AcidState MTimeTreeState
 
 --------------------------------------------------------------------------------
 
-newtype MTimeTreeState = MTimeTreeState { unMTTS :: Maybe MTimeTree }
-                         deriving (Eq,Show,Data,Typeable)
-
-$(deriveSafeCopy 0 'base ''MTimeTreeState)
-
-instance Default MTimeTreeState where
-  def = MTimeTreeState Nothing
-
-
--- | Run a function on the tree we are storing
-onMTimeTree   :: (MTimeTree -> Maybe MTimeTree) -> MTimeTreeState -> MTimeTreeState
-onMTimeTree f = MTimeTreeState . (>>= f) . unMTTS
+type MTimeTreeState = Maybe MTimeTree
 
 
 -- | Get the thing we are actually storing
 queryMTimeTree :: Query MTimeTreeState (Maybe MTimeTree)
-queryMTimeTree = unMTTS <$> ask
+queryMTimeTree = ask
 
 replaceFull    :: Maybe MTimeTree -> Update MTimeTreeState ()
-replaceFull mt = modify (const $ MTimeTreeState mt)
+replaceFull mt = modify (const mt)
 
--- | Acidized version of MTimeTree.updateFileIdent.
-updateFileIdent          :: DateTime -> SubPath -> FileIdent -> Update MTimeTreeState ()
-updateFileIdent dt sp fi = modify (onMTimeTree $ MT.updateFileIdent dt sp fi)
+modify' f = modify $ fmap f
 
--- | Specialized version of updateFileIdent that does not allow deletes
-setFileIdentOf :: SubPath -> FileIdent -> Update MTimeTreeState ()
-setFileIdentOf = updateFileIdent undefined
-                  -- Note: We specifically acidize this one to prevent having to
-                  -- serialized the 'undefined' value we pass to updateFileIdent.
+
+addByFileIdent       :: SubPath -> FileIdent -> Update MTimeTreeState ()
+addByFileIdent sp fi = modify' $ FST.addByFileIdent sp fi
+
+
+deleteByFileIdent          :: SubPath -> DateTime -> FileIdent -> Update MTimeTreeState ()
+deleteByFileIdent sp dt fi = modify' $ FST.deleteByFileIdent sp dt fi
+
+
+updateByFileIdent       :: SubPath -> FileIdent -> Update MTimeTreeState ()
+updateByFileIdent sp fi = modify' $ FST.updateByFileIdent sp fi
 
 $(makeAcidic ''MTimeTreeState [ 'queryMTimeTree
                               , 'replaceFull
-                              , 'updateFileIdent
-                              , 'setFileIdentOf
+                              , 'addByFileIdent
+                              , 'deleteByFileIdent
+                              , 'updateByFileIdent
                               ])
 
 --------------------------------------------------------------------------------

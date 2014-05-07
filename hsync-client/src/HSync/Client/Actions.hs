@@ -33,13 +33,15 @@ import HSync.Client.Sync(Sync, user, password, clientIdent
 import HSync.Client.ActionT
 import HSync.Client.Import
 import HSync.Client.Logger
-import HSync.Client.AcidActions( updateFileIdent, setFileIdentOf
-                               , expectedFileIdent)
+import HSync.Client.AcidActions( setByFileIdent
+                               , deleteByFileIdent
+                               , expectedFileIdent
+                               )
 import HSync.Client.TemporaryIgnored(withTemporarilyIgnored)
 
 
 import HSync.Common.DateTime(DateTime, toEpochTime, currentTime)
-import HSync.Common.MTimeTree(MTimeTree)
+import HSync.Common.TimedFSTree(MTimeTree)
 import HSync.Common.Header
 import HSync.Common.Notification(Notification(..))
 
@@ -205,7 +207,7 @@ getFile' p lp = do
     liftIO $ renameFile lpPartial (encodeString lp)
     -- set the modification time, and update the remote tree state
     withHeader HFileIdent resp (\fi ->    setModificationTime p fi
-                                       >> setFileIdentOf p fi
+                                       >> setByFileIdent      p fi
                                )
 
 --------------------------------------------------------------------------------
@@ -214,7 +216,7 @@ getFile' p lp = do
 putDir   :: Path -> Action ()
 putDir p = infoM "Actions.putDir" ("Creating directory at " ++ show p) >>
            runPostRoute (PutDirR NonExistent p) noData >>= \resp ->
-             withHeader HFileIdent resp (setFileIdentOf p)
+             withHeader HFileIdent resp (setByFileIdent p)
     where
       noData   = sourceLbs LB.empty
 
@@ -231,7 +233,7 @@ putFile fp fi p = do
                      -- let mh = headerValue HFileIdent . responseHeaders $ resp
                      --       ((getHeader hFileIdent . responseHeaders $ resp)
                      --          >>= fromPathPiece) :: Maybe FileIdent
-                     withHeader HFileIdent resp (setFileIdentOf p)
+                     withHeader HFileIdent resp (setByFileIdent p)
   where
     msg = concat [ "Uploading "
                  , show fp
@@ -276,7 +278,7 @@ deleteRemote      :: FileIdent -> Path -> Action ()
 deleteRemote fi p = infoM "Actions.deleteRemote" msg >>
                     runDeleteRoute (DeleteR fi p) >>= \resp ->
                       withHeader HDeletionTime resp (\dt ->
-                         updateFileIdent dt p NonExistent)
+                         deleteByFileIdent p dt fi)
   where
     msg = "Deleting " ++ show p ++ " with FileIdent " ++ show fi
 --------------------------------------------------------------------------------
@@ -288,10 +290,12 @@ deleteFileLocally _ NonExistent = emergencyM "Actions.deleteFileLocally" "non ex
 deleteFileLocally p fi          = infoM "Actions.deleteFileLocally" msg >>
                                   toLocalPath p >>= liftIO . f . encodeString
   where
-    f = if FI.isDirectory fi then removeFile
-                             else removeDirectoryRecursive
+    f = if FI.isDirectory fi then removeDirectoryRecursive
+                             else removeFile
     msg = concat [ "Deleting local file with path ", show p
                  , " and FileIdent " , show fi ]
+
+
 
 
 createDirectoryLocally   :: Path -> Action ()

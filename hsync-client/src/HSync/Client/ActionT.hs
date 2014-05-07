@@ -27,7 +27,7 @@ import Data.Text.Encoding(encodeUtf8)
 import Filesystem.Path.CurrentOS
 
 import HSync.Common.DateTime(DateTime)
-import HSync.Common.MTimeTree
+import HSync.Common.TimedFSTree
 import HSync.Common.Header(HClientId(..), asHeader)
 
 import HSync.Client.Import
