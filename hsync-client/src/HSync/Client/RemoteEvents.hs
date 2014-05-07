@@ -24,10 +24,10 @@ import Filesystem.Path.CurrentOS( FilePath, (<.>), (</>)
                                 , addExtensions, splitExtensions, basename
                                 , splitDirectories, encode, decode, encodeString)
 
+import HSync.Client.AcidActions
 import HSync.Client.ActionT
 import HSync.Client.Actions
 import HSync.Client.Sync(Sync, clientIdent)
-import HSync.Client.AcidActions
 
 import HSync.Common.Import
 import HSync.Common.AtomicIO
@@ -73,8 +73,6 @@ handleEvent (Event DirectoryRemoved p fi)           = return () -- TODO
 handleEvent e                                       = let es = show e in
           error $  "handleEvent: inconsistent event: " ++ es
 
-
-deleteFileLocally' = return () -- TODO: Ignore file and then remove it
 
 --------------------------------------------------------------------------------
 -- | Conflict Checking
@@ -128,6 +126,7 @@ replaceBaseName fp n' = let dirs      = splitDirectories fp
                             n         = last dirs
                             (bn,exts) = splitExtensions n
                         in dirs' </> n `addExtensions` exts
+
 
 --------------------------------------------------------------------------------
 -- | Cloning

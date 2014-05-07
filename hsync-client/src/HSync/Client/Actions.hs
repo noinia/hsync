@@ -297,7 +297,14 @@ deleteFileLocally p fi          = infoM "Actions.deleteFileLocally" msg >>
 
 
 
+-- | Temporarily ignore a file or directory and then delete it.
+deleteFileLocally'      :: Path -> FileIdent -> Action ()
+deleteFileLocally' p fi = toLocalPath p >>= \lp ->
+                          withTemporarilyIgnored lp 1000000 $
+                            deleteFileLocally p fi
 
+
+-- | Create a local directory
 createDirectoryLocally   :: Path -> Action ()
 createDirectoryLocally p = do
   infoM "Actions.createDirectoryLocally"
