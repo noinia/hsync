@@ -45,7 +45,9 @@ import qualified HSync.Common.FileIdent as FI
 --------------------------------------------------------------------------------
 
 -- | The second arugment is the modification time
-data FileData a = FileData a DateTime
+data FileData a = FileData { extractData          :: a
+                           , modificationTimeData :: DateTime
+                           }
                        deriving  (Show,Eq,Ord,Data,Typeable)
 
 $(deriveJSON defaultOptions ''FileData)
@@ -53,9 +55,6 @@ $(deriveSafeCopy 0 'base ''FileData)
 
 $(deriveJSON defaultOptions ''Max)
 $(deriveSafeCopy 0 'base ''Max)
-
-modificationTimeData (FileData _ d) =d
-
 
 instance Measured (Max DateTime) (FileData a) where
   measure (FileData _ m) = Max m
@@ -77,25 +76,33 @@ $(deriveJSON defaultOptions ''TimedFSTree)
 $(deriveSafeCopy 0 'base ''TimedFSTree)
 
 
-
 withDir              :: ( Directory (Max DateTime) (FileData t) ->
                           Directory (Max DateTime) (FileData a)
                         )
                      -> TimedFSTree t -> TimedFSTree a
 withDir f (FSTree d) = FSTree $ f d
 
+--------------------------------------------------------------------------------
+
 type MTimeTree = TimedFSTree ()
 
+-- | Read an MTimeTree from disk. Returns Nothing if the path does not point to
+-- a directory on the filesystem.
+readMTimeTree :: (Functor m, MonadIO m) => FilePath -> m (Maybe MTimeTree)
+readMTimeTree = fmap (fmap FSTree) . flip readDirectory readMTimeData
+
+-- | Read the Modification time data for a single file
 readMTimeData    :: (Functor m, MonadIO m) => FilePath -> m (FileData ())
 readMTimeData fp = (FileData ()) <$> modificationTime fp
 
-readMTimeTree :: (Functor m, MonadIO m) => FilePath -> m (Maybe MTimeTree)
-readMTimeTree = fmap (fmap FSTree) . flip readDirectory readMTimeData
 
 -- | get the fileIdent of a certain file in the tree
 fileIdentOf   :: SubPath -> MTimeTree -> FileIdent
 fileIdentOf p = toFileIdent . findAt p . unTree
 
+-- | Given a subpath and a fileIdent. Add a new item (i.e. file or directory)
+-- to the MTimeTree. This operation assumes that all parents of the new item
+-- already exist in the tree.
 addByFileIdent                     :: SubPath -> FileIdent -> MTimeTree -> MTimeTree
 addByFileIdent _ FI.NonExistent    = id
 addByFileIdent p (FI.File dt)      = let (sp,n) = andLast p in withDir $
@@ -103,7 +110,9 @@ addByFileIdent p (FI.File dt)      = let (sp,n) = andLast p in withDir $
 addByFileIdent p (FI.Directory dt) = let (sp,n) = andLast p in withDir $
                                      addDirectoryAt sp (emptyDirectory n $ FileData () dt)
 
-
+-- | Delete the item, i.e. file or directory at the indicated sub path. If the
+-- item is a directory, this removes that entire subtree. The given dateTime is used
+-- to (recursive) update the Modification times.
 deleteByFileIdent :: SubPath -> DateTime -> FileIdent -> MTimeTree -> MTimeTree
 deleteByFileIdent _ _  FI.NonExistent   = id
 deleteByFileIdent p dt (FI.File _)      = let (sp,n) = andLast p in withDir $
@@ -115,3 +124,5 @@ updateByFileIdent                :: SubPath -> FileIdent -> MTimeTree -> MTimeTr
 updateByFileIdent p (FI.File dt) = let g f    = f { fileData = FileData () dt }
                                    in withDir $ updateFileAt p g
 updateByFileIdent _ _            = error "updateByFileIdent: Only files are supported."
+
+--------------------------------------------------------------------------------
