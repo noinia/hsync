@@ -1,27 +1,23 @@
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# Language TemplateHaskell #-}
 {-# Language GeneralizedNewtypeDeriving #-}
 {-# Language DeriveDataTypeable #-}
-module HSync.Common.TimedFSTree( TimedFSTree
-                               , readTimedFSTree
-                               , update
-                               , delete
-                               , replaceSubTree
+module HSync.Common.TimedFSTree( FileData(..)
 
-                               , insertOrAdjustLabel
+                               , TimedFSTree(..)
 
-                               -- , addDir
-                               -- , addFile
+                               , MTimeTree
+                               , fileIdentOf
+                               , readMTimeData
+                               , readMTimeTree
 
-                               , Directory'
 
-                               , DirectoryLabel(..)
-                               , updateDirLabel
-                               , fromFileLabel
+                               , addByFileIdent
+                               , deleteByFileIdent
+                               , updateByFileIdent
 
-                                 -- Reexports:
-                               , FSTree(..), File(..), Directory(..)
-                               , emptyDirectory , isDir , isFile
-                               , label
+                               , Max(..)
                                ) where
 
 import Control.Applicative((<$>))
@@ -30,139 +26,92 @@ import Control.Monad.IO.Class(MonadIO(..))
 import Data.Aeson.TH
 import Data.Data(Data, Typeable)
 
+import Data.Semigroup
+
 import Data.SafeCopy(base, deriveSafeCopy)
 
-import HSync.Common.DateTime(DateTime, AsDateTime(..))
-import HSync.Common.FSTree( FSTree(..), File(..), Directory(..)
-                          , update, adjust, replace
-                          , readFSTree, labelBottomUp, updateLabel
-                          -- , addFileAt, addDirAt
-                          , emptyDirectory , isDir , isFile , label
-                          )
+import HSync.Common.DateTime(DateTime, AsDateTime(..), modificationTime)
+import HSync.Common.FSTree
+
+import HSync.Common.FileIdent(FileIdent, HasFileIdent(..))
+
+import HSync.Common.Notification(Notification)
 
 import HSync.Common.Types(FileName, SubPath)
 
-import qualified HSync.Common.FSTree    as FT
+import qualified HSync.Common.FileIdent as FI
+
 
 --------------------------------------------------------------------------------
 
--- | A directory label that stores the same info as a file label, together with
--- the last time this subtree was modified.
-data DirectoryLabel fl = DirectoryLabel { directoryLabel :: fl
-                                        , modTime        :: DateTime -- The last time this
-                                                                     -- subtree was
-                                                                    -- updated.
-                                        }
+-- | The second arugment is the modification time
+data FileData a = FileData a DateTime
                        deriving  (Show,Eq,Ord,Data,Typeable)
 
-$(deriveJSON defaultOptions ''DirectoryLabel)
-$(deriveSafeCopy 0 'base ''DirectoryLabel)
+$(deriveJSON defaultOptions ''FileData)
+$(deriveSafeCopy 0 'base ''FileData)
 
--- | Given either a file label or a directory label Compute an updated
--- directory label.
-updateDirLabel :: AsDateTime fl =>
-                  Either fl (DirectoryLabel fl)
-               -> DirectoryLabel fl -> DirectoryLabel fl
-updateDirLabel (Left x)   = updateDirLabel' (toDateTime x)
-updateDirLabel (Right dl) = updateDirLabel' (modTime dl)
+$(deriveJSON defaultOptions ''Max)
+$(deriveSafeCopy 0 'base ''Max)
 
-updateDirLabel'                         :: DateTime
-                                        -> DirectoryLabel fl -> DirectoryLabel fl
-updateDirLabel' t' (DirectoryLabel l t) = DirectoryLabel l $ maximum [t,t']
+modificationTimeData (FileData _ d) =d
 
 
-updateDirLabel'' :: AsDateTime fl =>
-                    fl -> DirectoryLabel fl -> DirectoryLabel fl
-updateDirLabel'' l (DirectoryLabel _ t) = DirectoryLabel l $ maximum [toDateTime l, t]
+instance Measured (Max DateTime) (FileData a) where
+  measure (FileData _ m) = Max m
 
+instance HasFileIdent (File m (FileData a)) where
+  toFileIdent = FI.File . modificationTimeData . dataValue
 
-fromFileLabel   :: AsDateTime fl => fl -> DirectoryLabel fl
-fromFileLabel l = DirectoryLabel l $ toDateTime l
+instance HasFileIdent (Directory m (FileData a)) where
+  toFileIdent = FI.Directory . modificationTimeData . dataValue
+
 
 --------------------------------------------------------------------------------
+-- | A tree with just the modification times
 
--- | A FSTree where directories store information about the last time they are
--- modified.
-type TimedFSTree fl = FSTree fl (DirectoryLabel fl)
+newtype TimedFSTree a = FSTree { unTree :: Directory (Max DateTime) (FileData a) }
+                        deriving (Show,Eq,Ord,Data,Typeable,HasFileIdent)
 
--- | convenience type for directories in a timedFSTree
-type Directory' fl = Directory fl (DirectoryLabel fl)
-
-
--- | Given a basedir and a file labelling function. Compute a FSTree. The
--- directory labels are computed using the same file labelling function.
-readTimedFSTree             :: (Functor m, MonadIO m, AsDateTime fl) =>
-                               FilePath -- ^ base dir
-                            -> (FilePath -> m fl) -- ^ how to ocmpute a file label
-                            -> m (Maybe (TimedFSTree fl))
-readTimedFSTree base fileLF = fmap (labelBottomUp f) <$> readFSTree base fileLF dirLF
-  where
-    dirLF fp                       = fromFileLabel <$> fileLF fp
-    f (DirectoryLabel l t) dls fls = let fts = map toDateTime fls
-                                         dts = map modTime dls in
-                                     DirectoryLabel l $ maximum (t : fts ++ dts)
-
-------------------------------
-
--- | Function to adjust the file label of the node pointed to path the given subpath.
---  if this node does not exist (but its parent does), we create a new node. It's type
---  depending on the specified Either value, and set its label.
--- Finally, we update all modification times on the subpath.
-insertOrAdjustLabel        :: AsDateTime fl =>
-                              SubPath
-                           -> Either (File a) (Directory b c)
-                           -- ^ In case of an insert we need to know if we are
-                           --  updating a file or a directory. The type of the
-                           --  this value determines which one it is. The
-                           --  passed value itself will never be inspected (so
-                           --  you can safely pass an undefined)
-                           -> (fl -> fl)
-                           -- ^ The Function we pass to update the actual label.
-                           -> TimedFSTree fl
-                           -> TimedFSTree fl
-insertOrAdjustLabel sp e f = FT.insertOrAdjustLabel updateDirLabel sp labelF
-  where
-    labelF = either (const $ Left f) (const $ Right f') e
-    f' dl  = let newL = f . directoryLabel $ dl in
-             updateDirLabel'' newL dl
+$(deriveJSON defaultOptions ''TimedFSTree)
+$(deriveSafeCopy 0 'base ''TimedFSTree)
 
 
 
--- -- | Given a path and a file label, update the node at that path with that time.
--- -- this also updates all mtimes on the path to that node.
--- adjustLabel      :: AsDateTime fl => SubPath -> fl -> TimedFSTree fl -> TimedFSTree fl
--- adjustLabel p fl = adjust updateDirLabel p treeF
---   where
---     dirLF oldDl = updateDirLabel' (modTime oldDl) (fromFileLabel fl)
---     treeF       = updateLabel (const fl) dirLF
---                   -- if we have a file, the label is just the file label
---                   -- itself. If we have a directory, we construct a directory
---                   -- label from fl. The (new) modification time is either the
---                   -- old modification time, or we can derive it form the new
---                   -- label.
+withDir              :: ( Directory (Max DateTime) (FileData t) ->
+                          Directory (Max DateTime) (FileData a)
+                        )
+                     -> TimedFSTree t -> TimedFSTree a
+withDir f (FSTree d) = FSTree $ f d
 
--- | Replace a subtree and propagate the new labels upwards.
-replaceSubTree :: AsDateTime fl => SubPath
-               -> TimedFSTree fl -- ^ subtree
-               -> TimedFSTree fl -> TimedFSTree fl
-replaceSubTree = replace updateDirLabel
+type MTimeTree = TimedFSTree ()
 
--- | Delete a subtree
-delete      :: AsDateTime fl => SubPath
-            -> fl -- ^ Time at which we delete the file/dir
-            -> TimedFSTree fl -> Maybe (TimedFSTree fl)
-delete p fl = FT.delete updateDirLabel (Left fl) p
+readMTimeData    :: (Functor m, MonadIO m) => FilePath -> m (FileData ())
+readMTimeData fp = (FileData ()) <$> modificationTime fp
 
--- -- | Add the directory at the specified path
--- addDir :: AsDateTime fl => SubPath
---        -> Directory' fl
---        -> TimedFSTree fl
---        -> TimedFSTree fl
--- addDir = addDirAt updateDirLabel
+readMTimeTree :: (Functor m, MonadIO m) => FilePath -> m (Maybe MTimeTree)
+readMTimeTree = fmap (fmap FSTree) . flip readDirectory readMTimeData
 
--- -- | Add a file at the specified path
--- addFile :: AsDateTime fl => SubPath
---         -> File fl
---         -> TimedFSTree fl
---         -> TimedFSTree fl
--- addFile = addFileAt updateDirLabel
+-- | get the fileIdent of a certain file in the tree
+fileIdentOf   :: SubPath -> MTimeTree -> FileIdent
+fileIdentOf p = toFileIdent . findAt p . unTree
+
+addByFileIdent                     :: SubPath -> FileIdent -> MTimeTree -> MTimeTree
+addByFileIdent _ FI.NonExistent    = id
+addByFileIdent p (FI.File dt)      = let (sp,n) = andLast p in withDir $
+                                     addFileAt      sp (file n $ FileData () dt)
+addByFileIdent p (FI.Directory dt) = let (sp,n) = andLast p in withDir $
+                                     addDirectoryAt sp (emptyDirectory n $ FileData () dt)
+
+
+deleteByFileIdent :: SubPath -> DateTime -> FileIdent -> MTimeTree -> MTimeTree
+deleteByFileIdent _ _  FI.NonExistent   = id
+deleteByFileIdent p dt (FI.File _)      = let (sp,n) = andLast p in withDir $
+                                          deleteFileAt      sp n (Max dt)
+deleteByFileIdent p dt (FI.Directory _) = let (sp,n) = andLast p in withDir $
+                                          deleteDirectoryAt sp n (Max dt)
+
+updateByFileIdent                :: SubPath -> FileIdent -> MTimeTree -> MTimeTree
+updateByFileIdent p (FI.File dt) = let g f    = f { fileData = FileData () dt }
+                                   in withDir $ updateFileAt p g
+updateByFileIdent _ _            = error "updateByFileIdent: Only files are supported."
