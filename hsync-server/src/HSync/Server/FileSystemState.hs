@@ -18,8 +18,10 @@ import Prelude
 import Control.Applicative((<$>))
 import Control.Monad.IO.Class(MonadIO(..))
 
+
 import Data.Aeson.TH
 import Data.Data(Data, Typeable)
+import Data.Monoid
 import Data.Sequence(Seq)
 
 
@@ -29,7 +31,7 @@ import Data.SafeCopy(base, deriveSafeCopy)
 import HSync.Common.TimedFSTree
 import HSync.Common.FSTree
 import HSync.Common.DateTime
-import HSync.Common.FileIdent(FileIdent)
+import HSync.Common.FileIdent(FileIdent, fileIdent, getDateTime)
 import HSync.Common.Notification( Event(..)
                                 , involvesFile
                                 , EventKind(..)
@@ -44,10 +46,12 @@ import qualified HSync.Common.Notification as N
 
 --------------------------------------------------------------------------------
 
-data FileLabel = FileLabel { eventKind :: EventKind
-                           , changee   :: ClientIdent
-                           , timestamp :: DateTime
-                           , fileIdent :: Maybe FileIdent
+-- | The data that we store for each file. This should allow us to reconstruct
+-- a notification once we have the path.
+data FileLabel = FileLabel { eventKind    :: EventKind
+                           , changee      :: ClientIdent
+                           , timestamp    :: DateTime
+                           , oldFileIdent :: FileIdent
                            }
                  deriving (Show,Eq,Data,Typeable)
 
@@ -60,13 +64,12 @@ instance AsDateTime FileLabel where
 
 -- | Extract a file label from a Notification
 fromNotification                                     :: Notification -> FileLabel
-fromNotification (Notification (Event ek _ fi) ci t) = FileLabel ek ci t (Just fi)
+fromNotification (Notification (Event ek _ fi) ci t) = FileLabel ek ci t fi
 
 
 -- | Given a file label and a path. Reconstruct the corresponding notification
-toNotification                                 :: FileLabel -> Path -> Notification
-toNotification (FileLabel ek ci t (Just fi)) p = Notification (Event ek p fi) ci t
-toNotification _                             _ = error "toNotification: No FileIdent"
+toNotification                          :: FileLabel -> Path -> Notification
+toNotification (FileLabel ek ci t fi) p = Notification (Event ek p fi) ci t
 
 --------------------------------------------------------------------------------
 
@@ -84,8 +87,9 @@ newFSState baseDir = readDirectory baseDir f >>=
                        maybe (error "newFSState") -- TODO: fix
                              (return . FSState . FSTree)
   where
-    f fp       = (\d -> FileData (mkLabel d) d) <$> (modificationTime fp)
-    mkLabel dt = FileLabel FileAdded (ClientIdent "unknown") dt Nothing
+    f fp    = (\fi -> let d = getDateTime fi in
+                      FileData (mkLabel d fi) d) <$> fileIdent fp
+    mkLabel = FileLabel FileAdded (ClientIdent "unknown")
 
 
 withTimedFSTree   :: (TimedFSTree FileLabel -> TimedFSTree FileLabel)
@@ -97,19 +101,25 @@ withTimedFSTree f = FSState . f . fsStateTree
 -- | Update the FileSystem State by the incoming notification. I.e. update,
 -- add, or delete the indicated item in the tree.
 updateNotification   :: Notification -> FSState -> FSState
-updateNotification n = withTimedFSTree (FSTree . f p . unTree)
+updateNotification n = withTimedFSTree (FSTree . f . unTree)
   where
     f = case kind . event $ n of
-         FileAdded        -> flip addFileAt newFile
-         FileRemoved      -> (\p -> deleteFileAt p fName (Max dt))
-         FileUpdated      -> flip updateFileAt g
-         DirectoryAdded   -> flip addDirectoryAt newDir
-         DirectoryRemoved -> (\p -> deleteDirectoryAt p fName (Max dt))
+         FileAdded        -> safe addFileAt newFile
+         FileRemoved      -> updateFileAt fullP gf
+         FileUpdated      -> updateFileAt fullP gf
+         DirectoryAdded   -> safe addDirectoryAt newDir
+         DirectoryRemoved -> updateDirectoryAt fullP gd
 
-    g file = file { fileData = fData }
+    gf file = file { fileData = fData }
+    gd dir  = dir  { dirData        = fData
+                   , files          = mempty  -- To Save space
+                   , subDirectories = mempty  -- To save space
+                   }
+
 
     fData   = FileData (fromNotification n) dt
     dt      = N.timestamp n
+
     newFile = File fName fData (measure fData)
     newDir  = emptyDirectory fName fData
 
@@ -118,7 +128,19 @@ updateNotification n = withTimedFSTree (FSTree . f p . unTree)
     (p'',fName) = andLast $ subPath p'
     p           = (unUI $ owner p') : p''
 
+    fullP = (unUI $ owner p') : subPath p'
 
+    -- If we add a file or directory, make sure to remove any earlier files or
+    -- sub-directory that was in the tree before
+    safe        :: IsFileOrDirectory t
+                => ( SubPath -> t (Max DateTime) (FileData FileLabel)
+                    -> Directory' -> Directory'
+                   )   -- ^ addF
+                -> t (Max DateTime) (FileData FileLabel)
+                -> Directory' -> Directory'
+    safe addF x = addF              p'' x
+                . deleteFileAt      p'' fName (Max dt)
+                . deleteDirectoryAt p'' fName (Max dt)
 
 
 type Directory' = Directory (Max DateTime) (FileData FileLabel)
@@ -126,9 +148,10 @@ type Directory' = Directory (Max DateTime) (FileData FileLabel)
 type ReversedSubPath = SubPath
 
 
-notificationsAsOf     :: DateTime -> Path -> Source m Notification
-notificationsAsOf dt p = undefined -- TODO
+-- notificationsAsOf     :: DateTime -> Path -> Source m Notification
+-- notificationsAsOf dt p = undefined -- TODO
 
+-- TODO: Check if this now all works for deleted files
 
 
 -- | Get all notifications for files stored in the filesystem rooted at this
