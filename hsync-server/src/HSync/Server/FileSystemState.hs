@@ -37,7 +37,6 @@ import HSync.Common.FSTree
 import HSync.Common.DateTime
 import HSync.Common.FileIdent(FileIdent, fileIdent, getDateTime)
 import HSync.Common.Notification( Event(..)
-                                , involvesFile
                                 , EventKind(..)
                                 , Notification(Notification)
                                 , event
