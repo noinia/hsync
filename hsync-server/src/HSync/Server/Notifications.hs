@@ -6,10 +6,8 @@ import Control.Applicative((<$>))
 
 import Control.Concurrent.STM.TChan
 import Control.Concurrent.STM(atomically)
-import Control.Monad.IO.Class(MonadIO(..))
 
 import Data.Conduit
-import Data.Conduit.List(sourceList)
 
 import Data.List(isPrefixOf)
 
@@ -18,7 +16,7 @@ import HSync.Common.Types(Path(..))
 import HSync.Common.DateTime(DateTime)
 
 import HSync.Server
-import HSync.Server.AcidSync(AcidSync, notificationUpdate, NotificationsAsOf(..))
+import HSync.Server.AcidSync(notificationUpdate, NotificationsAsOf(..))
 import HSync.Server.AcidState(queryAcid)
 import HSync.Server.Foundation
 
@@ -55,7 +53,7 @@ notificationsFor   :: Path -> Handler (Source Handler Notification)
 notificationsFor p =     ($= CL.filter ((`matches` p) . affectedPath . event))
                      <$> notifications
   where
-    (Path u ps) `matches` (Path u' ps') = u == u && ps' `isPrefixOf` ps
+    (Path u ps) `matches` (Path u' ps') = u == u' && ps' `isPrefixOf` ps
 
 
 -- | Get a stream of notifications for path p as of dt
