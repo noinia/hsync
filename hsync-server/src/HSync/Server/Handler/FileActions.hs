@@ -18,7 +18,7 @@ import HSync.Common.Header
 import HSync.Common.Notification
 
 import HSync.Server.Handler.Auth(requireRead,requireWrite)
-import HSync.Server.Notifications(logNotification, notifications)
+import HSync.Server.Notifications(logNotification, notificationsFor, notificationsAsOf)
 
 
 import System.Directory( removeFile , createDirectory , doesDirectoryExist )
@@ -31,18 +31,26 @@ import qualified Data.Conduit.List as C
 --------------------------------------------------------------------------------
 -- | Handles related to notifications
 
+
+-- | Get all notifications for path p as of time dt. It is assumed that dt lies in the
+-- past.
 getListenR      :: DateTime -> Path -> Handler TypedContent
-getListenR dt p = getListenNowR p
-                  -- TODO:Fix this one, and merge it with the one with the one
-                  -- below, since they are essencially the same
+getListenR dt p = protectRead p "listen" $
+                    respondWithSource (notificationsAsOf dt p)
 
-
--- TODO: Filter the source so we only send the notifications matching pat h
+-- | Get all notifications for path p, starting *now*
 getListenNowR   :: Path -> Handler TypedContent
-getListenNowR p = protectRead p "listen" $ do
-                   evtSource <- notifications
-                   respondSource typePlain
-                                 (evtSource $= C.map encode $= awaitForever sendChunk')
+getListenNowR p = protectRead p "listenNow" $
+                    respondWithSource (notificationsFor p)
+
+-- | Given a function to produce a source of a's (that can be encoded as JSON).
+-- Respond with this source
+respondWithSource          :: ToJSON a
+                           => Handler (Source Handler a) -> Handler TypedContent
+respondWithSource mkSource = do
+                               s <- mkSource
+                               respondSource typePlain
+                                 (s $= C.map encode $= awaitForever sendChunk')
     where
       sendChunk' x = sendChunk x >> sendFlush
 

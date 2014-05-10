@@ -9,14 +9,23 @@ import Control.Concurrent.STM(atomically)
 import Control.Monad.IO.Class(MonadIO(..))
 
 import Data.Conduit
+import Data.Conduit.List(sourceList)
+
+import Data.List(isPrefixOf)
 
 import HSync.Common.Notification
+import HSync.Common.Types(Path(..))
+import HSync.Common.DateTime(DateTime)
 
 import HSync.Server
-import HSync.Server.AcidSync(AcidSync, notificationUpdate)
+import HSync.Server.AcidSync(AcidSync, notificationUpdate, NotificationsAsOf(..))
+import HSync.Server.AcidState(queryAcid)
 import HSync.Server.Foundation
 
 import Yesod
+
+
+import Data.Conduit.List as CL
 
 --------------------------------------------------------------------------------
 -- | Storing Notifications
@@ -41,6 +50,20 @@ notificationSink hss = let acid = acidSync hss in
 notifications :: Handler (Source Handler Notification)
 notifications = getImplementation >>= notifications'
 
+-- | Get a stream of notifications, starting *now*, for path p
+notificationsFor   :: Path -> Handler (Source Handler Notification)
+notificationsFor p =     ($= CL.filter ((`matches` p) . affectedPath . event))
+                     <$> notifications
+  where
+    (Path u ps) `matches` (Path u' ps') = u == u && ps' `isPrefixOf` ps
+
+
+-- | Get a stream of notifications for path p as of dt
+notificationsAsOf      :: DateTime -> Path -> Handler (Source Handler Notification)
+notificationsAsOf dt p = do
+                           newNots <- notificationsFor p
+                           oldNots <- loadNotificationsAsOf dt p
+                           return $ oldNots `concatSources` newNots
 
 -- | Get a stream of notifications
 notifications' :: (Functor m, MonadIO m)
@@ -63,3 +86,18 @@ chanToSource c = do
 storeNotifications     :: (Functor m, MonadIO m)
                        => HSyncServerImplementation -> m ()
 storeNotifications hss = notifications' hss >>= ($$ notificationSink hss)
+
+
+-- Given two sources s1 and s2 generate a source that *first* streams everything
+-- from s1. If s1 is done only then start producing results using s2
+concatSources       :: Monad m => Source m a -> Source m a -> Source m a
+concatSources s1 s2 = s1 =$ await >>= \m -> case m of
+                        Nothing -> s2
+                        Just x  -> yield x >> concatSources s1 s2
+
+-- | Gives a source with all notifications, *up until now* in the tree.
+loadNotificationsAsOf    :: Monad m => DateTime -> Path -> Handler (Source m Notification)
+loadNotificationsAsOf dt = fmap sourceList . loadNotificationsAsOfList dt
+
+loadNotificationsAsOfList      :: DateTime -> Path -> Handler [Notification]
+loadNotificationsAsOfList dt p = queryAcid $ NotificationsAsOf dt p
