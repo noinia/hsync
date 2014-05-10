@@ -53,7 +53,8 @@ involvesDirectory = not . involvesFile
 
 data Event = Event { kind              :: EventKind
                    , affectedPath      :: Path
-                   , affectedFileIdent :: FileIdent
+                   , affectedFileIdent :: FileIdent -- I.e. the file event before the
+                                                    -- update
                    }
              deriving (Show,Read,Eq,Data,Typeable)
 
