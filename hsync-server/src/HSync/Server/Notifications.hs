@@ -89,9 +89,8 @@ storeNotifications hss = notifications' hss >>= ($$ notificationSink hss)
 -- Given two sources s1 and s2 generate a source that *first* streams everything
 -- from s1. If s1 is done only then start producing results using s2
 concatSources       :: Monad m => Source m a -> Source m a -> Source m a
-concatSources s1 s2 = s1 =$ await >>= \m -> case m of
-                        Nothing -> s2
-                        Just x  -> yield x >> concatSources s1 s2
+concatSources s1 s2 = s1 >> s2
+
 
 -- | Gives a source with all notifications, *up until now* in the tree.
 loadNotificationsAsOf    :: Monad m => DateTime -> Path -> Handler (Source m Notification)
