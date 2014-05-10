@@ -7,9 +7,7 @@ import Control.Applicative((<$>))
 
 import Control.Concurrent.STM.TChan
 
-import HSync.Common.DateTime(DateTime)
 import HSync.Common.Types
-import HSync.Common.FileIdent(FileIdent)
 import HSync.Common.Notification
 
 import Data.Text(pack)
