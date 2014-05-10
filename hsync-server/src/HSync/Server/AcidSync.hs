@@ -16,9 +16,11 @@ import Data.Acid(AcidState, Update, Query,
 import Data.Acid.Advanced(update')
 import Data.Acid.Local(createCheckpointAndClose)
 
-import HSync.Common.Types(UserIdent, ErrorMessage)
+import HSync.Common.FSTree(findDirectoryAt)
+import HSync.Common.Types(UserIdent, ErrorMessage,Path(..))
+import HSync.Common.DateTime(DateTime)
 import HSync.Common.Notification(Notification)
---import HSync.Common.TimedFSTree(File(..),Directory(..))
+import HSync.Common.TimedFSTree(unTree)
 
 import HSync.Server.User(User(..),UserIndex(..))
 import HSync.Server.FileSystemState
@@ -44,6 +46,16 @@ data AcidSync = AcidSync { fsState :: AcidState FSState
 queryFSState :: Query FSState FSState
 queryFSState = ask
 
+
+-- | precondition: Path points to a subdirectory
+notificationsAsOf                :: DateTime -> Path -> Query FSState [Notification]
+notificationsAsOf dt (Path u sp) =
+    maybe [] (getNotificationsAsOf dt u (reverse sp)) . getDir
+    <$>
+    ask
+  where
+    getDir = findDirectoryAt sp . unTree . fsStateTree
+
 replaceFull   :: FSState -> Update FSState ()
 replaceFull t = modify (const t)
 
@@ -51,6 +63,7 @@ newNotification   :: Notification -> Update FSState ()
 newNotification n = modify (updateNotification n)
 
 $(makeAcidic ''FSState [ 'queryFSState
+                       , 'notificationsAsOf
                        , 'replaceFull
                        , 'newNotification
                        ])

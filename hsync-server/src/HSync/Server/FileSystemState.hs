@@ -7,8 +7,12 @@ module HSync.Server.FileSystemState( FSState(..)
 
                                    , FileLabel(..)
                                    , fromNotification
+                                   , toNotification
 
                                    , updateNotification
+                                   , getNotificationsAsOf
+                                   , Directory'
+                                   , ReversedSubPath
 
                                    , withTimedFSTree
                                    ) where
@@ -110,11 +114,11 @@ updateNotification n = withTimedFSTree (FSTree . f . unTree)
          DirectoryAdded   -> safe addDirectoryAt newDir
          DirectoryRemoved -> updateDirectoryAt fullP gd
 
-    gf file = file { fileData = fData }
-    gd dir  = dir  { dirData        = fData
-                   , files          = mempty  -- To Save space
-                   , subDirectories = mempty  -- To save space
-                   }
+    gf file' = file' { fileData = fData }
+    gd dir   = dir   { dirData        = fData
+                     , files          = mempty  -- To Save space
+                     , subDirectories = mempty  -- To save space
+                     }
 
 
     fData   = FileData (fromNotification n) dt
@@ -126,7 +130,6 @@ updateNotification n = withTimedFSTree (FSTree . f . unTree)
 
     p'          = affectedPath . event $ n
     (p'',fName) = andLast $ subPath p'
-    p           = (unUI $ owner p') : p''
 
     fullP = (unUI $ owner p') : subPath p'
 
@@ -147,9 +150,6 @@ type Directory' = Directory (Max DateTime) (FileData FileLabel)
 
 type ReversedSubPath = SubPath
 
-
--- notificationsAsOf     :: DateTime -> Path -> Source m Notification
--- notificationsAsOf dt p = undefined -- TODO
 
 -- TODO: Check if this now all works for deleted files
 
