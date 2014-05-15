@@ -264,13 +264,15 @@ readFS p f = do
 findFileAt :: SubPath -> Directory m a -> Maybe (File m a)
 findFileAt = findAtL filesL
 
-
+fileExists   :: SubPath -> Directory m a -> Bool
 fileExists p = isJust . findFileAt p
 
 findDirectoryAt    :: SubPath -> Directory m a -> Maybe (Directory m a)
 findDirectoryAt [] = Just . id    -- If the path is empty do return the main directory
 findDirectoryAt sp = findAtL dirsL sp
 
+
+directoryExists   :: SubPath -> Directory m a -> Bool
 directoryExists p = isJust . findDirectoryAt p
 
 
