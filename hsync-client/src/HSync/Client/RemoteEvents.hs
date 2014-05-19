@@ -12,7 +12,7 @@ import Control.Monad.IO.Class(MonadIO(..))
 import Control.Monad.Trans.Class(lift)
 
 import Data.Maybe(isNothing)
-import Data.Monoid(mconcat)
+import Data.Monoid
 
 
 import Data.Conduit
@@ -27,6 +27,7 @@ import Filesystem.Path.CurrentOS( FilePath, (<.>), (</>)
 import HSync.Client.AcidActions
 import HSync.Client.ActionT
 import HSync.Client.Actions
+import HSync.Client.Logger
 import HSync.Client.Sync(Sync, clientIdent)
 
 import HSync.Common.Import
@@ -89,15 +90,27 @@ handleConflict      :: Path
                     -> DateTime  -- Time when the file was changed at the server
                     -> Action ()
 handleConflict p rt = do
+  errorM "RemoteEvents.handleConflict" $ "Conflict found for " <> show p
   fp <- toLocalPath p
   let fp' = encodeString fp
-  -- Move the local file or directory if it exists and then just download the
+ -- Move the local file or directory if it exists and then just download the
   -- tree anew from the server
   (b,_) <- exists fp'
   when b $ do
              ci <- clientIdent <$> getSync
              mt <- modificationTime fp'
-             liftIO $ renameFileOrDir fp' (encodeString $ conflictedFp fp ci mt rt)
+             let conflictedFp' = conflictedFp fp ci mt rt
+             infoM "RemoteEvents.handleConflict" $ mconcat [ "Renaming local file "
+                                                           , show fp
+                                                           , " to "
+                                                           , show conflictedFp'
+                                                           , " and redownloading "
+                                                           , show p
+                                                           , "."
+                                                           ]
+             liftIO $ renameFileOrDir fp' (encodeString conflictedFp')
+  -- FIXME: cloneDownstream uses getTreeOf, which assumes p is a directory
+             -- but here it may also be a file.
   cloneDownstream p
 
 
@@ -198,4 +211,5 @@ notificationSink = awaitForever handle
   where
     handle n = do
                  liftIO $ print n
+                 liftIO $ print "Handling notification!"
                  lift $ handleNotification n
