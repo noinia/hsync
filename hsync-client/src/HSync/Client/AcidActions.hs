@@ -11,7 +11,9 @@ import Data.Acid.Memory.Pure( Event, QueryEvent,UpdateEvent
 import HSync.Common.Types
 import HSync.Common.DateTime(DateTime)
 import HSync.Common.FileIdent(FileIdent, isNonExistent)
-import HSync.Common.TimedFSTree(MTimeTree, fileIdentOf)
+import HSync.Common.FSTree(measurement)
+import HSync.Common.TimedFSTree(MTimeTree, fileIdentOf, unTree, Max(..))
+
 
 import HSync.Client.Import(protect)
 import HSync.Client.AcidSync
@@ -75,3 +77,9 @@ setByFileIdent      :: Path -> FileIdent -> Action ()
 setByFileIdent p fi = protect (isNonExistent <$> expectedFileIdent p)
                               (addByFileIdent    (subPath p) fi)
                               (updateByFileIdent (subPath p) fi)
+
+-- | Get the most recent change we have received from the server
+lastChange :: Action (Maybe DateTime)
+lastChange = fmap (unM .  measurement . unTree) <$> serverTreeState
+  where
+    unM (Max x) = x

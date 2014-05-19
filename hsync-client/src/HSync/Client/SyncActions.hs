@@ -3,7 +3,7 @@ module HSync.Client.SyncActions where
 
 import Prelude hiding (FilePath)
 
-import Control.Applicative((<$>))
+import Control.Applicative((<$>),(<*>))
 import Control.Concurrent(forkIO, killThread)
 import Control.Exception.Lifted(bracket)
 
@@ -18,10 +18,11 @@ import Data.Acid.Local(createCheckpointAndClose)
 
 import Data.Default
 import Data.Either
-import Data.Maybe(isNothing)
+import Data.Maybe(isNothing, fromMaybe)
 
 import Filesystem.Path.CurrentOS(FilePath, encodeString)
 
+import HSync.Client.AcidActions(serverTreeState, lastChange)
 import HSync.Client.Actions(login, forcePutFile)
 import HSync.Client.ActionT(Action, runActionT, getSync, cloneInIO)
 import HSync.Client.AcidSync(AcidSync(..))
@@ -32,9 +33,7 @@ import HSync.Client.LocalEvents
 import HSync.Client.TemporaryIgnored
 
 
--- Remove when done debugging
-import HSync.Client.AcidActions(serverTreeState)
---
+
 
 
 import HSync.Common.DateTime
@@ -87,7 +86,7 @@ syncMain fp = withSync fp $ do
     _    <- login
     mt   <- serverTreeState
     when (isNothing mt) firstRun
-    dt   <- currentTime
+    dt   <- lastChange'
     let rbp = Path (user sync) (remoteBaseDir sync)
     infoM "SyncActions.syncMain" "Start listening for remote changes"
     -- Start a new thread in which we listen for new remote changes
@@ -99,6 +98,9 @@ syncMain fp = withSync fp $ do
     liftIO $ killThread tid
   where
     stop = stopOnEnter
+
+    lastChange' = fromMaybe <$> currentTime
+                            <*> lastChange
 
 stopOnEnter :: IO ()
 stopOnEnter = putStrLn "Press enter to stop" >> getLine >> return ()
