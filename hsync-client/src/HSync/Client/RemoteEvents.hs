@@ -54,10 +54,11 @@ import qualified Filesystem.Path.CurrentOS as FP
 
 handleNotification                         :: Notification -> Action ()
 handleNotification n@(Notification e ci t) = do
-                                               fp  <- encodeString <$> toLocalPath p
-                                               ioA <- cloneInIO act
-                                               liftIO $
-                                                 atomicallyWriteIO fp ioA
+    debugM "RemoteEvents.handleNotification" $ "Handling Notification " ++ show n
+    fp  <- encodeString <$> toLocalPath p
+    ioA <- cloneInIO act
+    liftIO $
+      atomicallyWriteIO fp ioA
   where
     p   = affectedPath e
     act = protect (noConflict e)
@@ -185,12 +186,17 @@ cloneDirectoryDownstream p dir = protect dirExists
 -- the future), we run a handler that updates our local file system.
 syncDownstream      :: DateTime -> Path -> Action ()
 syncDownstream dt p = do
-                        sync            <- getSync
-                        changesSource'  <- changes dt p
-                        liftIO $ print "syncing downstream!"
-                        -- lift $ changesSource' $$+- printSink
-                        let changesSource = transPipe' lift changesSource'
-                        changesSource $$+- notificationSink
+    sync            <- getSync
+    changesSource'  <- changes dt p
+    infoM "RemoteEvents.syncDownStream" $ mconcat [ "Started synchronizing downstream on "
+                                                  , show p
+                                                  , " as of "
+                                                  , show dt
+                                                  , "."
+                                                  ]
+    -- lift $ changesSource' $$+- printSink
+    let changesSource = transPipe' lift changesSource'
+    changesSource $$+- notificationSink
 
 -- | The function transPipe for ResumableSources. Note that we use the supplied
 -- lifting function on both the source as the finalizer.
@@ -209,7 +215,4 @@ notificationSink :: Sink Notification Action ()
 -- notificationSink = awaitForever (lift .handleNotification)
 notificationSink = awaitForever handle
   where
-    handle n = do
-                 liftIO $ print n
-                 liftIO $ print "Handling notification!"
-                 lift $ handleNotification n
+    handle n = lift $ handleNotification n
