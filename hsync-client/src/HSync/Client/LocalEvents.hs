@@ -9,6 +9,8 @@ import Control.Monad.IO.Class(MonadIO(..))
 
 
 import Control.Monad.Trans.Resource(runResourceT)
+
+import Data.Monoid
 import Data.Maybe
 import Data.List(isSuffixOf)
 
@@ -56,18 +58,18 @@ whenNotIgnored fp act =  do
 -- | should we use the time?
 handleEvent                 :: FSN.Event -> Action ()
 handleEvent (FSN.Added fp _)    = whenNotIgnored fp $ \_ -> do
-                                    liftIO $ print "fileAdded "
-                                    liftIO $ print fp
-                                    putFileOrDir fp
+      debugM "LocalEvents.handleEvent" $ "File Added " <> show fp
+      putFileOrDir fp
 handleEvent (FSN.Modified fp _) = whenNotIgnored fp $ \p -> do
-                                    liftIO $ print "fileModified "
-                                    fi <- expectedFileIdent p
-                                    liftIO $ print (fp,p,fi)
-                                    putUpdate fp fi p
+      debugM "LocalEvents.handleEvent" $ "File Modified " <> show fp
+      fi <- expectedFileIdent p
+      debugM "LocalEvents.handleEvent" $ show (fp,p,fi)
+      putUpdate fp fi p
 handleEvent (FSN.Removed fp _)  = do
-                                    p  <- toRemotePath fp
-                                    fi <- expectedFileIdent p
-                                    deleteRemote fi p
+      debugM "LocalEvents.handleEvent" $ "File Removed " <> show fp
+      p  <- toRemotePath fp
+      fi <- expectedFileIdent p
+      deleteRemote fi p
    -- TODO: Fix, the encodeString is a bit ugly. FSNotify uses system-filepath's
    -- FilePath data type.
 
