@@ -8,6 +8,12 @@ import HSync.Server.AcidState
 
 import HSync.Server.User(User(..),RealName(..))
 
+import System.Directory(createDirectory)
+
+import qualified Data.Text as T
+
+--------------------------------------------------------------------------------
+
 getMyLoginR      :: UserIdent -> HashedPassword -> Handler Text
 getMyLoginR u hp = protect (validateUser u hp)
                            (do
@@ -32,11 +38,19 @@ postRegisterR = do
     where
       tryInsert u = updateAcid (InsertUser u)
                       >>= \me -> case me of
-                            Nothing  -> setMessage "User Registered."
+                            Nothing  -> createFilesDir u
+                                          >> setMessage "User Registered."
                                           >> redirect HomeR
                             Just err -> setMessage (toHtml err)
                                           >> redirect RegisterR
       invalidInput = setMessage "Invalid Input" >> redirect RegisterR
+
+-- | Create the directory for this user
+createFilesDir   :: User -> Handler ()
+createFilesDir u = let n       = T.unpack . unUI . userId $ u
+                       a </> b = a <> "/" <> b
+                    in
+                    getFilesDir >>= liftIO . createDirectory . (</> n)
 
 
 userForm :: Html -> MForm Handler (FormResult User, Widget)
