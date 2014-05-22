@@ -63,7 +63,7 @@ handleNotification n@(Notification e ci t) = do
     p   = affectedPath e
     act = protect (noConflict e)
                   (handleEvent e)
-                  (handleConflict p t)
+                  (handleConflict p t e)
 
 handleEvent                                         :: Event -> Action ()
 handleEvent (Event FileAdded p FI.NonExistent)      = getFile p
@@ -87,10 +87,11 @@ noConflict e = let p   = affectedPath e
 --------------------------------------------------------------------------------
 -- | Conflict Handling
 
-handleConflict      :: Path
-                    -> DateTime  -- Time when the file was changed at the server
-                    -> Action ()
-handleConflict p rt = do
+handleConflict        :: Path
+                      -> DateTime -- Time when the file was changed at the server
+                      -> Event
+                      -> Action ()
+handleConflict p rt e = do
   errorM "RemoteEvents.handleConflict" $ "Conflict found for " <> show p
   fp <- toLocalPath p
   let fp' = encodeString fp
@@ -110,9 +111,8 @@ handleConflict p rt = do
                                                            , "."
                                                            ]
              liftIO $ renameFileOrDir fp' (encodeString conflictedFp')
-  -- FIXME: cloneDownstream uses getTreeOf, which assumes p is a directory
-             -- but here it may also be a file.
-  cloneDownstream p
+  let redownload = if involvesFile . kind $ e then getFile else cloneDownstream
+  redownload p
 
 
 -- | Rename function that works both for files and directories
