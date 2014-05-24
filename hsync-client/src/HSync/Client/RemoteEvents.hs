@@ -111,6 +111,8 @@ handleConflict p rt e = do
                                                            , "."
                                                            ]
              liftIO $ renameFileOrDir fp' (encodeString conflictedFp')
+             liftIO $ print "renamed "
+
   let redownload = if involvesFile . kind $ e then getFile else cloneDownstream
   redownload p
 
@@ -135,11 +137,11 @@ conflictedFp fp ci lt rt = replaceBaseName fp $ mconcat [ encode . basename $ fp
                                                         ]
 
 replaceBaseName       :: FilePath -> Text -> FilePath
-replaceBaseName fp n' = let dirs      = splitDirectories fp
+replaceBaseName fp nn = let dirs      = splitDirectories fp
                             dirs'     = FP.concat $ init dirs
                             n         = last dirs
                             (bn,exts) = splitExtensions n
-                        in dirs' </> n `addExtensions` exts
+                        in dirs' </> FP.fromText nn `addExtensions` exts
 
 
 --------------------------------------------------------------------------------
