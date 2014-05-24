@@ -4,6 +4,7 @@ module HSync.Client.TemporaryIgnored( initializeTemporaryIgnored
                                     , unIgnoreIn
                                     , unIgnore
                                     , withTemporarilyIgnored
+                                    , whileIgnored
                                     ) where
 
 
@@ -45,27 +46,41 @@ isTemporarilyIgnored fp = getActionState >>= liftIO . isIgnored
                      return $ S.member fp s
 
 
+
+-- | Temporarily ignore a file, while running act
+whileIgnored      :: FilePath -> Action () -> Action ()
+whileIgnored fp a = withTemporarilyIgnored' fp a unIgnore
+
+
+
 -- | Temporarily ignore a file and run an action in the mean time
 withTemporarilyIgnored        :: FilePath  -- ^ the path to the file in question
                               -> Int       -- ^ the time (in microseconds) to
                                            -- wait until unignoring the file
                               -> Action () -- ^ the action that to run in the meantime
                               -> Action ()
-withTemporarilyIgnored fp t a = do
-    debugM "TemporaryIgnored" $ "Ignoring " ++ show fp
-    temporarilyIgnore fp
-    a
-    debugM "TemporaryIgnored" $ mconcat [ "Unignoring "
-                                        , show fp
-                                        , " in "
-                                        , show t
-                                        , " microseconds."
-                                        ]
-    unIgnoreIn t fp
+withTemporarilyIgnored fp t a = withTemporarilyIgnored' fp a (unIgnoreIn t)
+
+
+
+
+
+-- | Temporarily ignore a file and run a in the meantime. The second Action () is the
+-- action that unlocks the file
+withTemporarilyIgnored'           :: FilePath
+                                  -> Action ()  -- ^ Action to run
+                                  -> (FilePath -> Action ())
+                                               -- ^ The action that unignores the file
+                                  -> Action ()
+withTemporarilyIgnored' fp a unIg = temporarilyIgnore fp >> a >> unIg fp
+
+--------------------------------------------------------------------------------
 
 -- | Add to the temporary ignore list
 temporarilyIgnore    :: FilePath -> Action ()
-temporarilyIgnore fp = getActionState >>= liftIO . atomically . add
+temporarilyIgnore fp = debugM "TemporaryIgnored" ("Ignoring " <> show fp)
+                       >>
+                       getActionState >>= liftIO . atomically . add
   where
     add = flip modifyTVar (S.insert fp)
 
@@ -74,9 +89,20 @@ temporarilyIgnore fp = getActionState >>= liftIO . atomically . add
 --  This function starts a new thread to wait, so it immediately
 -- returns.
 unIgnoreIn          :: Int -> FilePath -> Action ()
-unIgnoreIn delay fp = getActionState >>= \v -> liftIO . const (return ()) . forkIO $
-                           threadDelay delay
-                        >> unIgnore' fp v
+unIgnoreIn delay fp = debugM "TemporaryIgnored" msg
+                      >>
+                      getActionState >>= \v -> liftIO . const (return ()) . forkIO $
+                                               threadDelay delay
+                                               >>
+                                               unIgnore' fp v
+  where
+    msg = mconcat [ "Unignoring "
+                  , show fp
+                  , " in "
+                  , show delay
+                  , " microseconds."
+                  ]
+
 
 unIgnore    :: FilePath -> Action ()
 unIgnore fp = getActionState >>= unIgnore' fp
