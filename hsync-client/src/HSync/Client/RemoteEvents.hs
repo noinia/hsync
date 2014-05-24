@@ -4,7 +4,7 @@ module HSync.Client.RemoteEvents where
 
 import Prelude hiding (FilePath)
 
-import Control.Applicative((<$>))
+import Control.Applicative((<$>),(<*>))
 import Control.Concurrent(forkIO)
 
 import Control.Monad(when)
@@ -29,6 +29,7 @@ import HSync.Client.ActionT
 import HSync.Client.Actions
 import HSync.Client.Logger
 import HSync.Client.Sync(Sync, clientIdent)
+import HSync.Client.TemporaryIgnored(whileIgnored)
 
 import HSync.Common.Import
 import HSync.Common.AtomicIO
@@ -91,35 +92,40 @@ handleConflict        :: Path
                       -> DateTime -- Time when the file was changed at the server
                       -> Event
                       -> Action ()
-handleConflict p rt e = do
-  errorM "RemoteEvents.handleConflict" $ "Conflict found for " <> show p
-  fp <- toLocalPath p
-  let fp' = encodeString fp
- -- Move the local file or directory if it exists and then just download the
-  -- tree anew from the server
-  (b,_) <- exists fp'
-  when b $ do
-             ci <- clientIdent <$> getSync
-             mt <- modificationTime fp'
-             let conflictedFp' = conflictedFp fp ci mt rt
-             infoM "RemoteEvents.handleConflict" $ mconcat [ "Renaming local file "
-                                                           , show fp
-                                                           , " to "
-                                                           , show conflictedFp'
-                                                           , " and redownloading "
-                                                           , show p
-                                                           , "."
-                                                           ]
-             liftIO $ renameFileOrDir fp' (encodeString conflictedFp')
-             liftIO $ print "renamed "
+handleConflict p rt e = toLocalPath p >>= handleConflict' p rt e
 
-  let redownload = if involvesFile . kind $ e then getFile else cloneDownstream
-  redownload p
+
+handleConflict' p rt e fp = do
+    errorM "RemoteEvents.handleConflict" $ "Conflict found for " <> show p
+    -- Temporarily Ingore the file, so we don't generate any remote actions
+    -- while cleaning up our mess
+    whileIgnored fp $ do
+      (b,_) <- exists fp'
+      when b rename
+      let redownload = if involvesFile . kind $ e then getFile else cloneDownstream
+      redownload p
+  where
+    fp'           = encodeString fp
+    conflictedFp' = (\ci mt -> conflictedFp fp ci mt rt)
+                    <$> clientIdent <$> getSync
+                    <*> modificationTime fp'
+    rename        = do
+                      cfp <- conflictedFp'
+                      let msg = mconcat [ "Renaming local file "
+                                        , show fp
+                                        , " to "
+                                        , show cfp
+                                        , " and redownloading "
+                                        , show p
+                                        , "."
+                                        ]
+                      infoM "RemoteEvents.handleConflict" msg
+                      liftIO $ renameFileOrDir fp' (encodeString cfp)
 
 
 -- | Rename function that works both for files and directories
 renameFileOrDir        :: String -> String -> IO ()
-renameFileOrDir fp fp' = atomicallyIO fp $ do
+renameFileOrDir fp fp' = do
                            b <- doesDirectoryExist fp
                            let rename = if b then renameDirectory else renameFile
                            rename fp fp'
