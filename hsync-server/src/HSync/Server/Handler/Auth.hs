@@ -6,6 +6,8 @@ import HSync.Server.Import
 import HSync.Server.AcidSync
 import HSync.Server.AcidState
 
+import HSync.Server.FileSystemState(newUserFSState)
+
 import HSync.Server.User(User(..),RealName(..))
 
 import System.Directory(createDirectory)
@@ -45,12 +47,17 @@ postRegisterR = do
                                           >> redirect RegisterR
       invalidInput = setMessage "Invalid Input" >> redirect RegisterR
 
--- | Create the directory for this user
+-- | Create the directory for this user, and update the FSState
 createFilesDir   :: User -> Handler ()
 createFilesDir u = let n       = T.unpack . unUI . userId $ u
                        a </> b = a <> "/" <> b
                     in
-                    getFilesDir >>= liftIO . createDirectory . (</> n)
+                    do
+                      fd <- getFilesDir
+                      let fp = fd </> n
+                      liftIO $ createDirectory fp
+                      newUserFSState fp
+                        >>= updateAcid . NewUserDirectory (userId u)
 
 
 userForm :: Html -> MForm Handler (FormResult User, Widget)

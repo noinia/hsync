@@ -16,19 +16,18 @@ import Data.Acid(AcidState, Update, Query,
 import Data.Acid.Advanced(update')
 import Data.Acid.Local(createCheckpointAndClose)
 
-import HSync.Common.FSTree(findDirectoryAt)
 import HSync.Common.Types(UserIdent, ErrorMessage,Path(..))
 import HSync.Common.DateTime(DateTime)
 import HSync.Common.Notification(Notification)
-import HSync.Common.TimedFSTree(unTree)
+import HSync.Common.TimedFSTree(TimedFSTree)
 
 import HSync.Server.User(User(..),UserIndex(..))
 import HSync.Server.FileSystemState
 import HSync.Server.Settings(Extra(..))
 
+
 -- import qualified HSync.Common.TimedFSTree as T
 import qualified HSync.Server.User as U
-
 
 --------------------------------------------------------------------------------
 
@@ -48,13 +47,9 @@ queryFSState = ask
 
 
 -- | precondition: Path points to a subdirectory
-notificationsAsOf                :: DateTime -> Path -> Query FSState [Notification]
-notificationsAsOf dt (Path u sp) =
-    maybe [] (getNotificationsAsOf dt u (reverse sp)) . getDir
-    <$>
-    ask
-  where
-    getDir = findDirectoryAt sp . unTree . fsStateTree
+notificationsAsOf      :: DateTime -> Path -> Query FSState [Notification]
+notificationsAsOf dt p = getNotificationsAsOf dt p <$> ask
+
 
 replaceFull   :: FSState -> Update FSState ()
 replaceFull t = modify (const t)
@@ -62,10 +57,16 @@ replaceFull t = modify (const t)
 newNotification   :: Notification -> Update FSState ()
 newNotification n = modify (updateNotification n)
 
+
+newUserDirectory     :: UserIdent -> TimedFSTree FileLabel -> Update FSState ()
+newUserDirectory u t = modify (addUserToFSState u t)
+
+
 $(makeAcidic ''FSState [ 'queryFSState
                        , 'notificationsAsOf
                        , 'replaceFull
                        , 'newNotification
+                       , 'newUserDirectory
                        ])
 
 ---------------------------------------- Users

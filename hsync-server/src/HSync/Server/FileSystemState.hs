@@ -3,7 +3,9 @@
 {-# Language DeriveDataTypeable #-}
 module HSync.Server.FileSystemState( FSState(..)
                                    , newFSState
+                                   , newUserFSState
 
+                                   , addUserToFSState
 
                                    , FileLabel(..)
                                    , fromNotification
@@ -19,15 +21,17 @@ module HSync.Server.FileSystemState( FSState(..)
 
 import Prelude
 
-import Control.Applicative((<$>))
-import Control.Monad.IO.Class(MonadIO(..))
 
+import Control.Applicative((<$>))
+import Control.Monad((<=<))
+import Control.Monad.IO.Class(MonadIO(..))
 
 import Data.Aeson.TH
 import Data.Data(Data, Typeable)
 import Data.Monoid
 import Data.Sequence(Seq)
 
+import Data.Map(Map)
 
 
 import Data.SafeCopy(base, deriveSafeCopy)
@@ -44,6 +48,7 @@ import HSync.Common.Notification( Event(..)
 import HSync.Common.Types
 
 import qualified Data.Foldable             as F
+import qualified Data.Map                  as M
 import qualified Data.Sequence             as S
 import qualified HSync.Common.Notification as N
 
@@ -76,42 +81,67 @@ toNotification (FileLabel ek ci t fi) p = Notification (Event ek p fi) ci t
 
 --------------------------------------------------------------------------------
 
-newtype FSState = FSState { fsStateTree :: TimedFSTree FileLabel }
-                  deriving (Show,Eq,Data,Typeable)
+newtype FSState = FSState { unM :: Map UserIdent (TimedFSTree FileLabel) }
+                deriving (Show,Eq,Data,Typeable)
+
+
+$(deriveJSON defaultOptions ''Map)
+
 
 $(deriveJSON defaultOptions ''FSState)
 $(deriveSafeCopy 0 'base ''FSState)
 
--- | Read a new instance of the FSState from disk. All notifications will be of
--- the kind 'fileAdded', and have the file modification time as the associated
--- datetime.
+-- | Construct a new FSState from the disk. The file path is the path to
+-- a directory s.t. each directory corresponds to the FSTree of that user
+--
+  -- All file labels will be of the kind 'fileAdded', and have the file
+  -- modification time as the associated datetime.
 newFSState         :: (MonadIO m, Functor m) => FilePath -> m FSState
-newFSState baseDir = readDirectory baseDir f >>=
-                       maybe (error "newFSState") -- TODO: fix
-                             (return . FSState . FSTree)
+newFSState baseDir = f <$> newUserFSState baseDir
+  where
+    f (FSTree dir) = FSState $ M.fromList [ (userIdent' . name $ d,  FSTree d)
+                                          | d <- F.toList . subDirectories $ dir
+                                          ]
+
+    userIdent' = either (error "newFSState': userIdent not valid") id . userIdent
+
+-- | Build the tree for one user
+newUserFSState     :: (MonadIO m, Functor m) => FilePath -> m (TimedFSTree FileLabel)
+newUserFSState dir = maybe (error "newFSState'") FSTree <$> readDirectory dir f
   where
     f fp    = (\fi -> let d = getDateTime fi in
                       FileData (mkLabel d fi) d) <$> fileIdent fp
     mkLabel = FileLabel FileAdded (ClientIdent "unknown")
 
 
-withTimedFSTree   :: (TimedFSTree FileLabel -> TimedFSTree FileLabel)
-                  -> FSState -> FSState
-withTimedFSTree f = FSState . f . fsStateTree
+
+-- | Given a user and a Tree. Add this user/tree combination to the FSState.
+addUserToFSState                 :: UserIdent
+                                 -> TimedFSTree FileLabel
+                                 -> FSState -> FSState
+addUserToFSState u t (FSState m) = FSState $ M.insert u t m
+
+
+-- | Given a userident, and a function to maniuplate the FSTree. Update the
+--   tree of the selected user.
+withTimedFSTree     :: UserIdent
+                    -> (TimedFSTree FileLabel -> TimedFSTree FileLabel)
+                    -> FSState -> FSState
+withTimedFSTree u f = FSState . M.adjust f u . unM
 
 --------------------------------------------------------------------------------
 
 -- | Update the FileSystem State by the incoming notification. I.e. update,
 -- add, or delete the indicated item in the tree.
 updateNotification   :: Notification -> FSState -> FSState
-updateNotification n = withTimedFSTree (FSTree . f . unTree)
+updateNotification n = withTimedFSTree (owner p) (FSTree . f . unTree)
   where
     f = case kind . event $ n of
          FileAdded        -> safe addFileAt newFile
-         FileRemoved      -> updateFileAt fullP gf
-         FileUpdated      -> updateFileAt fullP gf
+         FileRemoved      -> updateFileAt sp gf
+         FileUpdated      -> updateFileAt sp gf
          DirectoryAdded   -> safe addDirectoryAt newDir
-         DirectoryRemoved -> updateDirectoryAt fullP gd
+         DirectoryRemoved -> updateDirectoryAt sp gd
 
     gf file' = file' { fileData = fData }
     gd dir   = dir   { dirData        = fData
@@ -127,10 +157,11 @@ updateNotification n = withTimedFSTree (FSTree . f . unTree)
     newDir  = emptyDirectory fName fData
 
 
-    p'          = affectedPath . event $ n
-    (p'',fName) = andLast $ subPath p'
+    p           = affectedPath . event $ n
+    sp          = subPath p
+    (sp',fName) = andLast sp
 
-    fullP = (unUI $ owner p') : subPath p'
+
 
     -- If we add a file or directory, make sure to remove any earlier files or
     -- sub-directory that was in the tree before
@@ -140,9 +171,9 @@ updateNotification n = withTimedFSTree (FSTree . f . unTree)
                    )   -- ^ addF
                 -> t (Max DateTime) (FileData FileLabel)
                 -> Directory' -> Directory'
-    safe addF x = addF              p'' x
-                . deleteFileAt      p'' fName (Max dt)
-                . deleteDirectoryAt p'' fName (Max dt)
+    safe addF x = addF              sp' x
+                . deleteFileAt      sp' fName (Max dt)
+                . deleteDirectoryAt sp' fName (Max dt)
 
 
 type Directory' = Directory (Max DateTime) (FileData FileLabel)
@@ -153,23 +184,35 @@ type ReversedSubPath = SubPath
 -- TODO: Check if this now all works for deleted files
 
 
+-- | Get all notifications for files stored in the filesystem rooted at path
+-- directory, in increasing order of time at which they happened.
+getNotificationsAsOf      :: DateTime -> Path -> FSState -> [Notification]
+getNotificationsAsOf dt p = maybe [] getNots . getDir . unM
+  where
+    getNots = getNotificationsAsOf' dt (owner p) (reverse . subPath $ p)
+    getDir  = findDirectoryAt (subPath p) . unTree <=< M.lookup (owner p)
+
+
 -- | Get all notifications for files stored in the filesystem rooted at this
 -- directory, in increasing order of time at which they happened.
 -- The clientId are the userId to use in the path, and ReverseSubPath the subpath
--- pointing to the file, stored in reverse order.
-getNotificationsAsOf          :: DateTime -> UserIdent -> ReversedSubPath
-                              -> Directory' -> [Notification]
-getNotificationsAsOf dt u rp dir
+-- pointing to this directory, stored in reverse order.
+getNotificationsAsOf'          :: DateTime -> UserIdent -> ReversedSubPath
+                               -> Directory' -> [Notification]
+getNotificationsAsOf' dt u rp dir
   | measurement dir < Max dt  = [] -- All changes in this directory occured before dt.
   | otherwise                 = myChanges `merge` fileChanges `merge` recursiveChanges
 
     where
       -- localDirChanges  = changes . subDirectories $ dir
-      myChanges        = changes . S.singleton $ dir
       fileChanges      = changes . files       $ dir
-      recursiveChanges = foldr1 merge [ getNotificationsAsOf dt u (name d : rp) d
-                                      | d <- F.toList $ subDirectories dir
-                                      ]
+      recursiveChanges = foldr merge [] [ getNotificationsAsOf' dt u (name d : rp) d
+                                        | d <- F.toList $ subDirectories dir
+                                        ]
+      myChanges
+        | timestamp' dir > dt = [toNotification'' dir $ Path u (reverse rp)]
+        | otherwise           = []
+
 
       changes :: IsFileOrDirectory t
               => Seq (t m (FileData FileLabel))
@@ -177,14 +220,17 @@ getNotificationsAsOf dt u rp dir
       changes = F.toList
               . S.unstableSort
               . fmap toNotification'
-              . S.filter (\x -> timestamp' x >= dt)
+              . S.filter (\x -> timestamp' x > dt)
 
       timestamp' :: IsFileOrDirectory t => t m (FileData FileLabel) -> DateTime
       timestamp' = timestamp . extractData . dataValue
 
-
       toNotification'   :: IsFileOrDirectory t => t m (FileData FileLabel) -> Notification
-      toNotification' x = toNotification (extractData $ dataValue x) (rp </> name x)
+      toNotification' x =  toNotification'' x (rp </> name x)
+
+      toNotification''   :: IsFileOrDirectory t => t m (FileData FileLabel)
+                         -> Path -> Notification
+      toNotification'' x = toNotification (extractData $ dataValue x)
 
       ps </> n = Path u $ reverse (n : ps)
 
