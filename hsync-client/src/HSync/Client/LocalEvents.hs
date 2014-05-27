@@ -60,6 +60,7 @@ handleEvent                 :: FSN.Event -> Action ()
 handleEvent (FSN.Added fp _)    = whenNotIgnored fp $ \_ -> do
       debugM "LocalEvents.handleEvent" $ "File Added " <> show fp
       putFileOrDir fp
+      debugM "LocalEvents.handleEvent" $ "Done with File Added event on " <> show fp
 handleEvent (FSN.Modified fp _) = whenNotIgnored fp $ \p -> do
       debugM "LocalEvents.handleEvent" $ "File Modified " <> show fp
       fi <- expectedFileIdent p
