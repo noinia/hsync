@@ -207,7 +207,7 @@ getFile' p lp = do
   -- of this file. (unignore in 1 second = 1e6 microseconds)
   debugM "Actions.getFile" $ "Download complete."
   -- withTemporarilyIgnored lp 1000000 $ do
-  debugM "Actions.getFile" "Moving partial file to actuall path."
+  debugM "Actions.getFile" "Moving partial file to actual path."
   liftIO $ renameFile lpPartial (encodeString lp)
   -- liftIO $ print "Should have renamed now "
   -- set the modification time, and update the remote tree state

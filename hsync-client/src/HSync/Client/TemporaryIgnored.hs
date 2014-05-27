@@ -89,23 +89,15 @@ temporarilyIgnore fp = debugM "TemporaryIgnored.temporarilyIgnore" ("Ignoring " 
 --  This function starts a new thread to wait, so it immediately
 -- returns.
 unIgnoreIn          :: Int -> FilePath -> Action ()
-unIgnoreIn delay fp = debugM "TemporaryIgnored.unIgnoreIn" msg
-                      >>
-                      getActionState >>= \v -> liftIO . const (return ()) . forkIO $
+unIgnoreIn delay fp = getActionState >>= \v -> liftIO . const (return ()) . forkIO $
                                                threadDelay delay
                                                >>
                                                unIgnore' fp v
-  where
-    msg = mconcat [ "Unignoring "
-                  , show fp
-                  , " in "
-                  , show delay
-                  , " microseconds."
-                  ]
-
 
 unIgnore    :: FilePath -> Action ()
-unIgnore fp = getActionState >>= unIgnore' fp
+unIgnore fp = debugM "TemporaryIgnored.unIgnore" ("Unignoring" <> show fp)
+              >>
+              getActionState >>= unIgnore' fp
 
 
 
