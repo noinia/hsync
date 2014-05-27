@@ -27,6 +27,24 @@ import qualified Data.List
 
 import qualified Filesystem.Path.CurrentOS as FP
 
+--------------------------------------------------------------------------------
+
+-- | The FilePaths of system-filepath include a trailing / for directories.
+-- We sometimes get patsh that do not have such a trailing /
+newtype FilePathIgnoringTrailingSlash = IgnoreSlash { unIgnoreSlash :: FilePath }
+                                        deriving Show
+
+instance Eq FilePathIgnoringTrailingSlash where
+  (IgnoreSlash fp) == (IgnoreSlash fp') = dropTrailingSlash fp == dropTrailingSlash fp'
+    where
+      dropTrailingSlash fp
+        | filename fp == "/" = parent fp </> dirname fp
+        | otherwise          = fp
+
+instance Ord FilePathIgnoringTrailingSlash where
+  x@(IgnoreSlash fp) `compare` y@(IgnoreSlash fp')
+    | x == y    = EQ
+    | otherwise = fp `compare` fp'
 
 --------------------------------------------------------------------------------
 
@@ -37,11 +55,9 @@ partialFileExtension = "hsyncpart"
 isPartialFile :: FilePath -> Bool
 isPartialFile = flip hasExtension partialFileExtension
 
-
-
 -- | Files that should be temporarily ignored (in order to avoid reuploading
 --   incoming files)
-type TemporaryIgnoreFiles = Set FilePath
+type TemporaryIgnoreFiles = Set FilePathIgnoringTrailingSlash
 
 type ServerAddress = Text
 
