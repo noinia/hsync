@@ -36,8 +36,8 @@ newtype FilePathIgnoringTrailingSlash = IgnoreSlash { unIgnoreSlash :: FilePath 
 
 instance Eq FilePathIgnoringTrailingSlash where
   (IgnoreSlash fp) == (IgnoreSlash fp') = dropTrailingSlash fp == dropTrailingSlash fp'
-
-dropTrailingSlash fp
+    where
+      dropTrailingSlash fp
         | FP.null $ filename fp = parent fp </> dirname fp
         | otherwise             = fp
 
