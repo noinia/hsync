@@ -29,7 +29,7 @@ import HSync.Client.ActionT
 import HSync.Client.Actions
 import HSync.Client.Logger
 import HSync.Client.Sync(Sync, clientIdent)
-import HSync.Client.TemporaryIgnored(whileIgnored)
+import HSync.Client.TemporaryIgnored(withTemporarilyIgnored)
 
 import HSync.Common.Import
 import HSync.Common.AtomicIO
@@ -56,10 +56,10 @@ import qualified Filesystem.Path.CurrentOS as FP
 handleNotification                         :: Notification -> Action ()
 handleNotification n@(Notification e ci t) = do
     debugM "RemoteEvents.handleNotification" $ "Handling Notification " ++ show n
-    fp  <- encodeString <$> toLocalPath p
+    fp  <- toLocalPath p
     ioA <- cloneInIO act
-    liftIO $
-      atomicallyWriteIO fp ioA
+    withTemporarilyIgnored fp 1000000 $
+      liftIO (atomicallyWriteIO (encodeString fp) ioA)
   where
     p   = affectedPath e
     act = protect (noConflict e)
@@ -99,11 +99,11 @@ handleConflict' p rt e fp = do
     errorM "RemoteEvents.handleConflict" $ "Conflict found for " <> show p
     -- Temporarily Ingore the file, so we don't generate any remote actions
     -- while cleaning up our mess
-    whileIgnored fp $ do
-      (b,_) <- exists fp'
-      when b rename
-      let redownload = if involvesFile . kind $ e then getFile else cloneDownstream
-      redownload p
+    -- whileIgnored fp $ do
+    (b,_) <- exists fp'
+    when b rename
+    let redownload = if involvesFile . kind $ e then getFile else cloneDownstream
+    redownload p
   where
     fp'           = encodeString fp
     conflictedFp' = (\ci mt -> conflictedFp fp ci mt rt)

@@ -40,6 +40,7 @@ import HSync.Client.AcidActions( setByFileIdent
 import HSync.Client.TemporaryIgnored(withTemporarilyIgnored)
 
 
+import HSync.Common.AtomicIO(exists)
 import HSync.Common.DateTime(DateTime, toEpochTime, currentTime)
 import HSync.Common.TimedFSTree(MTimeTree)
 import HSync.Common.Header
@@ -66,7 +67,7 @@ import Network.HTTP.Types
 import Network.Wai(requestBody)
 
 
-import System.Directory( createDirectory, doesDirectoryExist
+import System.Directory( createDirectory
                        , removeFile , removeDirectoryRecursive
                        , renameFile )
 import System.PosixCompat.Files(setFileTimes)
@@ -200,15 +201,19 @@ getFile' p lp = do
   resp <- runGetRoute $ FileR p
   -- Download the file into a partial file
   let lpPartial = encodeString $ lp <.> partialFileExtension
-  lift (responseBody resp C.$$+- sinkFile lpPartial)
+  debugM "Actions.getFile" $ "Downloading into " <> show lpPartial
+  lift $ responseBody resp C.$$+- sinkFile lpPartial
   -- This file is incoming, so temporarily ignore listening for local changes
   -- of this file. (unignore in 1 second = 1e6 microseconds)
-  withTemporarilyIgnored lp 1000000 $ do
-    liftIO $ renameFile lpPartial (encodeString lp)
-    -- set the modification time, and update the remote tree state
-    withHeader HFileIdent resp (\fi ->    setModificationTime p fi
-                                       >> setByFileIdent      p fi
-                               )
+  debugM "Actions.getFile" $ "Download complete."
+  -- withTemporarilyIgnored lp 1000000 $ do
+  debugM "Actions.getFile" "Moving partial file to actuall path."
+  liftIO $ renameFile lpPartial (encodeString lp)
+  -- liftIO $ print "Should have renamed now "
+  -- set the modification time, and update the remote tree state
+  withHeader HFileIdent resp (\fi ->    setModificationTime p fi
+                                     >> setByFileIdent      p fi
+                             )
 
 --------------------------------------------------------------------------------
 
@@ -247,10 +252,13 @@ putFile fp fi p = do
 -- | Given a local (absolute) file path. Upload the file or directory.
 putFileOrDir    :: FilePath -> Action ()
 putFileOrDir fp = do
-                    isDir <- liftIO $ doesDirectoryExist (encodeString fp)
-                    p     <- toRemotePath fp
-                    if isDir then putDir p
-                             else expectedFileIdent p >>= \fi -> putFile fp fi p
+                    e <- exists $ encodeString fp
+                    p <- toRemotePath fp
+                    case e of
+                      (_,True)  -> putDir p
+                      (True,_)  -> expectedFileIdent p >>= \fi -> putFile fp fi p
+                      (False,_) -> debugM "Actions.putFileOrDir" $
+                                     "Ignored the empty file " <> show fp
 
 -- | Force uploading the file at fp onto the server. I.e. get the remote file
 -- info for this file, and then upload the file. Note that this is unsafe in
@@ -299,8 +307,8 @@ deleteFileLocally p fi          = infoM "Actions.deleteFileLocally" msg >>
 
 -- | Temporarily ignore a file or directory and then delete it.
 deleteFileLocally'      :: Path -> FileIdent -> Action ()
-deleteFileLocally' p fi = toLocalPath p >>= \lp ->
-                          withTemporarilyIgnored lp 1000000 $
+deleteFileLocally' p fi = -- toLocalPath p >>= \lp ->
+                          -- withTemporarilyIgnored lp 1000000 $
                             deleteFileLocally p fi
 
 
@@ -310,8 +318,8 @@ createDirectoryLocally p = do
   infoM "Actions.createDirectoryLocally"
         ("Creating local directory for " ++ show p)
   lp <- toLocalPath p
-  withTemporarilyIgnored (asDirectory lp) 1000000 $
-    (liftIO . createDirectory . encodeString $ lp)
+  -- withTemporarilyIgnored (asDirectory lp) 1000000 $
+  (liftIO . createDirectory . encodeString $ lp)
 
 asDirectory    :: FilePath -> FilePath
 asDirectory fp = decode $ encode fp <> "/"
