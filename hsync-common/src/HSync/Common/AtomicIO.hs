@@ -22,14 +22,18 @@ import System.Lock.FLock
 
 -- | Tries to get an exclusive write lock on fp, and runs act. There are three possible
 -- outcomes:
+--
+--
 --   if fp points to a file      then
 --                     we try to get the lock and run the action
 --   if fp points to a directory then
 --                     we don't get a lock, and run the action directly: directories
---                     cannot be locked, but operations on directories are atomic anyway
+--                     cannot be locked.
 --   if fp points to a nonexistent file/directory then
 --                     we create an empty file, lock that, remove the file, and then run
 --                     the action.
+--
+-- FIXME: The directory case
 atomicallyWriteIO        :: (MonadIO m, MonadBaseControl IO m) => FilePath -> m a -> m a
 atomicallyWriteIO fp act = catchJust inAppropriateTypeException
                            (atomicallyWriteIOF fp act)
