@@ -17,7 +17,7 @@ import Control.Monad.State.Class
 import Control.Monad.State
 
 import Control.Monad.Trans.Class
-import Control.Monad.Trans.Resource(ResourceT, runResourceT)
+import Control.Monad.Trans.Resource(ResourceT, runResourceT, MonadThrow)
 import Control.Monad.IO.Class
 
 import Data.Data(Data,Typeable)
@@ -70,10 +70,11 @@ newtype ActionT s r m a = ActionT { unActionT ::
                                                    )
                                          ) a
                                   }
-                          deriving (Functor,Applicative,Monad,MonadIO)
+                          deriving (Functor,Applicative,Monad,MonadIO,MonadThrow)
 
 instance MonadTrans (ActionT s r) where
   lift = ActionT . lift . lift . lift
+
 
 
 instance ( MonadResource m
