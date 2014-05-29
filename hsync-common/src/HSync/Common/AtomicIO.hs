@@ -20,10 +20,30 @@ import GHC.IO.Exception(IOErrorType(..))
 import System.Lock.FLock
 
 
+-- | Tries to get an exclusive write lock on fp, and runs act. There are three possible
+-- outcomes:
+--   if fp points to a file      then
+--                     we try to get the lock and run the action
+--   if fp points to a directory then
+--                     we don't get a lock, and run the action directly: directories
+--                     cannot be locked, but operations on directories are atomic anyway
+--   if fp points to a nonexistent file/directory then
+--                     we create an empty file, lock that, remove the file, and then run
+--                     the action.
+atomicallyWriteIO        :: (MonadIO m, MonadBaseControl IO m) => FilePath -> m a -> m a
+atomicallyWriteIO fp act = catchJust inAppropriateTypeException
+                           (atomicallyWriteIOF fp act)
+                           (const act)
+  where
+    inAppropriateTypeException e
+      | ioeGetErrorType e == InappropriateType = Just ()
+      | otherwise                              = Nothing
+
+
 -- | Gets an exclusive write lock on fp, and runs act. If the file d oes not exist
 -- this action creates an empty file, and then runs the action.
-atomicallyWriteIO        :: (MonadIO m, MonadBaseControl IO m) => FilePath -> m a -> m a
-atomicallyWriteIO fp act = catchJust doesNotExistException
+atomicallyWriteIOF        :: (MonadIO m, MonadBaseControl IO m) => FilePath -> m a -> m a
+atomicallyWriteIOF fp act = catchJust doesNotExistException
                            (atomicallyIO fp act)
                            (\_ ->    createFile fp
                                   >> atomicallyWriteIO fp (deleteFile fp >> act)
