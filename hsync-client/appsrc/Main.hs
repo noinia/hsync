@@ -3,13 +3,16 @@ module Main where
 import Prelude hiding (FilePath)
 
 import Network
-import System.Environment (getArgs)
 
 import Filesystem.Path.CurrentOS(FilePath, decodeString)
 
 import HSync.Client.SyncActions
 
 import System.Log.Logger
+
+
+import System.Environment(getArgs)
+
 
 --------------------------------------------------------------------------------
 

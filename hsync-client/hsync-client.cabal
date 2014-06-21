@@ -3,7 +3,7 @@
 
 name:                hsync-client
 version:             0.0.0.0
-synopsis:            Dropbox like file synchronization
+synopsis:            Client for a Dropbox like file synchronization system
 -- description:
 homepage:            http://fstaals.net/software/hsync
 license:             BSD3
@@ -13,13 +13,33 @@ maintainer:          frank@fstaals.net
 -- copyright:
 category:            Network
 build-type:          Simple
-cabal-version:       >=1.8
+cabal-version:       >= 1.8
 
-executable hsync-client
+library
 
     hs-source-dirs: src
 
-    main-is: Main.hs
+    exposed-modules: HSync.Client.AcidActions
+                     HSync.Client.AcidSync
+                     HSync.Client.Actions
+                     HSync.Client.ActionT
+                     HSync.Client.HSyncClient
+                     HSync.Client.Import
+                     HSync.Client.LocalEvents
+                     HSync.Client.Logger
+                     HSync.Client.RemoteEvents
+                     HSync.Client.Sync
+                     HSync.Client.SyncActions
+                     HSync.Client.SyncedTree
+                     HSync.Client.TemporaryIgnored
+
+                     Yesod.Client
+
+
+    Extra-Source-Files: config/hsync.yaml
+                        config/default_sync.yaml
+                        config/ignore
+
   -- other-modules:
 
     build-depends: base                          >= 4          && < 5
@@ -77,3 +97,18 @@ executable hsync-client
                 -- EmptyDataDecls
                 -- NoMonomorphismRestriction
                 -- DeriveDataTypeable
+
+
+executable hsync-client
+
+    hs-source-dirs: appsrc
+
+    main-is: Main.hs
+
+    build-depends:     base
+                     , hsync-client
+                     , hslogger
+                     , system-filepath
+                     , cmdargs                  >= 0.10.7   && < 0.11
+
+    ghc-options:       -Wall

@@ -1,0 +1,6 @@
+syncsDir : "configs"
+syncs : [ name : "downloadsync"
+          mode : "BiDirectional"
+        ]
+logLevel : "normal"
+logDirectory : "logs"
