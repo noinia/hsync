@@ -1,5 +1,11 @@
 name:              hsync-server
 version:           0.0.0.0
+synopsis:          Server for a Dropbox like file synchronization system
+-- description:
+author:            Frank Staals
+maintainer:        frank@fstaals.net
+homepage:          http://fstaals.net/software/hsync
+category:          Network
 cabal-version:     >= 1.8
 build-type:        Simple
 
