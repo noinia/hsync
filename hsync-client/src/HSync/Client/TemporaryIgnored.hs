@@ -1,20 +1,28 @@
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 module HSync.Client.TemporaryIgnored( initializeTemporaryIgnored
                                     , isTemporarilyIgnored
                                     , temporarilyIgnore
                                     , unIgnoreIn
                                     , unIgnore
-                                    , withTemporarilyIgnored
+
                                     , whileIgnored
+                                    , whileIgnoredFor
+
+                                    , MicroSeconds(..)
                                     ) where
 
 
 import Prelude hiding (FilePath)
 
+
 import Control.Applicative
 import Control.Concurrent(forkIO, threadDelay)
 import Control.Concurrent.STM(atomically)
 import Control.Concurrent.STM.TVar
+
 import Control.Monad.IO.Class
+import Control.Monad.Trans.Resource
+import Control.Monad.Trans.Class
 
 import Data.Monoid
 import Data.Set(Set)
@@ -22,7 +30,7 @@ import Data.Set(Set)
 
 import Filesystem.Path.CurrentOS
 
-import HSync.Client.ActionT(Action, getActionState)
+import HSync.Client.ActionT(Action, getActionState, ActionT(..), cloneInIO)
 import HSync.Client.Logger
 import HSync.Client.Sync( TemporaryIgnoreFiles
                         , FilePathIgnoringTrailingSlash(..)
@@ -30,10 +38,7 @@ import HSync.Client.Sync( TemporaryIgnoreFiles
 
 import qualified Data.Set  as S
 
-
-initializeTemporaryIgnored :: IO (TVar TemporaryIgnoreFiles)
-initializeTemporaryIgnored = newTVarIO mempty
-
+--------------------------------------------------------------------------------
 
 -- | Check if a file is on the temporarily ignored list
 isTemporarilyIgnored    :: FilePath -> Action Bool
@@ -48,60 +53,80 @@ isTemporarilyIgnored fp = getActionState >>= isIgnored
                      return $ S.member (IgnoreSlash fp) s
 
 -- | Temporarily ignore a file, while running act
-whileIgnored      :: FilePath -> Action () -> Action ()
-whileIgnored fp a = withTemporarilyIgnored' fp a unIgnore
+whileIgnored        :: FilePath -> (FilePath -> IO ()) -> Action ()
+whileIgnored fp ioA = getActionState >>= \v -> liftIO $
+                        temporarilyIgnore v fp ioA unIgnore
+
+whileIgnoredFor              :: MicroSeconds -> FilePath
+                             -> (FilePath -> IO ())
+                             -> Action ()
+whileIgnoredFor delay fp ioA = getActionState >>= \v -> liftIO $
+                                 temporarilyIgnore v fp ioA (unIgnoreIn delay)
+
+
+-- whileIgnored' fp act unIg = getActionState >>= whileIgnored'' fp act unIg
 
 
 
--- | Temporarily ignore a file and run an action in the mean time
-withTemporarilyIgnored        :: FilePath  -- ^ the path to the file in question
-                              -> Int       -- ^ the time (in microseconds) to
-                                           -- wait until unignoring the file
-                              -> Action () -- ^ the action that to run in the meantime
-                              -> Action ()
-withTemporarilyIgnored fp t a = withTemporarilyIgnored' fp a (unIgnoreIn t)
+-- whileIgnored'' fp act unIg ignores = act'
+--   where
+--     act' = runResourceT $ do
+--       _ <- allocate (temporarilyIgnore ignores fp)
+--                     (unIg ignores)
+--       lift $ act
 
--- | Temporarily ignore a file and run a in the meantime. The second Action () is the
--- action that unlocks the file
-withTemporarilyIgnored'           :: FilePath
-                                  -> Action ()  -- ^ Action to run
-                                  -> (FilePath -> Action ())
-                                               -- ^ The action that unignores the file
-                                  -> Action ()
-withTemporarilyIgnored' fp a unIg = do
-                                      temporarilyIgnore fp >>=
-                                        const a
-                                      () <- unIg fp
-                                      return ()
+
+
+
+--------------------------------------------------------------------------------
+-- |
+
+temporarilyIgnore                 :: IgnoredFiles
+                                  -> FilePath  -- ^ The file to ignore
+                                  -> (FilePath -> IO a) -- ^ Computation to run while
+                                                        -- file is ignored
+                                  -> (IgnoredFiles -> FilePath -> IO ())
+                                                        -- ^ unignore action
+                                  -> IO a
+temporarilyIgnore igs fp act unIg = runResourceT $ do
+      (_,fp') <- allocate (addTemporarilyIgnore igs fp)
+                          (unIg igs)
+      lift $ act fp'
+
 
 --------------------------------------------------------------------------------
 
+newtype MicroSeconds = MicroSeconds Int
+                       deriving (Show,Read,Eq,Ord,Num,Real,Enum,Integral)
+
+--------------------------------------------------------------------------------
+-- | Primitives operation on TemporaryIgnoreFiles
+
+
+type IgnoredFiles = TVar TemporaryIgnoreFiles
+
+initializeTemporaryIgnored :: IO IgnoredFiles
+initializeTemporaryIgnored = newTVarIO mempty
+
 -- | Add to the temporary ignore list
-temporarilyIgnore    :: FilePath -> Action ()
-temporarilyIgnore fp = debugM "TemporaryIgnored.temporarilyIgnore" ("Ignoring " <> show fp)
-                       >>
-                       getActionState >>= liftIO . atomically . add
+addTemporarilyIgnore        :: IgnoredFiles -> FilePath -> IO FilePath
+addTemporarilyIgnore igs fp = atomically (add igs) >> return fp
   where
     add = flip modifyTVar (S.insert $ IgnoreSlash fp)
-
 
 -- | Unignore the file after waiting `delay` microseconds
 --  This function starts a new thread to wait, so it immediately
 -- returns.
-unIgnoreIn          :: Int -> FilePath -> Action ()
-unIgnoreIn delay fp = getActionState >>= \v -> liftIO . const (return ()) . forkIO $
-                                               threadDelay delay
-                                               >>
-                                               unIgnore' fp v
+unIgnoreIn                           :: MicroSeconds
+                                     -> IgnoredFiles
+                                     -> FilePath -> IO ()
+unIgnoreIn (MicroSeconds delay) v fp = forkIO (threadDelay delay >> unIgnore v fp)
+                                       >>
+                                       return ()
 
-unIgnore    :: FilePath -> Action ()
-unIgnore fp = debugM "TemporaryIgnored.unIgnore" ("Unignoring" <> show fp)
-              >>
-              getActionState >>= unIgnore' fp
-
-
-
-unIgnore'    :: MonadIO m => FilePath -> TVar TemporaryIgnoreFiles -> m ()
-unIgnore' fp = liftIO . atomically . delete
+unIgnore        :: IgnoredFiles -> FilePath -> IO ()
+unIgnore igs fp = do
+                    atomically . delete $ igs
+                    print $ "unignored " <> show fp
   where
     delete = flip modifyTVar (S.delete $ IgnoreSlash fp)

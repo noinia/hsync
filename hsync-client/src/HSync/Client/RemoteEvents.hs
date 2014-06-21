@@ -29,7 +29,7 @@ import HSync.Client.ActionT
 import HSync.Client.Actions
 import HSync.Client.Logger
 import HSync.Client.Sync(Sync, clientIdent)
-import HSync.Client.TemporaryIgnored(withTemporarilyIgnored)
+import HSync.Client.TemporaryIgnored(whileIgnoredFor, MicroSeconds(..))
 
 import HSync.Common.Import
 import HSync.Common.AtomicIO
@@ -58,8 +58,8 @@ handleNotification n@(Notification e ci t) = do
     debugM "RemoteEvents.handleNotification" $ "Handling Notification " ++ show n
     fp  <- toLocalPath p
     ioA <- cloneInIO act
-    withTemporarilyIgnored fp 1000000 $
-      liftIO (atomicallyWriteIO (encodeString fp) ioA)
+    whileIgnoredFor (MicroSeconds 1000000) fp $ \fp' ->
+      liftIO (atomicallyWriteIO (encodeString fp') ioA)
   where
     p   = affectedPath e
     act = protect (noConflict e)

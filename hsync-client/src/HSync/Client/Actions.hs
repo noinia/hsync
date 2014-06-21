@@ -37,7 +37,7 @@ import HSync.Client.AcidActions( setByFileIdent
                                , deleteByFileIdent
                                , expectedFileIdent
                                )
-import HSync.Client.TemporaryIgnored(withTemporarilyIgnored)
+-- import HSync.Client.TemporaryIgnored(withTemporarilyIgnored)
 
 
 import HSync.Common.AtomicIO(exists)
