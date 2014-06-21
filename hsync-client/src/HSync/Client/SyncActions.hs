@@ -1,4 +1,6 @@
+{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE TemplateHaskell #-}
 module HSync.Client.SyncActions where
 
 import Prelude hiding (FilePath)
@@ -13,9 +15,12 @@ import Control.Monad.Catch(MonadThrow(..))
 import Control.Monad.Trans.Resource(ResourceT, runResourceT)
 import Control.Monad.Trans.Control(MonadBaseControl)
 
+import Data.Aeson(ToJSON(..), FromJSON(..))
+import Data.Aeson.TH(deriveJSON, defaultOptions)
 import Data.Acid(openLocalStateFrom)
 import Data.Acid.Local(createCheckpointAndClose)
 
+import Data.Data(Data,Typeable)
 import Data.Default
 import Data.Either
 import Data.Maybe(isNothing, fromMaybe)
@@ -45,6 +50,16 @@ import Network.HTTP.Conduit( withManager)
 
 import System.Directory
 import Data.List(isPrefixOf)
+
+--------------------------------------------------------------------------------
+
+-- | Data type that defines if we should synchronize only downstream, only
+-- upstream, or both.
+data SyncMode = DownStream | UpStream | BiDirectional
+                   deriving (Show,Read,Eq,Data,Typeable)
+
+
+$(deriveJSON defaultOptions ''SyncMode)
 
 --------------------------------------------------------------------------------
 
