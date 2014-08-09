@@ -1,10 +1,14 @@
+{-# Language GeneralizedNewtypeDeriving #-}
 module HSync.Client.HSyncClient where
 
 import Prelude hiding (FilePath)
 
+import Control.Applicative
+
 import Control.Monad(mzero)
 
 
+import Data.Data(Data, Typeable)
 import Data.Text(Text)
 import Data.Yaml
 
@@ -12,6 +16,7 @@ import System.Log.Logger(Priority)
 
 import Filesystem.Path.CurrentOS(FilePath)
 
+import HSync.Client.SyncActions(SyncMode(..))
 
 --------------------------------------------------------------------------------
 

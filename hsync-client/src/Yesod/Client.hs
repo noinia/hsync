@@ -181,7 +181,7 @@ cookieJar = cookieJar' <$> get
 
 
 -- | Update the cookiejar
-updateCookieJar   :: Monad m => Response body => YesodClientT cli m ()
+updateCookieJar   :: (Monad m, Response body) => YesodClientT cli m ()
 updateCookieJar r = modify $ \st -> st {cookieJar' = Just . responseCookieJar $ r}
 
 --------------------------------------------------------------------------------
