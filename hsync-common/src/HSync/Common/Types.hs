@@ -34,7 +34,7 @@ import Data.Data(Data, Typeable)
 import Data.Digest.Pure.SHA(sha1, showDigest)
 import Data.Function(on)
 import Data.List(intercalate, isPrefixOf)
-import Data.SafeCopy(SafeCopy(..), base, deriveSafeCopy)
+import Data.SafeCopy(SafeCopy, base, deriveSafeCopy)
 import Data.Text(Text)
 
 import Text.Read(readMaybe)
@@ -52,7 +52,8 @@ type ErrorMessage = Text
 
 newtype UserIdent = UserIdent { unUI :: Text }
                     deriving (Show,Read,Eq,Ord,Data,Typeable,
-                              SafeCopy,FromJSON,ToJSON)
+                              FromJSON,ToJSON)
+$(deriveSafeCopy 0 'base ''UserIdent)
 
 userIdent   :: Text -> Either ErrorMessage UserIdent
 userIdent t
@@ -67,13 +68,16 @@ instance PathPiece UserIdent where
 
 newtype Password = Password { unPassword :: Text }
                     deriving (Show,Read,Eq,Ord,Data,Typeable,
-                              SafeCopy,PathPiece,FromJSON,ToJSON)
+                              PathPiece,FromJSON,ToJSON)
+$(deriveSafeCopy 0 'base ''Password)
 
 
 
 newtype HashedPassword = HashedPassword { unHashedPassword :: Text }
                     deriving (Show,Read,Eq,Ord,Data,Typeable,
-                              SafeCopy,PathPiece,FromJSON,ToJSON)
+                              PathPiece,FromJSON,ToJSON)
+$(deriveSafeCopy 0 'base ''HashedPassword)
+
 
 hash :: Text -> Text
 hash = T.pack . showDigest . sha1 . B.pack . T.unpack
@@ -84,7 +88,9 @@ hashedPassword = HashedPassword . hash . unPassword
 
 newtype ClientIdent = ClientIdent { unCI :: Text }
                     deriving (Show,Read,Eq,Ord,Data,Typeable,
-                              SafeCopy,PathPiece,FromJSON,ToJSON)
+                              PathPiece,FromJSON,ToJSON)
+$(deriveSafeCopy 0 'base ''ClientIdent)
+
 
 --------------------------------------------------------------------------------
 
