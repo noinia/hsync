@@ -10,7 +10,7 @@ import Data.Data(Data, Typeable)
 import Data.Default
 import Data.IxSet
 
-import Data.SafeCopy(SafeCopy(..), base, deriveSafeCopy)
+import Data.SafeCopy(SafeCopy, base, deriveSafeCopy)
 
 import Data.Text(Text)
 
@@ -21,7 +21,8 @@ import qualified Data.IxSet as I
 --------------------------------------------------------------------------------
 
 newtype RealName = RealName { unRealName :: Text }
-                 deriving (Show,Read,Eq,Ord,Data,Typeable,SafeCopy)
+                 deriving (Show,Read,Eq,Ord,Data,Typeable)
+$(deriveSafeCopy 0 'base ''RealName)
 
 
 --------------------------------------------------------------------------------
@@ -44,7 +45,8 @@ instance Indexable User where
 
 -- | Users have a unique userId
 newtype UserIndex = UserIndex { unUIdx :: IxSet User }
-                  deriving (Show,Read,Eq,Data,Typeable,SafeCopy)
+                  deriving (Show,Read,Eq,Data,Typeable)
+$(deriveSafeCopy 0 'base ''UserIndex)
 
 instance Default UserIndex where
   def = UserIndex I.empty
