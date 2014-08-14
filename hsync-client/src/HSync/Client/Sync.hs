@@ -170,18 +170,17 @@ instance FromJSON SyncConfig where
 --type ErrorMessage = String
 
 
-readIgnore      :: Sync -> IO Sync
-readIgnore sync = (readLines . ignorePath' . syncConfig $ sync) >>= \ps ->
-                    return $ sync { ignore = ps }
+fromConfig    :: SyncConfig -> IO Sync
+fromConfig sc = Sync undefined sc <$> readLines sc
   where
-    -- readLines :: FilePath -> IO IgnoredPattern
-    readLines = fmap lines . readFile . FP.encodeString
+    readLines = fmap lines . readFile . FP.encodeString . ignorePath'
 
 readConfig    :: FilePath -> IO (Either ErrorMessage Sync)
-readConfig fp = decodeFileEither fp' >>= \es -> case es of
-                  Left parseError -> return . Left . showError $ parseError
-                  Right sc        -> let s = Sync undefined sc []
-                                     in Right <$> readIgnore s
+readConfig fp = readYamlConfig fp >>= either (return . Left)
+                                             (fmap Right . fromConfig)
+
+readYamlConfig :: FromJSON a => FilePath -> IO (Either ErrorMessage a)
+readYamlConfig fp = either (Left . showError) Right <$> decodeFileEither fp'
   where
     fp'          = FP.encodeString fp
     showError pe = mconcat [ "Error parsing sync config file "
