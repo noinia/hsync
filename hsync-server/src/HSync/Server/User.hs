@@ -10,7 +10,7 @@ import Data.Data(Data, Typeable)
 import Data.Default
 import Data.IxSet
 
-import Data.SafeCopy(SafeCopy, base, deriveSafeCopy)
+import Data.SafeCopy(base, deriveSafeCopy)
 
 import Data.Text(Text)
 
