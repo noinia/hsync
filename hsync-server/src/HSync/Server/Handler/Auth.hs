@@ -23,13 +23,6 @@ import qualified Data.Text as T
 
 --------------------------------------------------------------------------------
 
-getMyLoginR      :: UserIdent -> HashedPassword -> Handler Text
-getMyLoginR u hp = protect (validateUser u hp)
-                           (do
-                              setCreds False $ Creds "RESTfull" (unUI u) []
-                              return "VALID")
-                           (return "INVALID")
-
 instance ToContent Bool where
   toContent = toContent . show
 
