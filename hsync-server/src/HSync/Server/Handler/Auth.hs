@@ -1,6 +1,7 @@
 module HSync.Server.Handler.Auth where
 
 import Control.Applicative
+import Control.Monad(when)
 
 import Data.Maybe
 
@@ -37,12 +38,19 @@ instance ToTypedContent Bool where
 postMyLoginR :: Handler Bool
 postMyLoginR = getPostParams >>= validateUser'
   where
+    validateUser'' mu mpw = fromMaybe (pure False) $ liftA2 validateUser mu mpw
+
     validateUser'    :: PostParams -> Handler Bool
-    validateUser' ps = fromMaybe (pure False) $ liftA2 validateUser
-                          (lookup "username" ps >>= userIdent')
-                          (lookup "password" ps >>= password')
+    validateUser' ps = do
+                         let mu@(Just u) = lookup "username" ps >>= userIdent'
+                             mpw         = lookup "password" ps >>= password'
+                         b <- validateUser'' mu mpw
+                         when b $ setCreds False $ Creds "PostLoginR" (unUI u) []
+                         return b
     userIdent' = either (const Nothing) Just . userIdent
     password'  = return . hashedPassword . Password
+
+
 
 
 getPostParams :: Handler PostParams
