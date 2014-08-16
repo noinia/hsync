@@ -87,3 +87,25 @@ instance IsTypedHeader HDeletionTime where
   headerName        _ = "deletionTime"
   parseHeaderValue  _ = fromPathPiece . decodeUtf8
   encodeHeaderValue _ = toPathPiece
+
+------------------------------
+
+data HUserIdent = HUserIdent deriving (Show,Eq)
+
+instance IsTypedHeader HUserIdent where
+  type HeaderValue HUserIdent = UserIdent
+
+  headerName        _ = "userIdent"
+  parseHeaderValue  _ = fromPathPiece . decodeUtf8
+  encodeHeaderValue _ = toPathPiece
+
+------------------------------
+
+data HPassword = HPassword deriving (Show,Eq)
+
+instance IsTypedHeader HPassword where
+  type HeaderValue HPassword = Password
+
+  headerName        _ = "password"
+  parseHeaderValue  _ = fromPathPiece . decodeUtf8
+  encodeHeaderValue _ = toPathPiece
