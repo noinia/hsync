@@ -1,3 +1,19 @@
+<div class="navbar navbar-inverse navbar-fixed-top" role="navigation">
+  <div class="container">
+    <div class="navbar-header">
+      <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
+        <span class="sr-only">Toggle navigation
+        <span class="icon-bar">
+        <span class="icon-bar">
+        <span class="icon-bar">
+      <a class="navbar-brand" href="#">HSync
+    <div class="navbar-collapse collapse">
+      ^{loginForm}
+
 $maybe msg <- mmsg
     <div #message>#{msg}
 ^{widget}
+
+<div class="container">
+  <footer>
+    <p>&copy; FStaals.net 2014

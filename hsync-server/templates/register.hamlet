@@ -1,0 +1,7 @@
+<div class="jumbotron">
+
+<div class="container">
+  <form method=post action=@{RegisterR} enctype=#{enctype}>
+    ^{widget}
+
+    <button type="submit" class="btn btn-success">Submit

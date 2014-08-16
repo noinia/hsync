@@ -17,7 +17,7 @@ getHomeR = do
         handlerName = "getHomeR" :: Text
     defaultLayout $ do
         aDomId <- newIdent
-        setTitle "Welcome To Yesod!"
+        setTitle "Welcome to HSync!"
         $(widgetFile "homepage")
 
 postHomeR :: Handler Html
@@ -37,3 +37,10 @@ sampleForm :: Form (FileInfo, Text)
 sampleForm = renderDivs $ (,)
     <$> fileAFormReq "Choose a file"
     <*> areq textField "What's on the file?" Nothing
+
+-- loginForm :: Form User
+-- loginForm = renderBootstrap $ do mkUser
+--                          <$> areq userIdField   "username" Nothing
+--                          <*> areq passwordField "password" Nothing
+--   where
+--     mkUser =

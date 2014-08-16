@@ -31,6 +31,8 @@ getMyLoginR u hp = protect (validateUser u hp)
 userExists   :: UserIdent -> Handler Bool
 userExists u = isJust <$> queryAcid (LookupUser u)
 
+
+
 postRegisterR :: Handler Html
 postRegisterR = do
     ((result, _), _) <- runFormPost userForm
@@ -75,16 +77,19 @@ getRegisterR :: Handler Html
 getRegisterR = do
     -- Generate the form to be displayed
     (widget, enctype) <- generateFormPost userForm
-    defaultLayout
-        [whamlet|
-            <form method=post action=@{RegisterR} enctype=#{enctype}>
-                ^{widget}
-                <p>It also doesn't include the submit button.
-                <button>Submit
-        |]
+    defaultLayout $(widgetFile "register")
+
+
+
+        -- [whamlet|
+        --     <form method=post action=@{RegisterR} enctype=#{enctype}>
+        --         ^{widget}
+        --         <p>It also doesn't include the submit button.
+        --         <button>Submit
+        -- |]
 
 --------------------------------------------------------------------------------
--- | Permissions
+    -- | permissions
 
 requireRead            :: Path -> Handler Bool
 requireRead (Path u _) = (u ==) <$> requireAuthId'
