@@ -1,7 +1,7 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 module HSync.Server.Application
     ( makeApplication
-    -- , getApplicationDev
+    , getApplicationDev
     , makeFoundation
     ) where
 
@@ -14,7 +14,7 @@ import Data.Default (def)
 import HSync.Server
 
 import HSync.Server.Import
-import HSync.Server.AcidSync(AcidSync)
+import HSync.Server.AcidSync(AcidSync, withAcidSync)
 import HSync.Server.Notifications(storeNotifications)
 
 -- Import all relevant handler modules here.
@@ -31,6 +31,7 @@ import Network.Wai.Middleware.RequestLogger
 
 import System.Log.FastLogger (newStdoutLoggerSet, defaultBufSize)
 
+import Yesod.Default.Main(defaultDevelApp)
 import Yesod.Default.Config
 import Yesod.Default.Handlers
 import Yesod.Core.Types (loggerSet, Logger (Logger))
@@ -96,14 +97,15 @@ makeFoundation acid conf = do
 
 
 -- -- for yesod devel
--- getApplicationDev :: IO (Int, Application)
--- getApplicationDev =
---     defaultDevelApp loader makeApplication
---   where
---     loader = Yesod.Default.Config.loadConfig (configSettings Development)
---         { csParseExtra = parseExtra
---         }
-
+getApplicationDev :: IO (Int, Application)
+getApplicationDev = do
+  config <- loader
+  withAcidSync (appExtra config) $ \acid ->
+    defaultDevelApp (return config) (makeApplication acid)
+  where
+    loader = Yesod.Default.Config.loadConfig (configSettings Development)
+             { csParseExtra = parseExtra
+             }
 
 
 startNotificationLogger :: HSyncServerImplementation -> IO ThreadId
