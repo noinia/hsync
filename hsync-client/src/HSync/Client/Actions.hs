@@ -96,14 +96,19 @@ import Debug.Trace
 
 login :: Action Bool
 login = do
-  sync <- getSync
-  infoM "Actions.login" "Sending login"
-  resp <- runGetRoute $ MyLoginR (user sync) (password sync)
-  body <- lift $ responseBody resp C.$$+- sinkLbs
-  case LB.unpack body of
-    "VALID"   -> noticeM    "Actions.login" "Login successful" >>
-                 setSessionCreds resp                          >> return True
-    "INVALID" -> criticalM "Actions.login" "Login failed!"     >> return False
+    s <- getSync
+    infoM "Actions.login" "Sending login"
+    resp <- runRouteWith MyLoginR ( addHeader' HUserIdent (user s)
+                                  . addHeader' HPassword  (password s)
+                                  )
+    body <- lift $ responseBody resp C.$$+- sinkLbs
+    let loggedIn = read . LB.unpack $ body
+    if loggedIn then $ do noticeM    "Actions.login" "Login successful"
+                          setSessionCreds resp
+                else criticalM "Actions.login" "Login failed!"
+    return loggedIn
+  where
+    addHeader' h v r = r { requestHeaders = asHeader h v : requestHeaders r }
 
 
 setSessionCreds :: Response body -> Action ()

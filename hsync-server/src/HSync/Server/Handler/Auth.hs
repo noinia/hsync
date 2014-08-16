@@ -5,6 +5,8 @@ import Control.Monad(when)
 
 import Data.Maybe
 
+import HSync.Common.Header(lookupTypedHeader, HUserIdent(..), HPassword(..))
+
 import HSync.Server.Import
 import HSync.Server.AcidSync
 import HSync.Server.AcidState
@@ -36,30 +38,14 @@ instance ToTypedContent Bool where
 
 
 postMyLoginR :: Handler Bool
-postMyLoginR = getPostParams >>= validateUser'
+postMyLoginR = do
+    mu@(Just u) <-                         lookupTypedHeader HUserIdent
+    mpw         <- fmap hashedPassword <$> lookupTypedHeader HPassword
+    b <- validateUser' mu mpw
+    when b $ setCreds False $ Creds "PostLoginR" (unUI u) []
+    return b
   where
-    validateUser'' mu mpw = fromMaybe (pure False) $ liftA2 validateUser mu mpw
-
-    validateUser'    :: PostParams -> Handler Bool
-    validateUser' ps = do
-                         let mu@(Just u) = lookup "username" ps >>= userIdent'
-                             mpw         = lookup "password" ps >>= password'
-                         b <- validateUser'' mu mpw
-                         when b $ setCreds False $ Creds "PostLoginR" (unUI u) []
-                         return b
-    userIdent' = either (const Nothing) Just . userIdent
-    password'  = return . hashedPassword . Password
-
-
-
-
-getPostParams :: Handler PostParams
-getPostParams = fst <$> runRequestBody
-
-type FieldName = Text
-type PostParams = [(FieldName,Text)]
-
-
+    validateUser' mu mpw = fromMaybe (pure False) $ liftA2 validateUser mu mpw
 
 
 
