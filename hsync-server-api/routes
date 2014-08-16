@@ -7,7 +7,7 @@
 
 /                                 HomeR           GET POST
 
-/login/#UserIdent/#HashedPassword MyLoginR        GET
+/login                            MyLoginR        POST
 /register                         RegisterR       GET POST
 
 

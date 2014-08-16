@@ -1,5 +1,7 @@
 module HSync.Server.Handler.Auth where
 
+import Control.Applicative
+
 import Data.Maybe
 
 import HSync.Server.Import
@@ -12,6 +14,8 @@ import HSync.Server.User(User(..),RealName(..))
 
 import System.Directory(createDirectory)
 
+
+
 import qualified Data.Text as T
 
 --------------------------------------------------------------------------------
@@ -22,6 +26,32 @@ getMyLoginR u hp = protect (validateUser u hp)
                               setCreds False $ Creds "RESTfull" (unUI u) []
                               return "VALID")
                            (return "INVALID")
+
+instance ToContent Bool where
+  toContent = toContent . show
+
+instance ToTypedContent Bool where
+  toTypedContent = TypedContent typePlain . toContent
+
+
+postMyLoginR :: Handler Bool
+postMyLoginR = getPostParams >>= validateUser'
+  where
+    validateUser'    :: PostParams -> Handler Bool
+    validateUser' ps = fromMaybe (pure False) $ liftA2 validateUser
+                          (lookup "username" ps >>= userIdent')
+                          (lookup "password" ps >>= password')
+    userIdent' = either (const Nothing) Just . userIdent
+    password'  = return . hashedPassword . Password
+
+
+getPostParams :: Handler PostParams
+getPostParams = fst <$> runRequestBody
+
+type FieldName = Text
+type PostParams = [(FieldName,Text)]
+
+
 
 
 
