@@ -14,13 +14,14 @@ import Data.Text(pack)
 
 import HSync.Server
 
+import HSync.Server.LocalAuth (localAuth)
 import HSync.Server.Settings (widgetFile, Extra (..))
 import HSync.Server.Settings.StaticFiles
 import HSync.Server.Settings.Development (development)
 import HSync.Server.AcidState
 import HSync.Server.AcidSync
 import HSync.Server.FileSystemState(FSState)
-import HSync.Server.User(User(..),UserIndex)
+import HSync.Server.User (User(..),UserIndex)
 
 import Network.HTTP.Conduit (Manager)
 
@@ -30,7 +31,7 @@ import Text.Hamlet (hamletFile)
 
 import Yesod
 import Yesod.Auth
-import Yesod.Core.Types(Logger)
+import Yesod.Core.Types (Logger)
 import Yesod.Default.Config
 import Yesod.Default.Util (addStaticContentExternal)
 import Yesod.Static
@@ -101,7 +102,7 @@ instance Yesod HSyncServer where
     defaultLayout widget = do
         master <- getImplementation
         mmsg <- getMessage
-
+        let loginForm = $(widgetFile "loginForm")
         -- We break up the default layout into two components:
         -- default-layout is the contents of the body tag, and
         -- default-layout-wrapper is the entire page. Since the final
@@ -185,7 +186,7 @@ instance YesodAuth HSyncServer where
       return $ m >>= fromPathPiece
 
     -- You can add other plugins like BrowserID, email or OAuth here
-    authPlugins _ = []
+    authPlugins _ = [localAuth]
 
     authHttpManager = httpManager . implementation
 
