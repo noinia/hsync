@@ -36,7 +36,10 @@ validateUser ui pw = maybe False checkPassword <$> queryAcid (LookupUser ui)
     checkPassword u = pw == password u
 
 
-authLocal :: AuthPlugin master
+authLocal :: ( AcidMonad (HandlerT master IO) LookupUser
+             , YesodAuth master
+             )
+             => AuthPlugin master
 authLocal = AuthPlugin "local" dispatch login
   where
     dispatch "POST" ["login"] = postLoginR >>= sendResponse
@@ -47,30 +50,23 @@ authLocal = AuthPlugin "local" dispatch login
         toWidget [hamlet| "woei"
                   |]
 
-postLoginR :: RenderMessage master FormMessage
+postLoginR :: ( RenderMessage master FormMessage
+              , YesodAuth master
+              , AcidMonad (HandlerT master IO) LookupUser
+              )
            => HandlerT Auth (HandlerT master IO) TypedContent
 postLoginR = do
     (u,hpw) <- lift $ runInputPost $ (,)
                         <$>                   ireq userIdField "username"
                         <*> (fmap hPassword $ ireq textField   "password")
-    protect (validateUser u hpw)
-            (validKey   u)
-            invalidKey
+    protect (lift $ validateUser u hpw)
+            (validUser   u)
+            invalidUser
   where
     hPassword = hashedPassword . Password
 
-    validKey u = do
-        lift $  setCredsRedirect $ Creds "localAuth" (unUI u) []
-    msgIk = Msg.InvalidKey
-    invalidKey = do
-        mr      <- lift getMessageRender
-        messageJson401 (mr msgIk) $ lift $ authLayout $ do
-        setTitleI msgIk
-          [whamlet|
-$newline never
-<p>_{msgIk}
-|]
-
+    validUser u = lift $  setCredsRedirect $ Creds "localAuth" (unUI u) []
+    invalidUser = loginErrorMessageI LoginR Msg.InvalidUsernamePass
 
 
 -- userForm = mkUser
