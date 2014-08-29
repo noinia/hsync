@@ -18,7 +18,7 @@ import System.Log.Logger(Priority(..))
 import Filesystem.Path.CurrentOS(FilePath)
 
 import HSync.Client.Import
-import HSync.Client.SyncActions(SyncMode(..))
+import HSync.Client.SyncActions(SyncMode(..), launchSyncFrom)
 import HSync.Client.Sync(readYamlConfig)
 
 import qualified Filesystem.Path.CurrentOS as FP
@@ -66,12 +66,15 @@ readConfig = readYamlConfig
 data HSyncClient = HSyncClient { globalSettings :: HSyncSettings
                                }
 
+readHSync    :: FilePath -> IO (Either ErrorMessage HSyncClient)
 readHSync fp = (fmap HSyncClient) <$> readConfig fp
 
 
--- runSyncs hsc = do
+launchSync                    :: HSyncClient -> SyncInfo -> IO ()
+launchSync hs (SyncInfo n m) = let dir = syncConfigDir . globalSettings $ hs
+                                   fn  = FP.decode n FP.<.> "yaml"
+                               in launchSyncFrom (dir FP.</> fn) m
 
 
--- main = do
---          hs <- readHSync $ FP.decode "config/hsync.yaml"
---          print "woei"
+main    :: HSyncClient -> IO ()
+main hs = mapM_ (launchSync hs) . syncs . globalSettings $ hs

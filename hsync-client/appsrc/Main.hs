@@ -1,31 +1,22 @@
+{-# Language LambdaCase #-}
 module Main where
 
-import Prelude hiding (FilePath)
-
 import Network
+import CLIOptions
 
-import Filesystem.Path.CurrentOS(FilePath, decodeString)
+import System.Console.CmdArgs
 
-import HSync.Client.SyncActions
+import qualified Filesystem.Path.CurrentOS as FP
+import qualified HSync.Client.HSyncClient  as H
 
-import System.Log.Logger
-
-
-import System.Environment(getArgs)
 
 
 --------------------------------------------------------------------------------
 
 main :: IO ()
-main = withSocketsDo $ do
-    (configPath:rest) <- getArgs
-    updateGlobalLogger "HSync" (setLevel DEBUG)
-    syncMain (decodeString configPath)
+main = withSocketsDo $ cmdArgs cliArgsMain >>= mainMode
 
-  -- (mode:configPath:rest) <- getArgs
-  -- case mode of
-  --   "listen"    -> listenMain   configPath
-  --   "put"       -> putMain      configPath
-  --   "download"  -> downloadMain configPath
-  --   "upload"    -> uploadMain   configPath
-  --   "showstate" -> showState    configPath
+mainMode                :: HSyncCLIOptions -> IO ()
+mainMode (MainMode cfg) = H.readHSync (FP.decodeString cfg) >>= \case
+    Left err -> print err >> putStrLn "\n"
+    Right hs -> H.main hs
