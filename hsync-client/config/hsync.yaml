@@ -1,4 +1,4 @@
-syncConfigDir : "configs"
+syncConfigDir : "config"
 syncs : [ { name : "downloadsync" , mode : "BiDirectional" } ]
 logLevel : "INFO"
 logDirectory : "logs"
