@@ -58,6 +58,7 @@ import Network.HTTP.Conduit( Request
                            , RequestBody(..)
                            , HttpException(..)
                            , requestBody
+                           , requestHeaders
                            , responseBody
                            , responseStatus
                            , responseCookieJar
@@ -98,13 +99,13 @@ login :: Action Bool
 login = do
     s <- getSync
     infoM "Actions.login" "Sending login"
-    resp <- runRouteWith MyLoginR ( addHeader' HUserIdent (user s)
-                                  . addHeader' HPassword  (password s)
-                                  )
+    resp <- liftYT $ runRouteWith MyLoginR ( addHeader' HUserIdent (user s)
+                                           . addHeader' HPassword  (password s)
+                                           )
     body <- lift $ responseBody resp C.$$+- sinkLbs
     let loggedIn = read . LB.unpack $ body
-    if loggedIn then $ do noticeM    "Actions.login" "Login successful"
-                          setSessionCreds resp
+    if loggedIn then do noticeM    "Actions.login" "Login successful"
+                        setSessionCreds resp
                 else criticalM "Actions.login" "Login failed!"
     return loggedIn
   where

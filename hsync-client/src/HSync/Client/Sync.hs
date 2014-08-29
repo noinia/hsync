@@ -73,7 +73,7 @@ data Sync = Sync { httpManager     :: Manager
 data SyncConfig = SyncConfig { localBaseDir'   :: FilePath -- without trailing /
                              , serverAddress'  :: ServerAddress
                              , user'           :: UserIdent
-                             , password'       :: HashedPassword
+                             , password'       :: Password
                              , remoteBaseDir'  :: SubPath
                              , clientIdent'    :: ClientIdent
                              , ignorePath'     :: FilePath
@@ -96,7 +96,7 @@ instance Default SyncConfig where
     def = SyncConfig { localBaseDir'    = fromText "/Users/frank/tmp/synced/"
                      , serverAddress'   = "http://localhost:3000"
                      , user'            = let Right u = userIdent "nobody" in u
-                     , password'        = HashedPassword "hashed-secret"
+                     , password'        = Password "secret"
                      , remoteBaseDir'   = []
                      , clientIdent'     = ClientIdent "client-ident"
                      , ignorePath'      = fromText "config/ignore"
