@@ -20,6 +20,6 @@ $maybe msg <- mmsg
 <div class="container">
   ^{mainContent}
 
-<div class="container">
-  <footer>
-    <p>&copy; FStaals.net 2014
+<footer class="navbar navbar-fixed-bottom navbar-inverse">
+  <div class="container">
+    <p class="navbar-text">&copy; FStaals.net 2014
