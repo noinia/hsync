@@ -19,7 +19,7 @@ library
   exposed-modules: HSync.Server
                    Yesod.JoinPath
 
-  Extra-Source-Files: routes
+  extra-source-files: routes
 
   -- other-modules: HSync.Server.Internal
   --                HSync.Server.JoinPath

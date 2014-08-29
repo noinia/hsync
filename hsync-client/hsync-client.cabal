@@ -36,7 +36,7 @@ library
                      Yesod.Client
 
 
-    Extra-Source-Files: config/hsync.yaml
+    extra-source-files: config/hsync.yaml
                         config/default_sync.yaml
                         config/ignore
 
