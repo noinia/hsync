@@ -1,6 +1,5 @@
 <div class="navbar-right">
-  <p>
+  <p class="navbar-text">
     #{realName user}
 
-  <p>
-    <a class="btn btn-success" href="@{AuthR LogoutR}">Logout</a>
+  <a class="navbar-btn btn btn-success" href="@{AuthR LogoutR}">Logout</a>
