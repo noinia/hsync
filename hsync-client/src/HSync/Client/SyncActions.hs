@@ -6,7 +6,7 @@ module HSync.Client.SyncActions where
 import Prelude hiding (FilePath)
 
 import Control.Applicative((<$>),(<*>))
-import Control.Concurrent(forkIO, killThread)
+import Control.Concurrent(forkIO, killThread, ThreadId)
 import Control.Exception.Lifted(bracket)
 
 import Control.Monad(when)
@@ -57,9 +57,11 @@ import Data.List(isPrefixOf)
 -- upstream, or both.
 data SyncMode = DownStream | UpStream | BiDirectional
                    deriving (Show,Read,Eq,Data,Typeable)
-
-
 $(deriveJSON defaultOptions ''SyncMode)
+
+shouldListenLocal x = x == UpStream || x == BiDirectional
+
+shouldListenRemote x = x == DownStream || x == BiDirectional
 
 --------------------------------------------------------------------------------
 
@@ -84,6 +86,68 @@ withSync fp act = do
     statePath' = encodeString . statePath
 
 
+
+
+launchSyncFrom       :: FilePath -> SyncMode -> IO ()
+launchSyncFrom fp sm = withSync fp $ do
+    sync <- getSync
+    _    <- login
+    mt   <- serverTreeState
+    when (isNothing mt) firstRun
+    let stop = stopOnEnter
+    mtid <- if shouldListenRemote sm then Just <$> listenRemote sync stop
+                                     else return Nothing
+    _    <- if shouldListenLocal  sm then          listenLocal  sync stop
+                                     else return ()
+    liftIO $ maybe (return ()) killThread mtid
+
+
+
+  --   dt   <- lastChange'
+  --   let rbp = Path (user sync) (remoteBaseDir sync)
+  --   infoM "SyncActions.syncMain" "Start listening for remote changes"
+  --   -- Start a new thread in which we listen for new remote changes
+  --   tid  <- (cloneInIO $ syncDownstream dt rbp) >>= liftIO . forkIO
+  --   -- We will start listening for local changes
+  --   syncUpstreamUntil stop rbp
+  --   -- we have stopped listening for local changes so also stop listening for
+  --   -- remote changes
+  --   liftIO $ killThread tid
+  -- where
+  --   stop = stopOnEnter
+
+
+-- | Given a sync, and an 'stop'-action, listen for local changes until
+-- 'stop'. (i.e. we keep listening until the stop action finishes.)
+listenLocal           :: Sync -> IO () -> Action ()
+listenLocal sync stop =
+    syncUpstreamUntil stop (remoteBasePath sync)
+
+-- | Given a sync, and a stop-action, start a new thread in which we listen for
+-- new remote changes until the stop action finishes.
+listenRemote      :: Sync -> IO () -> Action ThreadId
+listenRemote sync stop = do
+    dt   <- lastChange'
+    infoM "SyncActions.listenRemote" "Start listening for remote changes"
+    ioA <- cloneInIO $ syncDownstream dt (remoteBasePath sync)
+    liftIO  . forkIO $ ioA
+  where
+    lastChange' = fromMaybe <$> currentTime
+                            <*> lastChange
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 listenMain    :: FilePath -> IO ()
 listenMain fp = withSync fp $ do
                                 u <- user <$> getSync
@@ -91,8 +155,6 @@ listenMain fp = withSync fp $ do
                                 liftIO $ print "ok!"
                                 login
                                 syncDownstream now $ Path u []
-
-
 
 -- | The main method for the sync with config fp
 syncMain    :: FilePath -> IO ()

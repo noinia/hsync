@@ -126,6 +126,8 @@ cloneInIO act = do
                   let ioA = runResourceT $
                               runActionTWithYST yState sync s r act
                   return ioA
+ -- FIXME: Running ioA closes resources. That is probably not what we want
+
 
 --------------------------------------------------------------------------------
 -- | The instantiated monad we will use to run our actions

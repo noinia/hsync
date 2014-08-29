@@ -69,6 +69,9 @@ data HSyncClient = HSyncClient { globalSettings :: HSyncSettings
 readHSync fp = (fmap HSyncClient) <$> readConfig fp
 
 
+-- runSyncs hsc = do
+
+
 -- main = do
 --          hs <- readHSync $ FP.decode "config/hsync.yaml"
 --          print "woei"
