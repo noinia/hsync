@@ -63,8 +63,11 @@ import Network.HTTP.Conduit( Request
                            , responseStatus
                            , responseCookieJar
                            , responseHeaders
+                           , method
                            )
 import Network.HTTP.Types
+import Network.HTTP.Types.Method(methodPost
+                                )
 import Network.Wai(requestBody)
 
 
@@ -101,6 +104,7 @@ login = do
     infoM "Actions.login" "Sending login"
     resp <- liftYT $ runRouteWith MyLoginR ( addHeader' HUserIdent (user s)
                                            . addHeader' HPassword  (password s)
+                                           . setMethod methodPost
                                            )
     body <- lift $ responseBody resp C.$$+- sinkLbs
     let loggedIn = read . LB.unpack $ body
@@ -110,6 +114,7 @@ login = do
     return loggedIn
   where
     addHeader' h v r = r { requestHeaders = asHeader h v : requestHeaders r }
+    setMethod    m r = r { method = m }
 
 
 setSessionCreds :: Response body -> Action ()
