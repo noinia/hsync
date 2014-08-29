@@ -1,7 +1,4 @@
-<div class="jumbotron">
+<form method=post action=@{tp registerR} enctype=#{enctype}>
+  ^{widget}
 
-<div class="container">
-  <form method=post action=@{RegisterR} enctype=#{enctype}>
-    ^{widget}
-
-    <button type="submit" class="btn btn-success">Submit
+  <button type="submit" class="btn btn-success">Submit

@@ -8,11 +8,17 @@
         <span class="icon-bar">
       <a class="navbar-brand" href="#">HSync
     <div class="navbar-collapse collapse">
-      ^{loginForm}
+      ^{userMenu}
 
 $maybe msg <- mmsg
     <div #message>#{msg}
-^{widget}
+
+<div class="jumbotron">
+  <div class="container">
+    ^{jumboHeader}
+
+<div class="container">
+  ^{mainContent}
 
 <div class="container">
   <footer>
