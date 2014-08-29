@@ -145,7 +145,7 @@ instance FromJSON SyncConfig where
   parseJSON (Object v) = fromConfig <$> v .:  "localBaseDir"
                                     <*> v .:  "server"
                                     <*> v .:  "username"
-                                    <*> v .:  "hashedPassword"
+                                    <*> v .:  "password"
                                     <*> v .:  "remoteBaseDir"
                                     <*> v .:  "clientIdent"
                                     <*> v .:  "ignore"
@@ -188,3 +188,6 @@ readYamlConfig fp = either (Left . showError) Right <$> decodeFileEither fp'
                            , ":\n"
                            , showT pe
                            ]
+
+remoteBasePath      :: Sync -> Path
+remoteBasePath sync = Path (user sync) (remoteBaseDir sync)

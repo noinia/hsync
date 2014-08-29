@@ -1,7 +1,7 @@
 localBaseDir: "/path/to/a/local/directory"
 server: "http://localhost:3000"
 username: "joe"
-hashedPassword: "hashedsecret"
+password: "secret"
 remoteBaseDir: ""
 clientIdent: "client-ident"
 ignore: "config/ignore"
