@@ -4,26 +4,29 @@ module HSync.Server.Foundation where
 import Prelude
 
 import Control.Applicative((<$>))
-
 import Control.Concurrent.STM.TChan
+
+import Data.Monoid
 
 import HSync.Common.Types
 import HSync.Common.Notification
 
-import Data.Text(pack)
+import Data.Text(pack, unpack)
 
 import HSync.Server
 
-import HSync.Server.LocalAuth (localAuth)
+import HSync.Server.LocalAuth (YesodLocalAuth(..), localAuth, loginR)
 import HSync.Server.Settings (widgetFile, Extra (..))
 import HSync.Server.Settings.StaticFiles
 import HSync.Server.Settings.Development (development)
 import HSync.Server.AcidState
 import HSync.Server.AcidSync
-import HSync.Server.FileSystemState(FSState)
+import HSync.Server.FileSystemState(FSState, newUserFSState)
 import HSync.Server.User (User(..),UserIndex)
 
 import Network.HTTP.Conduit (Manager)
+
+import System.Directory(createDirectory)
 
 import Text.Jasmine (minifym)
 import Text.Hamlet (hamletFile)
@@ -99,10 +102,16 @@ instance Yesod HSyncServer where
         (120 * 60) -- 120 minutes
         "config/client_session_key.aes"
 
-    defaultLayout widget = do
+    defaultLayout mainContent = do
         master <- getImplementation
-        mmsg <- getMessage
-        let loginForm = $(widgetFile "loginForm")
+        mmsg   <- getMessage
+        muser  <- maybeAuthId
+
+        let loginR'     = AuthR loginR
+            userMenu    = maybe $(widgetFile "loginForm")
+                                (\user -> $(widgetFile "userLoggedIn"))
+                          muser
+            jumboHeader = $(widgetFile "welcome")
         -- We break up the default layout into two components:
         -- default-layout is the contents of the body tag, and
         -- default-layout-wrapper is the entire page. Since the final
@@ -170,7 +179,7 @@ instance HasAcidState (HandlerT HSyncServer IO) UserIndex where
 
 -- How to authenticate
 instance YesodAuth HSyncServer where
-    type AuthId HSyncServer = UserIdent
+    type AuthId HSyncServer = User
 
     -- Where to send a user after successful login
     loginDest _ = HomeR
@@ -179,7 +188,7 @@ instance YesodAuth HSyncServer where
 
     getAuthId creds = case userIdent . credsIdent $ creds of
                         Left _   -> return Nothing
-                        Right ui -> fmap userId <$> (queryAcid $ LookupUser ui)
+                        Right ui -> (queryAcid $ LookupUser ui)
 
     maybeAuthId = do
       m <- lookupSession credsKey
@@ -192,6 +201,9 @@ instance YesodAuth HSyncServer where
 
 -- credsKey :: Text
 -- credsKey = "_ID"
+
+instance YesodLocalAuth HSyncServer where
+  onRegister = createFilesDir
 
 -- This instance is required to use forms. You can modify renderMessage to
 -- achieve customized and internationalized form validation messages.
@@ -215,3 +227,18 @@ getAcidSync = acidSync <$> getImplementation
 asLocalPath   :: Path -> Handler FilePath
 asLocalPath p = flip toFilePath p . pack <$> getFilesDir
                 -- TODO: The packing and unpacking is silly
+
+
+
+
+-- | Create the directory for this user, and update the FSState
+createFilesDir   :: User -> Handler ()
+createFilesDir u = let n       = unpack . unUI . userId $ u
+                       a </> b = a <> "/" <> b
+                    in
+                    do
+                      fd <- getFilesDir
+                      let fp = fd </> n
+                      liftIO $ createDirectory fp
+                      newUserFSState fp
+                        >>= updateAcid . NewUserDirectory (userId u)

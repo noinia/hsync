@@ -17,11 +17,8 @@ import HSync.Common.Import(protect)
 
 import HSync.Server.AcidState
 import HSync.Server.AcidSync
+import HSync.Server.Settings(widgetFile)
 import HSync.Server.User
-import HSync.Server.FileSystemState(newUserFSState)
-
-import System.Directory(createDirectory)
-
 
 import Yesod
 import Yesod.Auth
@@ -48,33 +45,11 @@ userExists   :: AcidMonad m LookupUser => UserIdent -> m Bool
 userExists u = isJust <$> queryAcid (LookupUser u)
 
 
-
-
-getFilesDir = return "/"
-
--- | Create the directory for this user, and update the FSState
-createFilesDir   :: AcidMonad m NewUserDirectory => User -> m ()
-createFilesDir u = let n       = T.unpack . unUI . userId $ u
-                       a </> b = a <> "/" <> b
-                    in
-                    do
-                      fd <- getFilesDir
-                      let fp = fd </> n
-                      liftIO $ createDirectory fp
-                      newUserFSState fp
-                        >>= updateAcid . NewUserDirectory (userId u)
-
-
-
-
 --------------------------------------------------------------------------------
 --  The Auth plugin
 
-
-
-
-
-
+class YesodAuth master => YesodLocalAuth master where
+  onRegister :: AuthId master -> HandlerT master IO ()
 
 
 
@@ -89,7 +64,8 @@ registerR = PluginR "local" ["register"]
 
 
 localAuth :: ( AcidMonad (HandlerT master IO) LookupUser
-             , YesodAuth master
+             , YesodLocalAuth master
+             , AuthId master ~ User
              )
              => AuthPlugin master
 localAuth = AuthPlugin "local" dispatch login
@@ -105,10 +81,6 @@ localAuth = AuthPlugin "local" dispatch login
     login authToMaster =
         [whamlet|
 $newline never
-<div class="jumbotron">
-
-<div class="container">
-
   <form role="form" method="post"
        action="@{authToMaster loginR}">
 
@@ -148,39 +120,47 @@ postLoginR = do
 --------------------------------------------------------------------------------
 -- | Register
 
-getRegisterR :: RenderMessage master FormMessage
-             => HandlerT Auth (HandlerT master IO) TypedContent
+getRegisterR :: (RenderMessage master FormMessage
+                , YesodAuth master
+                )
+             => HandlerT Auth (HandlerT master IO) Html
 getRegisterR = do
     -- Generate the form to be displayed
     (widget, enctype) <- lift $ generateFormPost registerForm
-    undefined
-    -- defaultLayout $(widgetFile "register")
+    tp <- getRouteToParent
+    lift $ authLayout $ do
+        setTitleI Msg.RegisterLong
+        $(widgetFile "register")
 
 
 postRegisterR :: ( RenderMessage master FormMessage
-                 , YesodAuth master
-                 , AcidMonad (HandlerT master IO) LookupUser
+                 , YesodLocalAuth master
+                 , AuthId master ~ User
+                 , AcidMonad (HandlerT master IO) InsertUser
                  )
               => HandlerT Auth (HandlerT master IO) TypedContent
 postRegisterR = do
     ((result, _), _) <- lift $ runFormPost registerForm
+    tp <- getRouteToParent
     case result of
-        FormSuccess u -> tryInsert u
-        _             -> invalidInput
-    where
-      tryInsert u = undefined
-      invalidInput = undefined
+      FormSuccess u -> lift $ tryInsert u (tp registerR)
+      _             -> invalidInput
+  where
+    invalidInput = loginErrorMessageI registerR Msg.InvalidKey
 
-      -- tryInsert u = updateAcid (InsertUser u)
-      --                 >>= \me -> case me of
-      --                       Nothing  -> createFilesDir u
-      --                                     >> setMessage "User Registered."
-      --                                     >> redirect HomeR
-      --                       Just err -> setMessage (toHtml err)
-      --                                     >> redirect RegisterR
-      -- invalidInput = setMessage "Invalid Input" >> redirect RegisterR
-
-
+tryInsert :: ( RenderMessage master FormMessage
+             , YesodLocalAuth master
+             , AuthId master ~ User
+             , AcidMonad (HandlerT master IO) InsertUser
+             )
+             => User -> Route master -> HandlerT master IO TypedContent
+tryInsert u redir = do
+    me <- updateAcid (InsertUser u)
+    case me of
+      Nothing  -> do
+                    onRegister u
+                    setCredsRedirect $ Creds "local" (unUI . userId $ u) []
+      Just err -> loginErrorMessage redir err
 
 registerForm = renderDivs $ do mkUser
                         <$> areq userIdField   "userIdent" Nothing

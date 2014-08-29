@@ -66,18 +66,6 @@ postRegisterR = do
                                           >> redirect RegisterR
       invalidInput = setMessage "Invalid Input" >> redirect RegisterR
 
--- | Create the directory for this user, and update the FSState
-createFilesDir   :: User -> Handler ()
-createFilesDir u = let n       = T.unpack . unUI . userId $ u
-                       a </> b = a <> "/" <> b
-                    in
-                    do
-                      fd <- getFilesDir
-                      let fp = fd </> n
-                      liftIO $ createDirectory fp
-                      newUserFSState fp
-                        >>= updateAcid . NewUserDirectory (userId u)
-
 
 userForm :: Html -> MForm Handler (FormResult User, Widget)
 userForm = renderDivs $ do mkUser
@@ -94,6 +82,8 @@ getRegisterR :: Handler Html
 getRegisterR = do
     -- Generate the form to be displayed
     (widget, enctype) <- generateFormPost userForm
+    let tp = id
+        registerR = RegisterR
     defaultLayout $(widgetFile "register")
 
 
@@ -108,15 +98,15 @@ getRegisterR = do
 --------------------------------------------------------------------------------
     -- | permissions
 
-requireRead            :: Path -> Handler Bool
-requireRead (Path u _) = (u ==) <$> requireAuthId'
+requireRead             :: Path -> Handler Bool
+requireRead (Path ui _) = (\u -> ui == userId u) <$> requireAuthId'
 
 -- | For now require the same thing as reading
 requireWrite :: Path -> Handler Bool
 requireWrite = requireRead
 
 
-requireAuthId' :: Handler UserIdent
+requireAuthId' :: Handler User
 requireAuthId' = maybeAuthId >>= maybe (permissionDenied "Login Required") return
 
 

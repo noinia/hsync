@@ -30,6 +30,7 @@ library
                      HSync.Server.User
                      HSync.Server.Notifications
                      HSync.Server.Settings
+                     HSync.Server.LocalAuth
                      HSync.Server.Settings.StaticFiles
                      HSync.Server.Settings.Development
                      HSync.Server.Handler.Home
@@ -89,6 +90,7 @@ library
                  , yaml                          >= 0.8        && < 0.9
                  , aeson                         >= 0.6.2.0    && < 0.7
                  , containers                    >= 0.5        && < 0.6
+                 , blaze-markup                  >= 0.6.1      && < 0.7
 
                  , data-default
                  , directory                     >= 1.1        && < 1.3

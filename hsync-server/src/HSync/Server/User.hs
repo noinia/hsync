@@ -6,15 +6,16 @@ module HSync.Server.User where
 
 import Prelude
 
+import Data.Aeson.TH
 import Data.Data(Data, Typeable)
 import Data.Default
 import Data.IxSet
-
 import Data.SafeCopy(base, deriveSafeCopy)
-
-import Data.Text(Text)
+import Data.Text(Text, pack, unpack)
 
 import HSync.Common.Types
+import Text.Blaze
+import Yesod.Core
 
 import qualified Data.IxSet as I
 
@@ -23,6 +24,16 @@ import qualified Data.IxSet as I
 newtype RealName = RealName { unRealName :: Text }
                  deriving (Show,Read,Eq,Ord,Data,Typeable)
 $(deriveSafeCopy 0 'base ''RealName)
+$(deriveJSON defaultOptions ''RealName)
+
+instance ToMarkup RealName where
+  toMarkup           = toMarkup           . unRealName
+  preEscapedToMarkup = preEscapedToMarkup . unRealName
+
+
+instance ToMarkup UserIdent where
+  toMarkup           = toMarkup           . unUI
+  preEscapedToMarkup = preEscapedToMarkup . unUI
 
 
 --------------------------------------------------------------------------------
@@ -34,6 +45,15 @@ data User = User { userId   :: UserIdent
             deriving (Show,Read,Eq,Ord,Data,Typeable)
 
 $(deriveSafeCopy 0 'base ''User)
+
+
+
+-- Give a better instance here
+instance PathPiece User where
+  fromPathPiece t = case reads . unpack $ t of
+                      [(u,"")] -> Just u
+                      _        -> Nothing
+  toPathPiece     = pack . show
 
 
 instance Indexable User where
