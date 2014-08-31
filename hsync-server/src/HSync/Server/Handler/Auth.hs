@@ -11,6 +11,8 @@ import HSync.Server.Import
 import HSync.Server.AcidSync
 import HSync.Server.AcidState
 
+import HSync.Server.LocalAuth(validateUser)
+
 import HSync.Server.FileSystemState(newUserFSState)
 
 import HSync.Server.User(User(..),RealName(..))
@@ -40,63 +42,8 @@ postMyLoginR = do
   where
     validateUser' mu mpw = fromMaybe (pure False) $ liftA2 validateUser mu mpw
 
-
-
 --------------------------------------------------------------------------------
--- | Registration
-
-userExists   :: UserIdent -> Handler Bool
-userExists u = isJust <$> queryAcid (LookupUser u)
-
-
-
-postRegisterR :: Handler Html
-postRegisterR = do
-    ((result, _), _) <- runFormPost userForm
-    case result of
-        FormSuccess u -> tryInsert u
-        _             -> invalidInput
-    where
-      tryInsert u = updateAcid (InsertUser u)
-                      >>= \me -> case me of
-                            Nothing  -> createFilesDir u
-                                          >> setMessage "User Registered."
-                                          >> redirect HomeR
-                            Just err -> setMessage (toHtml err)
-                                          >> redirect RegisterR
-      invalidInput = setMessage "Invalid Input" >> redirect RegisterR
-
-
-userForm :: Html -> MForm Handler (FormResult User, Widget)
-userForm = renderDivs $ do mkUser
-                        <$> areq userIdField   "username" Nothing
-                        <*> areq textField     "realname" Nothing
-                        <*> areq passwordField "password" Nothing
-  where
-    mkUser i n p = User i (RealName n) (hashedPassword $ Password p)
-
-userIdField :: Monad m => RenderMessage (HandlerSite m) FormMessage => Field m UserIdent
-userIdField = checkMMap (return . userIdent) unUI textField
-
-getRegisterR :: Handler Html
-getRegisterR = do
-    -- Generate the form to be displayed
-    (widget, enctype) <- generateFormPost userForm
-    let tp = id
-        registerR = RegisterR
-    defaultLayout $(widgetFile "register")
-
-
-
-        -- [whamlet|
-        --     <form method=post action=@{RegisterR} enctype=#{enctype}>
-        --         ^{widget}
-        --         <p>It also doesn't include the submit button.
-        --         <button>Submit
-        -- |]
-
---------------------------------------------------------------------------------
-    -- | permissions
+-- | permissions
 
 requireRead             :: Path -> Handler Bool
 requireRead (Path ui _) = (\u -> ui == userId u) <$> requireAuthId'
@@ -108,18 +55,3 @@ requireWrite = requireRead
 
 requireAuthId' :: Handler User
 requireAuthId' = maybeAuthId >>= maybe (permissionDenied "Login Required") return
-
-
-
--- | Given a (user,password) in plaintext, validate them against the
---   database values
-validateUser       :: UserIdent -> HashedPassword -> Handler Bool
-validateUser ui pw = maybe False checkPassword <$> queryAcid (LookupUser ui)
-  where
-    checkPassword u = pw == password u
-
-
-  -- runDB (getBy . UniqueUser $ ui) >>= \dbUser ->
-  --   case dbUser of
-  --       Nothing                 -> return False
-  --       Just (Entity _ sqlUser) -> return $ mHashedPw == userPassword sqlUser

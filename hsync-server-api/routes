@@ -8,7 +8,7 @@
 /                                 HomeR           GET POST
 
 /login                            MyLoginR        POST
-/register                         RegisterR       GET POST
+
 
 
 /listen/now/*Path                 ListenNowR      GET
