@@ -80,13 +80,14 @@ Test-suite test
     , tasty                     >= 0.3
     , tasty-quickcheck          >= 0.3.1
     , tasty-hunit               >= 0.4.1
-
     , quickcheck-instances      >= 0.3.8
 
-    , text                      >= 0.11
-
-    , semigroups                >= 0.12
-
     , hsync-common              == 0.0.0.0
+
+    , text
+    , aeson
+    , yesod-core
+    , semigroups
+
 
   Default-Extensions: OverloadedStrings

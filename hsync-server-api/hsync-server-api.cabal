@@ -12,14 +12,13 @@ maintainer:          frank@fstaals.net
 -- copyright:
 category:            Network
 build-type:          Simple
--- extra-source-files:
+extra-source-files: routes
 cabal-version:       >=1.10
 
 library
   exposed-modules: HSync.Server
                    Yesod.JoinPath
 
-  extra-source-files: routes
 
   -- other-modules: HSync.Server.Internal
   --                HSync.Server.JoinPath
