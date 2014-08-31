@@ -19,8 +19,8 @@ import qualified Data.Foldable as F
 
 import Data.Text
 
-instance Arbitrary FileName where
-  arbitrary = (arbitrary :: Gen Text)
+-- instance Arbitrary FileName where
+--   arbitrary = (arbitrary :: Gen Text)
 
 
 
