@@ -4,13 +4,11 @@ module HSync.Server.LocalAuth where
 import Prelude
 
 import Control.Applicative
-import Control.Monad(when)
 
-import Control.Monad.IO.Class(MonadIO(..))
+
 
 import Data.Acid(EventState)
 import Data.Maybe
-import Data.Monoid
 
 import HSync.Common.Types
 import HSync.Common.Import(protect)
@@ -25,7 +23,7 @@ import Yesod.Auth
 
 
 import qualified Yesod.Auth.Message as Msg
-import qualified Data.Text as T
+
 
 --------------------------------------------------------------------------------
 -- | The Acid actions that actually validate/insert stuff
@@ -76,7 +74,7 @@ localAuth = AuthPlugin "local" dispatch login
     dispatch _      _            = notFound
 
 
-    url = PluginR "local" []
+    -- url = PluginR "local" []
 
     login authToMaster =
         [whamlet|

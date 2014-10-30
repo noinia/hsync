@@ -8,8 +8,8 @@ import Data.Maybe
 import HSync.Common.Header(lookupTypedHeader, HUserIdent(..), HPassword(..))
 
 import HSync.Server.Import
-import HSync.Server.AcidSync
-import HSync.Server.AcidState
+-- import HSync.Server.AcidSync
+-- import HSync.Server.AcidState
 
 import HSync.Server.LocalAuth(validateUser)
 import HSync.Server.User(User(..))
