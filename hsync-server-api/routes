@@ -25,3 +25,7 @@
 /putFile/#FileIdent/*Path         PutFileR        POST
 
 /putDir/#FileIdent/*Path          PutDirR         POST
+
+
+/view/tree/*Path                  ViewTreeR       GET
+/view/state/*Path                 ViewStateR      GET

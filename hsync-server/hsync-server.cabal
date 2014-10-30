@@ -38,9 +38,11 @@ library
                     HSync.Server.LocalAuth
                     HSync.Server.Settings.StaticFiles
                     HSync.Server.Settings.Development
+
                     HSync.Server.Handler.Home
                     HSync.Server.Handler.Auth
                     HSync.Server.Handler.FileActions
+                    HSync.Server.Handler.ViewTree
 
 
 

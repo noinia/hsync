@@ -17,7 +17,7 @@ import HSync.Common.TimedFSTree(MTimeTree, readMTimeTree)
 import HSync.Common.Header
 import HSync.Common.Notification
 
-import HSync.Server.Handler.Auth(requireRead,requireWrite)
+import HSync.Server.Handler.Auth(requireRead,requireWrite, protectRead, protectWrite)
 import HSync.Server.Notifications(logNotification, notificationsFor, notificationsAsOf)
 
 
@@ -164,12 +164,6 @@ addDeletionHeader = addTypedHeader HDeletionTime
 getFileIdent   :: Path -> Handler FileIdent
 getFileIdent p = asLocalPath p >>= fileIdent
 
-
-protectRead         :: Path -> Text -> Handler a -> Handler a
-protectRead p err h = protect (requireRead p) h (permissionDenied err)
-
-protectWrite         :: Path -> Text -> Handler a -> Handler a
-protectWrite p err h = protect (requireWrite p) h (permissionDenied err)
 
 type FINotification = Either ErrorDescription Notification
 

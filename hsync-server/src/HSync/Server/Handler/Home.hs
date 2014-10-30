@@ -1,4 +1,5 @@
-{-# LANGUAGE TupleSections, OverloadedStrings #-}
+{-# LANGUAGE TupleSections #-}
+{-# LANGUAGE OverloadedStrings #-}
 module HSync.Server.Handler.Home where
 
 import HSync.Server.Import
@@ -37,10 +38,3 @@ sampleForm :: Form (FileInfo, Text)
 sampleForm = renderDivs $ (,)
     <$> fileAFormReq "Choose a file"
     <*> areq textField "What's on the file?" Nothing
-
--- loginForm :: Form User
--- loginForm = renderBootstrap $ do mkUser
---                          <$> areq userIdField   "username" Nothing
---                          <*> areq passwordField "password" Nothing
---   where
---     mkUser =

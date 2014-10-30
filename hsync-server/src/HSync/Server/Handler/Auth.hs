@@ -12,16 +12,8 @@ import HSync.Server.AcidSync
 import HSync.Server.AcidState
 
 import HSync.Server.LocalAuth(validateUser)
+import HSync.Server.User(User(..))
 
-import HSync.Server.FileSystemState(newUserFSState)
-
-import HSync.Server.User(User(..),RealName(..))
-
-import System.Directory(createDirectory)
-
-
-
-import qualified Data.Text as T
 
 --------------------------------------------------------------------------------
 
@@ -55,3 +47,11 @@ requireWrite = requireRead
 
 requireAuthId' :: Handler User
 requireAuthId' = maybeAuthId >>= maybe (permissionDenied "Login Required") return
+
+
+
+protectRead         :: Path -> Text -> Handler a -> Handler a
+protectRead p err h = protect (requireRead p) h (permissionDenied err)
+
+protectWrite         :: Path -> Text -> Handler a -> Handler a
+protectWrite p err h = protect (requireWrite p) h (permissionDenied err)
