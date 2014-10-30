@@ -4,6 +4,7 @@ module HSync.Server.Handler.ViewTree where
 import Data.Maybe
 import Data.Either
 import HSync.Common.TimedFSTree
+import HSync.Common.FSTree
 import HSync.Server.Import
 
 import HSync.Server.FileSystemState
@@ -25,13 +26,17 @@ getViewTreeR p = protectRead p "vierTree" $ getTreeOf p >>= \case
 
 getViewStateR   :: Path -> Handler Html
 getViewStateR p = protectRead p "viewState" $ queryDirectory p >>= \case
-    Left err -> defaultLayout $ [whamlet| err |]
-    Right t  -> defaultLayout $ [whamlet| #{show t} |]
+    Left err        -> defaultLayout $ [whamlet| err |]
+    Right (Left f)  -> defaultLayout $ [whamlet| #{show f} |]
+    Right (Right d) -> defaultLayout $ [whamlet| #{show d} |]
+
+-- type Directory' = Directory (Max DateTime) FileLabel
 
 -- | Query Acid state for the MTimeTree corresponding to the input path
-queryDirectory   :: Path -> Handler (Either Text (TimedFSTree FileLabel))
+queryDirectory   :: Path -> Handler (Either Text (Either File' Directory'))
 queryDirectory p = selectPath <$> queryAcid QueryFSState
   where
-    msg        = "no such user: " <> unUI (owner p)
-    selectPath = maybe (Left msg) selectDir . M.lookup (owner p) . unM
-    selectDir  = Right -- TODO: Select the acutal subdirectory corresp to p
+    selectPath = maybe (Left noUserMsg) selectDir . M.lookup (owner p) . unM
+    selectDir  = maybe (Left noDirMsg)  Right . findAt (subPath p) . unTree
+    noUserMsg  = "No such user: " <> unUI (owner p)
+    noDirMsg   = "No such file or directory: " <> showT (subPath p)

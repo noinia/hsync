@@ -13,7 +13,7 @@ module HSync.Server.FileSystemState( FSState(..)
 
                                    , updateNotification
                                    , getNotificationsAsOf
-                                   , Directory'
+                                   , File', Directory'
                                    , ReversedSubPath
 
                                    , withTimedFSTree
@@ -176,6 +176,7 @@ updateNotification n = withTimedFSTree (owner p) (FSTree . f . unTree)
                 . deleteDirectoryAt sp' fName (Max dt)
 
 
+type File'      = File      (Max DateTime) (FileData FileLabel)
 type Directory' = Directory (Max DateTime) (FileData FileLabel)
 
 type ReversedSubPath = SubPath
