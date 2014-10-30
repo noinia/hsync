@@ -1,0 +1,24 @@
+<h1>Directory: #{dirName dir}
+
+<table>
+  <tr>
+    <td>Path:
+    <td>#{show $ p}
+  <tr>
+    <td>Directory Data:
+    <td>#{show $ dirData dir}
+  <tr>
+    <td>Measure:
+    <td>#{show $ dirMeasure dir}
+
+<h3>Subdirectories
+
+<ul>
+  $forall subDir <- subDirectories dir
+    <li><a href=@{route subDir}> #{dirName subDir}
+
+<h3>Files
+
+<ul>
+  $forall file <- files dir
+    <li><a href=@{route file}> #{fileName file}
