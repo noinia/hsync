@@ -16,7 +16,7 @@ import           HSync.Server.AcidState
 import           HSync.Server.AcidSync(QueryFSState(..))
 
 import           HSync.Server.Handler.FileActions(getTreeOf)
-import           HSync.Server.Handler.Auth(protectRead, protectWrite)
+
 
 import qualified Data.Map as M
 
@@ -24,13 +24,13 @@ import qualified Data.Map as M
 
 -- | Get the MTimeTree directly from the files directory
 getViewTreeR   :: Path -> Handler Html
-getViewTreeR p = protectRead p "vierTree" $ getTreeOf p >>= \case
+getViewTreeR p = getTreeOf p >>= \case
     Nothing -> defaultLayout $ [whamlet| noUserMsg p |]
     Just t  -> defaultLayout . displayDir ViewTreeR p . unTree $ t
 
 -- | Get the MTimeTree by reading the FSState.
 getViewStateR   :: Path -> Handler Html
-getViewStateR p = protectRead p "viewState" $ queryDirectory p >>= \case
+getViewStateR p = queryDirectory p >>= \case
     Left err        -> defaultLayout $ [whamlet| err |]
     Right (Left f)  -> defaultLayout $ displayFile f
     Right (Right d) -> defaultLayout $ displayDir ViewStateR p d

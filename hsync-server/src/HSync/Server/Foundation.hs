@@ -1,47 +1,48 @@
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 {-# LANGUAGE FlexibleInstances #-}
 module HSync.Server.Foundation where
 
-import Prelude
+import           Prelude
 
-import Control.Applicative((<$>))
-import Control.Concurrent.STM.TChan
+import           Control.Applicative((<$>))
+import           Control.Concurrent.STM.TChan
 
-import Data.Monoid
+import           Data.Monoid
 
-import HSync.Common.Types
-import HSync.Common.Notification
+import           HSync.Common.Types
+import           HSync.Common.Notification
 
-import Data.Text(pack, unpack)
+import           Data.Text(pack, unpack)
 
-import HSync.Server
+import           HSync.Server
 
-import HSync.Server.LocalAuth (YesodLocalAuth(..), localAuth, loginR)
-import HSync.Server.Settings (widgetFile, Extra (..))
-import HSync.Server.Settings.StaticFiles
-import HSync.Server.Settings.Development (development)
-import HSync.Server.AcidState
-import HSync.Server.AcidSync
-import HSync.Server.FileSystemState(FSState, newUserFSState)
-import HSync.Server.User (User(..),UserIndex)
+import           HSync.Server.LocalAuth (YesodLocalAuth(..), localAuth, loginR)
+import           HSync.Server.Settings (widgetFile, Extra (..))
+import           HSync.Server.Settings.StaticFiles
+import           HSync.Server.Settings.Development (development)
+import           HSync.Server.AcidState
+import           HSync.Server.AcidSync
+import           HSync.Server.FileSystemState(FSState, newUserFSState)
+import           HSync.Server.User (User(..),UserIndex)
 
-import Network.HTTP.Conduit (Manager)
+import           Network.HTTP.Conduit (Manager)
 
-import System.Directory(createDirectory)
+import           System.Directory(createDirectory)
 
-import Text.Jasmine (minifym)
-import Text.Hamlet (hamletFile)
+import           Text.Jasmine (minifym)
+import           Text.Hamlet (hamletFile)
 
 
-import Yesod
-import Yesod.Auth
-import Yesod.Core.Types (Logger)
-import Yesod.Default.Config
-import Yesod.Default.Util (addStaticContentExternal)
-import Yesod.Static
+import           Yesod
+import           Yesod.Auth
+import           Yesod.Core.Types (Logger)
+import           Yesod.Default.Config
+import           Yesod.Default.Util (addStaticContentExternal)
+import           Yesod.Static
 
 import qualified HSync.Server.Settings                as Settings
-
 import qualified Yesod.JoinPath as Y
+
 
 --------------------------------------------------------------------------------
 
@@ -103,14 +104,14 @@ instance Yesod HSyncServer where
         "config/client_session_key.aes"
 
     defaultLayout mainContent = do
-        master <- getImplementation
+        -- master <- getImplementation
         mmsg   <- getMessage
         muser  <- maybeAuthId
 
         let loginR'     = AuthR loginR
             userMenu    = maybe $(widgetFile "loginForm")
                                 (\user -> $(widgetFile "userLoggedIn"))
-                          muser
+                                muser
             jumboHeader = $(widgetFile "welcome")
         -- We break up the default layout into two components:
         -- default-layout is the contents of the body tag, and
@@ -119,20 +120,50 @@ instance Yesod HSyncServer where
         -- you to use normal widget features in default-layout.
 
         pc <- widgetToPageContent $ do
-            $(combineStylesheets 'StaticR
-                [--  css_normalize_css
-                  css_bootstrap_css
-                ])
-            $(widgetFile "default-layout")
+                $(combineStylesheets 'StaticR [ css_bootstrap_css --  css_normalize_css
+                                              ])
+                $(widgetFile "default-layout")
         giveUrlRenderer $(hamletFile "templates/default-layout-wrapper.hamlet")
 
     -- This is done to provide an optimization for serving static files from
     -- a separate domain. Please see the staticRoot setting in Settings.hs
     urlRenderOverride y (StaticR s) =
-              Just $ uncurry (joinPath y root) $ renderRoute s
+        Just $ uncurry (joinPath y root) $ renderRoute s
       where
         root = Settings.staticRoot . settings . implementation $ y
     urlRenderOverride _ _ = Nothing
+
+    -- Routes not requiring authentication.
+    isAuthorized (AuthR _) _ = return Authorized
+    isAuthorized MyLoginR  _ = return Authorized
+    isAuthorized FaviconR  _ = return Authorized
+    isAuthorized RobotsR   _ = return Authorized
+
+    isAuthorized HomeR     _ = return Authorized
+
+    -- Listening for file changes requires listen access
+    isAuthorized (ListenNowR p) _ = requireListen p
+    isAuthorized (ListenR _ p)  _ = requireListen p
+
+    -- Reading files, deltas, or patches requires Read Access
+    isAuthorized (TreeR p)      _ = requireRead p
+    isAuthorized (FileR p)      _ = requireRead p
+    isAuthorized (DeltaR p)     _ = requireRead p
+    isAuthorized (SignatureR p) _ = requireRead p
+
+    -- Writing stuff requires write access
+    isAuthorized (DeleteR _ p)  _ = requireWrite p
+    isAuthorized (PatchR _ p)   _ = requireWrite p
+    isAuthorized (PutFileR _ p) _ = requireWrite p
+    isAuthorized (PutDirR _ p)  _ = requireWrite p
+
+    -- Viewing the tree and the state requires read access
+    isAuthorized (ViewTreeR p)  _ = requireRead p
+    isAuthorized (ViewStateR p) _ = requireRead p
+
+    -- For anything else: Forbid it for now
+    isAuthorized _              _ = return $ Unauthorized "Forbidden."
+
 
     -- The page to be redirected to when authentication is required.
     authRoute _ = Just $ AuthR LoginR
@@ -242,3 +273,20 @@ createFilesDir u = let n       = unpack . unUI . userId $ u
                       liftIO $ createDirectory fp
                       newUserFSState fp
                         >>= updateAcid . NewUserDirectory (userId u)
+
+
+
+requireRead             :: Path -> Handler AuthResult
+requireRead (Path ui _) = maybeAuthId >>= maybe (return AuthenticationRequired) checkUI
+  where
+    checkUI u
+      | userId u == ui = return Authorized
+      | otherwise      = return $ Unauthorized "No Access"
+
+requireListen :: Path -> Handler AuthResult
+requireListen = requireRead
+
+-- | For routes/paths that require write access
+requireWrite :: Path -> Handler AuthResult
+requireWrite = requireRead
+--  For now require the same thing as reading

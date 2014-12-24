@@ -1,7 +1,3 @@
-{-# Language TemplateHaskell    #-}
-{-# Language OverloadedStrings #-}
-{-# Language GeneralizedNewtypeDeriving #-}
-{-# Language DeriveDataTypeable #-}
 module HSync.Server.User where
 
 import Prelude

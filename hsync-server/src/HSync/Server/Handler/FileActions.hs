@@ -1,31 +1,23 @@
 module HSync.Server.Handler.FileActions where
 
-import HSync.Server.Import
+import           HSync.Server.Import
 
 
-import Data.Aeson(encode)
-
-import Control.Monad.Trans.Resource(runResourceT)
-import Data.Conduit
-import Data.Conduit.Binary
-import Data.ByteString(ByteString)
-
-
-import Network.Wai(requestBody)
-
-import HSync.Common.TimedFSTree(MTimeTree, readMTimeTree)
-import HSync.Common.Header
-import HSync.Common.Notification
-
-import HSync.Server.Handler.Auth(requireRead,requireWrite, protectRead, protectWrite)
-import HSync.Server.Notifications(logNotification, notificationsFor, notificationsAsOf)
-
-
-import System.Directory( removeFile , createDirectory , doesDirectoryExist )
-
-
+import           Data.Aeson(encode)
+import           Control.Monad.Trans.Resource(runResourceT)
+import           Data.Conduit
+import           Data.Conduit.Binary
 import qualified Data.Conduit.List as C
---import qualified Data.Text as T
+import           Data.ByteString(ByteString)
+import           Network.Wai(requestBody)
+import           HSync.Common.TimedFSTree(MTimeTree, readMTimeTree)
+import           HSync.Common.Header
+import           HSync.Common.Notification
+import           HSync.Server.Notifications( logNotification
+                                           , notificationsFor
+                                           , notificationsAsOf
+                                           )
+import           System.Directory( removeFile , createDirectory , doesDirectoryExist )
 
 
 --------------------------------------------------------------------------------
@@ -35,13 +27,11 @@ import qualified Data.Conduit.List as C
 -- | Get all notifications for path p as of time dt. It is assumed that dt lies in the
 -- past.
 getListenR      :: DateTime -> Path -> Handler TypedContent
-getListenR dt p = protectRead p "listen" $
-                    respondWithSource (notificationsAsOf dt p)
+getListenR dt p = respondWithSource (notificationsAsOf dt p)
 
 -- | Get all notifications for path p, starting *now*
 getListenNowR   :: Path -> Handler TypedContent
-getListenNowR p = protectRead p "listenNow" $
-                    respondWithSource (notificationsFor p)
+getListenNowR p = respondWithSource (notificationsFor p)
 
 -- | Given a function to produce a source of a's (that can be encoded as JSON).
 -- Respond with this source
@@ -59,8 +49,7 @@ respondWithSource mkSource = do
 
 -- | Produces a JSON value representing a Maybe MTimeTree
 getTreeR   :: Path -> Handler Value
-getTreeR p = protectRead p "tree" $
-               toJSON <$> getTreeOf p
+getTreeR p = toJSON <$> getTreeOf p
 
 getTreeOf   :: Path -> Handler (Maybe MTimeTree)
 getTreeOf p = asLocalPath p >>= \fp ->
@@ -72,18 +61,18 @@ getTreeOf p = asLocalPath p >>= \fp ->
 -- | Handles related to file events
 
 getFileR   :: Path -> Handler TypedContent
-getFileR p = protectRead p "file" $ serveFile p
+getFileR p = serveFile p
 
 getDeltaR   :: Path -> Handler TypedContent
-getDeltaR p = protectRead p "delta" $ serveSource dummy
+getDeltaR _ = serveSource dummy
 
 
 getSignatureR   :: Path -> Handler TypedContent
-getSignatureR p = protectRead p "signature" $ serveSource dummy
+getSignatureR _ = serveSource dummy
 
 
 deleteDeleteR      :: FileIdent -> Path -> Handler Text
-deleteDeleteR fi p = atomicallyWriteR p "delete" delete'
+deleteDeleteR fi p = atomicallyWriteR p delete'
     where
       delete' fp = protectedByFI fi fp "delete" $ do
                         liftIO $ removeFile fp
@@ -93,7 +82,7 @@ deleteDeleteR fi p = atomicallyWriteR p "delete" delete'
 
 postPatchR                :: FileIdent -> Path -> Handler Text
 postPatchR NonExistent _ = invalidArgs ["postPatch: cannot patch a nonexistent file."]
-postPatchR fi          p = atomicallyWriteR p "patch" patch'
+postPatchR _           p = atomicallyWriteR p patch'
     where
       patch' = error "postPatch: unimplemented"
 
@@ -105,7 +94,7 @@ postPutFileR fi            p = do
                                  -- transPipe lifts the underlying monad of
                                  -- bodySource' that is, the IO monad, into
                                  -- something more general; i.e. MonadIO m
-                                 atomicallyWriteR p "putFile" $ putFile' bodySource
+                                 atomicallyWriteR p $ putFile' bodySource
     where
       putFile' s fp = protectedByFI fi fp "putFile" $ do
                            liftIO . runResourceT $ s $$ sinkFile fp
@@ -169,11 +158,9 @@ type FINotification = Either ErrorDescription Notification
 
 -- TODO: Use the hName somewhere
 -- | Runs the given handler atomically.
-atomicallyWriteR              :: Path -> Text ->
-                                 (FilePath -> Handler FINotification) ->
-                                     Handler Text
-atomicallyWriteR p hName h = asLocalPath p >>= \fp ->
-                               protectWrite p hName $ withNotification (h' fp)
+atomicallyWriteR              :: Path -> (FilePath -> Handler FINotification)
+                              -> Handler Text
+atomicallyWriteR p h = asLocalPath p >>= \fp -> withNotification (h' fp)
     where
       h' fp = atomicallyWriteIO fp (h fp)
 

@@ -160,6 +160,10 @@ tryInsert u redir = do
                     setCredsRedirect $ Creds "local" (unUI . userId $ u) []
       Just err -> loginErrorMessage redir err
 
+
+
+registerForm :: (RenderMessage (HandlerSite m) FormMessage, MonadHandler m)
+             => Html -> MForm m (FormResult User, WidgetT (HandlerSite m) IO ())
 registerForm = renderDivs $ do mkUser
                         <$> areq userIdField   "userIdent" Nothing
                         <*> areq textField     "realName"  Nothing

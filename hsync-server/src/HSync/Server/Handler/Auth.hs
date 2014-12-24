@@ -4,7 +4,8 @@ import Control.Applicative
 import Control.Monad(when)
 
 import Data.Maybe
-
+import Yesod
+import Yesod.Auth
 import HSync.Common.Header(lookupTypedHeader, HUserIdent(..), HPassword(..))
 
 import HSync.Server.Import
@@ -33,22 +34,3 @@ postMyLoginR = do
 
 --------------------------------------------------------------------------------
 -- | permissions
-
-requireRead             :: Path -> Handler Bool
-requireRead (Path ui _) = (\u -> ui == userId u) <$> requireAuthId'
-
--- | For now require the same thing as reading
-requireWrite :: Path -> Handler Bool
-requireWrite = requireRead
-
-
-requireAuthId' :: Handler User
-requireAuthId' = maybeAuthId >>= maybe (permissionDenied "Login Required") return
-
-
-
-protectRead         :: Path -> Text -> Handler a -> Handler a
-protectRead p err h = protect (requireRead p) h (permissionDenied err)
-
-protectWrite         :: Path -> Text -> Handler a -> Handler a
-protectWrite p err h = protect (requireWrite p) h (permissionDenied err)
