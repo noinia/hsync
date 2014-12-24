@@ -106,7 +106,7 @@ class ( MonadResource m
 -- | A monad transformer that implements the MonadYesodClient actions
 newtype YesodClientT cli m a =
     YesodClientT { unYCT :: StateT YesodClientState (ReaderT cli m) a }
-    deriving (Monad, Functor,Applicative, MonadIO, MonadThrow)
+    deriving (Monad, Functor, Applicative, MonadIO, MonadThrow)
 
 
 -- -- | A yesodClientMonadT is a monad.

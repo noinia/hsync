@@ -50,24 +50,24 @@ library
 
                  , hsync-common                  >= 0.0.0.0    && < 0.2
 
-                 , yesod-core                    >= 1.2.5.2    && < 1.3
-                 , wai                           >= 2.1.0.1    && < 2.2
+                 , yesod-core                    >= 1.2.5.2
+                 , wai                           >= 2.1.0.1
 
-                 , bytestring                    >= 0.9        && < 0.11
-                 , text                          >= 0.11       && < 1.2
-                 , data-default                  >= 0.5.3      && < 0.6
-                 , aeson                         >= 0.6.2.0    && < 0.7
-                 , containers                    >= 0.5.0.0    && < 0.6
-                 , yaml                          >= 0.8.5.2    && < 0.9
+                 , bytestring                    >= 0.9
+                 , text                          >= 0.11
+                 , data-default                  >= 0.5.3
+                 , aeson                         >= 0.7
+                 , containers                    >= 0.5.0.0
+                 , yaml                          >= 0.8.5.2
 
-                 , http-conduit                  >= 2.1        && < 2.2
-                 , resourcet                     >= 1.1.1      && < 1.2
+                 , http-conduit                  >= 2.1
+                 , resourcet                     >= 1.1.1
                  , conduit                       >= 1.1
                  , conduit-extra                 >= 1.1
-                 , http-types                    >= 0.8        && < 0.9
-                 , network                       >= 2.4.1.2    && < 2.5
+                 , http-types                    >= 0.8
+                 , network                       >= 2.6
                  -- , attoparsec-conduit            >= 1.0.1.2    && < 1.1
-                 , attoparsec                    >= 0.10.4.0   && < 0.11
+                 , attoparsec                    >= 0.10.4.0
 
                  , fsnotify                      >= 0.0.11     && < 0.1
                  , directory                     >= 1.2        && < 1.3
@@ -78,7 +78,7 @@ library
 
                  , transformers                  >= 0.3        && < 0.4
                  , monad-control                 >= 0.3.2.3    && < 0.4
-                 , mtl                           >= 2.1.2      && < 2.2
+                 , mtl                           >= 2.1.2
                  -- , failure                       >= 0.2.0.1    && < 0.3
                  , lifted-base                   >= 0.2.1.0    && < 0.3
                  , exceptions                    >= 0.5        && < 0.6
@@ -90,15 +90,9 @@ library
                  , acid-state                    >= 0.12.2     && < 0.13
                  , safecopy                      >= 0.8.3      && < 0.9
 
-    extensions: OverloadedStrings
-                MultiParamTypeClasses
-                TypeFamilies
-                -- GADTs
-                -- GeneralizedNewtypeDeriving
-                -- FlexibleContexts
-                -- EmptyDataDecls
-                -- NoMonomorphismRestriction
-                -- DeriveDataTypeable
+  default-extensions: OverloadedStrings
+                      MultiParamTypeClasses
+                      TypeFamilies
 
   default-language:    Haskell2010
 

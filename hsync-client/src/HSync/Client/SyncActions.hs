@@ -148,37 +148,6 @@ listenRemote sync stop = do
 
 
 
-listenMain    :: FilePath -> IO ()
-listenMain fp = withSync fp $ do
-                                u <- user <$> getSync
-                                now <- liftIO $ currentTime
-                                liftIO $ print "ok!"
-                                login
-                                syncDownstream now $ Path u []
-
--- | The main method for the sync with config fp
-syncMain    :: FilePath -> IO ()
-syncMain fp = withSync fp $ do
-    sync <- getSync
-    _    <- login
-    mt   <- serverTreeState
-    when (isNothing mt) firstRun
-    dt   <- lastChange'
-    let rbp = Path (user sync) (remoteBaseDir sync)
-    infoM "SyncActions.syncMain" "Start listening for remote changes"
-    -- Start a new thread in which we listen for new remote changes
-    tid  <- (cloneInIO $ syncDownstream dt rbp) >>= liftIO . forkIO
-    -- We will start listening for local changes
-    syncUpstreamUntil stop rbp
-    -- we have stopped listening for local changes so also stop listening for
-    -- remote changes
-    liftIO $ killThread tid
-  where
-    stop = stopOnEnter
-
-    lastChange' = fromMaybe <$> currentTime
-                            <*> lastChange
-
 stopOnEnter :: IO ()
 stopOnEnter = putStrLn "Press enter to stop" >> getLine >> return ()
 
@@ -196,27 +165,50 @@ firstRun = do
 
 
 
-
--- putMain fp = withSync fp $ do
---  sync <- getSync
---  fs' <- liftIO $ getDirectoryContents "/Users/frank/tmp/synced/tls"
---  let fs = map ("/Users/frank/tmp/synced/tls/" ++) . filter (not . isPrefixOf ".") $ fs'
---  login
---  liftIO $ mapM_ print fs
---  mapM_ forcePutFile fs
-
-downloadMain fp = withSync fp $ do
-  sync <- getSync
-  login
-  cloneDownstream $ Path (user sync) (remoteBaseDir sync)
+-- downloadMain fp = withSync fp $ do
+--   sync <- getSync
+--   login
+--   cloneDownstream $ Path (user sync) (remoteBaseDir sync)
 
 
-uploadMain fp = withSync fp $ do
-                                u <- user <$> getSync
-                                login
-                                syncUpstreamUntil stopOnEnter $ Path u [""]
+-- uploadMain fp = withSync fp $ do
+--                                 u <- user <$> getSync
+--                                 login
+--                                 syncUpstreamUntil stopOnEnter $ Path u [""]
 
 
-showState fp = withSync fp $ do
-                               Just t <- serverTreeState
-                               liftIO . putStr $ show t
+-- showState fp = withSync fp $ do
+--                                Just t <- serverTreeState
+--                                liftIO . putStr $ show t
+
+
+-- listenMain    :: FilePath -> IO ()
+-- listenMain fp = withSync fp $ do
+--                                 u <- user <$> getSync
+--                                 now <- liftIO $ currentTime
+--                                 liftIO $ print "ok!"
+--                                 login
+--                                 syncDownstream now $ Path u []
+
+-- -- | The main method for the sync with config fp
+-- syncMain    :: FilePath -> IO ()
+-- syncMain fp = withSync fp $ do
+--     sync <- getSync
+--     _    <- login
+--     mt   <- serverTreeState
+--     when (isNothing mt) firstRun
+--     dt   <- lastChange'
+--     let rbp = Path (user sync) (remoteBaseDir sync)
+--     infoM "SyncActions.syncMain" "Start listening for remote changes"
+--     -- Start a new thread in which we listen for new remote changes
+--     tid  <- (cloneInIO $ syncDownstream dt rbp) >>= liftIO . forkIO
+--     -- We will start listening for local changes
+--     syncUpstreamUntil stop rbp
+--     -- we have stopped listening for local changes so also stop listening for
+--     -- remote changes
+--     liftIO $ killThread tid
+--   where
+--     stop = stopOnEnter
+
+--     lastChange' = fromMaybe <$> currentTime
+--                             <*> lastChange

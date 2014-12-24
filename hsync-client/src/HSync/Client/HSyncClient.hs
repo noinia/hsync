@@ -13,7 +13,12 @@ import Data.Data(Data, Typeable)
 import Data.Text(Text, unpack)
 import Data.Yaml
 
-import System.Log.Logger(Priority(..))
+import System.Log.Logger( Priority(..)
+                        , rootLoggerName
+                        , updateGlobalLogger
+                        , addHandler
+                        )
+import qualified System.Log.Handler.Syslog as SysLog
 
 import Filesystem.Path.CurrentOS(FilePath)
 
@@ -77,4 +82,8 @@ launchSync hs (SyncInfo n m) = let dir = syncConfigDir . globalSettings $ hs
 
 
 main    :: HSyncClient -> IO ()
-main hs = mapM_ (launchSync hs) . syncs . globalSettings $ hs
+main hs = do
+  let sets = globalSettings hs
+  sysl <- SysLog.openlog "HSync.Client" [SysLog.PID] SysLog.DAEMON (logLevel sets)
+  updateGlobalLogger rootLoggerName (addHandler sysl)
+  mapM_ (launchSync hs) $ syncs sets
