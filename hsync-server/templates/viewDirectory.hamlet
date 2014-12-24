@@ -15,10 +15,10 @@
 
 <ul>
   $forall subDir <- subDirectories dir
-    <li><a href=@{route subDir}> #{dirName subDir}
+    <li><a href=@{route subDir}> #{dirName subDir}</a>
 
 <h3>Files
 
 <ul>
   $forall file <- files dir
-    <li><a href=@{route file}> #{fileName file}
+    <li><a href=@{route file}> #{fileName file}</a>
