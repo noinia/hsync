@@ -18,9 +18,11 @@ import System.Log.Logger( Priority(..)
                         , updateGlobalLogger
                         , addHandler
                         )
-import qualified System.Log.Handler.Syslog as SysLog
+-- import qualified System.Log.Handler.Syslog as SysLog
+import qualified System.Log.Handler.Simple as SimpleLog
+import qualified System.Log.Logger as Log
 
-import Filesystem.Path.CurrentOS(FilePath)
+import Filesystem.Path.CurrentOS(FilePath, (</>), encodeString)
 
 import HSync.Client.Import
 import HSync.Client.SyncActions(SyncMode(..), launchSyncFrom)
@@ -83,7 +85,9 @@ launchSync hs (SyncInfo n m) = let dir = syncConfigDir . globalSettings $ hs
 
 main    :: HSyncClient -> IO ()
 main hs = do
-  let sets = globalSettings hs
-  sysl <- SysLog.openlog "HSync.Client" [SysLog.PID] SysLog.DAEMON (logLevel sets)
-  updateGlobalLogger rootLoggerName (addHandler sysl)
+  let sets    = globalSettings hs
+      logFile = encodeString $ logDirectory sets </> "hsync_client.log"
+  fileLog <- SimpleLog.fileHandler logFile (logLevel sets)
+  updateGlobalLogger rootLoggerName (addHandler fileLog)
+  Log.infoM "HSync.Client.Main" "Starting HSync"
   mapM_ (launchSync hs) $ syncs sets
