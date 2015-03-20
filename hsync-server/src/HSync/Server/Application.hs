@@ -15,7 +15,7 @@ import HSync.Server
 
 import HSync.Server.Import
 import HSync.Server.AcidSync(AcidSync, withAcidSync)
-import HSync.Server.Notifications(storeNotifications)
+import HSync.Server.Notifications(storeNotifications, printNotifications)
 
 -- Import all relevant handler modules here.
 -- Don't forget to add new modules to your cabal file!
@@ -113,4 +113,5 @@ startNotificationLogger :: HSyncServerImplementation -> IO ThreadId
 startNotificationLogger hss = forkIO start
   where
     start :: IO ()
-    start = storeNotifications hss
+    start = do storeNotifications hss
+               printNotifications hss

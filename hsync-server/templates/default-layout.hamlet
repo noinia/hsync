@@ -11,11 +11,12 @@
       ^{userMenu}
 
 $maybe msg <- mmsg
-    <div #message>#{msg}
+  <div #message>#{msg}
 
-<div class="jumbotron">
-  <div class="container">
-    ^{jumboHeader}
+$maybe jumbo <- jumboHeader
+  <div class="jumbotron">
+    <div class="container">
+      ^{jumbo}
 
 <div class="container">
   ^{mainContent}

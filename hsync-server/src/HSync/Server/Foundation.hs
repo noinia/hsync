@@ -112,7 +112,7 @@ instance Yesod HSyncServer where
             userMenu    = maybe $(widgetFile "loginForm")
                                 (\user -> $(widgetFile "userLoggedIn"))
                                 muser
-            jumboHeader = $(widgetFile "welcome")
+            jumboHeader = Just $(widgetFile "welcome")
         -- We break up the default layout into two components:
         -- default-layout is the contents of the body tag, and
         -- default-layout-wrapper is the entire page. Since the final
