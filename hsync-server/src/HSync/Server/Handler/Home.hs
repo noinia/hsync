@@ -21,18 +21,18 @@ getHomeR = do
         setTitle "Welcome to HSync!"
         $(widgetFile "homepage")
 
-postHomeR :: Handler Html
-postHomeR = do
-    ((result, formWidget), formEnctype) <- runFormPost sampleForm
-    let handlerName = "postHomeR" :: Text
-        submission = case result of
-            FormSuccess res -> Just res
-            _ -> Nothing
+-- postHomeR :: Handler Html
+-- postHomeR = do
+--     ((result, formWidget), formEnctype) <- runFormPost sampleForm
+--     let handlerName = "postHomeR" :: Text
+--         submission = case result of
+--             FormSuccess res -> Just res
+--             _ -> Nothing
 
-    defaultLayout $ do
-        aDomId <- newIdent
-        setTitle "Welcome To Yesod!"
-        $(widgetFile "homepage")
+--     defaultLayout $ do
+--         aDomId <- newIdent
+--         setTitle "Welcome To Yesod!"
+--         $(widgetFile "homepage")
 
 sampleForm :: Form (FileInfo, Text)
 sampleForm = renderDivs $ (,)

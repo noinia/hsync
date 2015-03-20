@@ -15,7 +15,7 @@ import           HSync.Server.FileSystemState
 import           HSync.Server.AcidState
 import           HSync.Server.AcidSync(QueryFSState(..))
 
-import           HSync.Server.Handler.FileActions(getTreeOf)
+import           HSync.Server.Handler.FileActions(getTreeOf,getFileR)
 
 
 import qualified Data.Map as M
@@ -23,10 +23,11 @@ import qualified Data.Map as M
 --------------------------------------------------------------------------------
 
 -- | Get the MTimeTree directly from the files directory
-getViewTreeR   :: Path -> Handler Html
+getViewTreeR   :: Path -> Handler TypedContent
 getViewTreeR p = getTreeOf p >>= \case
-    Nothing -> defaultLayout $ [whamlet| noUserMsg p |]
-    Just t  -> defaultLayout . displayDir ViewTreeR p . unTree $ t
+    Nothing -> getFileR p -- if p is not a dir, then it is either a file or nothing
+                          -- Let the the getFileR handler distinguish between them.
+    Just t  -> fmap toTypedContent . defaultLayout . displayDir ViewTreeR p . unTree $ t
 
 -- | Get the MTimeTree by reading the FSState.
 getViewStateR   :: Path -> Handler Html
