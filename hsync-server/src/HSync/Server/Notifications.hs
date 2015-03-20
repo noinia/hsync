@@ -1,29 +1,31 @@
 module HSync.Server.Notifications where
 
-import Prelude
+import           Prelude
 
-import Control.Applicative((<$>))
+import           Control.Applicative((<$>))
 
-import Control.Concurrent.STM.TChan
-import Control.Concurrent.STM(atomically)
+import           Control.Concurrent.STM.TChan
+import           Control.Concurrent.STM(atomically)
 
-import Data.Conduit
+import           Data.Conduit
 
-import Data.List(isPrefixOf)
+import           Data.List(isPrefixOf)
 
-import HSync.Common.Notification
-import HSync.Common.Types(Path(..))
-import HSync.Common.DateTime(DateTime)
+import           HSync.Common.Notification
+import           HSync.Common.Types(Path(..))
+import           HSync.Common.DateTime(DateTime)
 
-import HSync.Server
-import HSync.Server.AcidSync(notificationUpdate, NotificationsAsOf(..))
-import HSync.Server.AcidState(queryAcid)
-import HSync.Server.Foundation
+import           HSync.Server
+import           HSync.Server.Settings(extraNotificationLog)
+import           HSync.Server.AcidState(queryAcid)
+import           HSync.Server.AcidSync(notificationUpdate, NotificationsAsOf(..))
+import           HSync.Server.Foundation
+import qualified System.Log.FastLogger as FL
 
-import Yesod
+import           Yesod
+import           Yesod.Default.Config(appExtra)
 
-
-import Data.Conduit.List as CL
+import           Data.Conduit.List as CL
 
 --------------------------------------------------------------------------------
 -- | Storing Notifications
@@ -40,6 +42,14 @@ notificationSink     :: MonadIO m
                      => HSyncServerImplementation -> Sink Notification m ()
 notificationSink hss = let acid = acidSync hss in
                        awaitForever $ lift . notificationUpdate acid
+
+printNotificationSink    :: MonadIO m => FL.LoggerSet -> Sink Notification m ()
+printNotificationSink ls = awaitForever $ printNotification
+  where
+    printNotification :: MonadIO m => Notification -> m ()
+    printNotification = liftIO . FL.pushLogStr ls . FL.toLogStr . toLog
+
+
 
 --------------------------------------------------------------------------------
 -- | Obtaining Notifications
@@ -84,6 +94,14 @@ chanToSource c = do
 storeNotifications     :: (Functor m, MonadIO m)
                        => HSyncServerImplementation -> m ()
 storeNotifications hss = notifications' hss >>= ($$ notificationSink hss)
+
+
+-- | Print a log entry to a file for each notification
+printNotifications :: (Functor m, MonadIO m) => HSyncServerImplementation -> m ()
+printNotifications hss = do
+  let fp = extraNotificationLog . appExtra . settings $ hss
+  ls <- liftIO $ FL.newFileLoggerSet FL.defaultBufSize fp
+  notifications' hss >>= ($$ printNotificationSink ls)
 
 
 -- Given two sources s1 and s2 generate a source that *first* streams everything

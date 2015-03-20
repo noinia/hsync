@@ -70,7 +70,7 @@ widgetFile = (if development then widgetFileReload
 
 data Extra = Extra
     { extraFilesDir           :: FilePath
-    , extraNotificationLogDir :: FilePath -- TODO: change this
+    , extraNotificationLog    :: FilePath -- TODO: change this
     , extraCopyright          :: Text
     , extraAnalytics          :: Maybe Text -- ^ Google Analytics
     } deriving Show
@@ -78,7 +78,7 @@ data Extra = Extra
 parseExtra :: DefaultEnv -> Object -> Parser Extra
 parseExtra _ o = (\fDir nDir -> Extra (T.unpack fDir) (T.unpack nDir))
     <$> o .:  "filesDir"
-    <*> o .:  "notificationLogDir"
+    <*> o .:  "notificationLog"
     <*> o .:  "copyright"
     <*> o .:? "analytics"
 -- TODO: This should be updated, both the notification and the files dir are
