@@ -73,7 +73,7 @@ makeApplication acid conf = do
         , destination = RequestLogger.Logger $ loggerSet $ appLogger foundation
         }
 
-    _ <- startNotificationLogger foundation
+    _ <- startNotificationLoggers foundation
 
     -- Create the WAI application and apply middlewares
     app <- toWaiAppPlain foundation' -- vs toWaiApp
@@ -109,9 +109,7 @@ getApplicationDev = do
              }
 
 
-startNotificationLogger :: HSyncServerImplementation -> IO ThreadId
-startNotificationLogger hss = forkIO start
-  where
-    start :: IO ()
-    start = do storeNotifications hss
-               printNotifications hss
+startNotificationLoggers    :: HSyncServerImplementation -> IO [ThreadId]
+startNotificationLoggers hss = mapM forkIO [ storeNotifications hss
+                                           , printNotifications hss
+                                           ]

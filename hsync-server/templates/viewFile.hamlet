@@ -1,0 +1,17 @@
+<div class="jumbotron">
+  <div class="container">
+    <h1>#{fileName f}
+
+    <table>
+      <tr>
+        <td>Owner:
+        <td><a href=@{r (Path (owner p) [])}>#{unUI $ owner p}</a>
+      <tr>
+        <td>Path:
+        <td>^{displayPathWith r p}
+      <tr>
+        <td>File Data:
+        <td>#{show $ fileData f}
+      <tr>
+        <td>Measure:
+        <td>#{show $ fileMeasure f}

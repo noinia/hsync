@@ -35,8 +35,8 @@ getViewTreeR p = getTreeOf p >>= \case
 getViewStateR   :: Path -> Handler Html
 getViewStateR p = queryDirectory p >>= \case
     Left err        -> defaultLayout $ [whamlet| err |]
-    Right (Left f)  -> defaultLayout $ displayFile f
-    Right (Right d) -> defaultLayout $ displayDir ViewStateR p d
+    Right (Left f)  -> defaultLayout $ displayFile ViewStateR p f
+    Right (Right d) -> defaultLayout $ displayDir  ViewStateR p d
 
 
 --------------------------------------------------------------------------------
@@ -57,8 +57,12 @@ noUserMsg p = "No such user: " <> unUI (owner p)
 --------------------------------------------------------------------------------
 -- | Widgets
 
-displayFile :: Show m => File m (FileData FileLabel) -> Widget
-displayFile f = [whamlet| #{show f} |]
+displayFile       :: Show m
+                  => (Path -> Route HSyncServer) -- ^ Route constructor
+                  -> Path
+                  -> File m (FileData FileLabel) -> Widget
+displayFile r p f = $(widgetFile "viewFile")
+
 
 displayDir         :: (Show m, Show a)
                    => (Path -> Route HSyncServer) -- ^ Route constructor

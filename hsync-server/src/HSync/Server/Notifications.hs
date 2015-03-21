@@ -3,6 +3,7 @@ module HSync.Server.Notifications where
 import           Prelude
 
 import           Control.Applicative((<$>))
+import           Data.Monoid
 
 import           Control.Concurrent.STM.TChan
 import           Control.Concurrent.STM(atomically)
@@ -47,7 +48,7 @@ printNotificationSink    :: MonadIO m => FL.LoggerSet -> Sink Notification m ()
 printNotificationSink ls = awaitForever $ printNotification
   where
     printNotification :: MonadIO m => Notification -> m ()
-    printNotification = liftIO . FL.pushLogStr ls . FL.toLogStr . toLog
+    printNotification = liftIO . FL.pushLogStr ls . FL.toLogStr . (<> "\n") . toLog
 
 
 
