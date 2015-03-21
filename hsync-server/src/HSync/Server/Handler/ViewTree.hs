@@ -13,11 +13,13 @@ import           HSync.Server.Import hiding (fileName)
 
 import           HSync.Server.FileSystemState
 import           HSync.Server.AcidState
+import           HSync.Server.User
 import           HSync.Server.AcidSync(QueryFSState(..))
 
 import           HSync.Server.Handler.FileActions(getTreeOf,getFileR)
 
 
+import qualified Data.List as L
 import qualified Data.Map as M
 
 --------------------------------------------------------------------------------
@@ -68,3 +70,11 @@ displayDir r p dir = $(widgetFile "viewDirectory")
     route   :: IsFileOrDirectory t => t x y -> Route HSyncServer
     route x = r (p { subPath = subPath p ++ [name x]} )
               -- append the name to the path
+
+displayPathWith         :: (Path -> Route HSyncServer) -> Path -> Widget
+displayPathWith route p = $(widgetFile "path")
+  where
+    ancestors  = zip ancestors' texts
+    ancestors' = map (\sp -> p { subPath = sp}) . L.inits . subPath $ p
+    texts      :: [Text]
+    texts      = (unUI $ owner p) : subPath p

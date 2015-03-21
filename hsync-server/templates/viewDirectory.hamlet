@@ -1,24 +1,27 @@
-<h1>Directory: #{dirName dir}
+<div class="jumbotron">
+  <div class="container">
+    <h1>#{dirName dir}
 
-<table>
-  <tr>
-    <td>Path:
-    <td>#{show $ p}
-  <tr>
-    <td>Directory Data:
-    <td>#{show $ dirData dir}
-  <tr>
-    <td>Measure:
-    <td>#{show $ dirMeasure dir}
+    <table>
+      <tr>
+        <td>Path:
+        <td>^{displayPathWith r p}
+      <tr>
+        <td>Directory Data:
+        <td>#{show $ dirData dir}
+      <tr>
+        <td>Measure:
+        <td>#{show $ dirMeasure dir}
 
-<h3>Subdirectories
+<div .container>
+  <h3>Subdirectories
 
-<ul>
-  $forall subDir <- subDirectories dir
-    <li><a href=@{route subDir}> #{dirName subDir}</a>
+  <ul>
+    $forall subDir <- subDirectories dir
+      <li><a href=@{route subDir}> #{dirName subDir}</a>
 
-<h3>Files
+  <h3>Files
 
-<ul>
-  $forall file <- files dir
-    <li><a href=@{route file}> #{fileName file}</a>
+  <ul>
+    $forall file <- files dir
+      <li><a href=@{route file}> #{fileName file}</a>

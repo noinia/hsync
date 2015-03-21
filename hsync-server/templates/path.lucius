@@ -1,0 +1,16 @@
+ul.path:first-child:before {
+    content: '';
+}
+
+ul.path:first-child:after {
+    content: ':';
+}
+
+.path li {
+    display: inline;
+    list-style-type: none;
+}
+
+.path li:before {
+    content: '/';
+}

@@ -1,3 +1,10 @@
-  <ol>
+<div class="jumbotron">
+  <div class="container">
+    <h1>Welcome to HSync!
 
-    <a href=@{AuthR LoginR}>Go to the login page
+    <p>
+      <a href=@{AuthR LoginR} class="btn btn-primary btn-lg" role="button">Login &raquo;</a>
+
+<div class="container">
+  <p>
+    HSync is a file synchronization tool.

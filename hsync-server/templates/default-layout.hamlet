@@ -13,12 +13,7 @@
 $maybe msg <- mmsg
   <div #message>#{msg}
 
-$maybe jumbo <- jumboHeader
-  <div class="jumbotron">
-    <div class="container">
-      ^{jumbo}
-
-<div class="container">
+<div class="main">
   ^{mainContent}
 
 <footer class="navbar navbar-fixed-bottom navbar-inverse">

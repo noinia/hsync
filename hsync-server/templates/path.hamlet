@@ -1,0 +1,3 @@
+<ul .path>
+  $forall (a,t) <- ancestors
+    <li><a href=@{route a}>#{t}</a>
