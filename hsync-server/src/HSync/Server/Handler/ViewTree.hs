@@ -77,4 +77,4 @@ displayPathWith route p = $(widgetFile "path")
     ancestors  = zip ancestors' texts
     ancestors' = map (\sp -> p { subPath = sp}) . L.inits . subPath $ p
     texts      :: [Text]
-    texts      = (unUI $ owner p) : subPath p
+    texts      = "/" : subPath p
