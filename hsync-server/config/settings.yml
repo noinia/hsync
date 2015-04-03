@@ -5,10 +5,12 @@ Default: &defaults
   filesDir: "files/"
   notificationLog: "notifications.log"
   copyright: Insert copyright statement here
+  allowRegister: False
   #analytics: UA-YOURCODE
 
 Development:
   <<: *defaults
+  allowRegister: True
 
 Testing:
   <<: *defaults

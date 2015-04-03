@@ -72,6 +72,7 @@ data Extra = Extra
     { extraFilesDir           :: FilePath
     , extraNotificationLog    :: FilePath -- TODO: change this
     , extraCopyright          :: Text
+    , extraAllowRegister      :: Bool
     , extraAnalytics          :: Maybe Text -- ^ Google Analytics
     } deriving Show
 
@@ -80,6 +81,7 @@ parseExtra _ o = (\fDir nDir -> Extra (T.unpack fDir) (T.unpack nDir))
     <$> o .:  "filesDir"
     <*> o .:  "notificationLog"
     <*> o .:  "copyright"
+    <*> o .:  "allowRegister"
     <*> o .:? "analytics"
 -- TODO: This should be updated, both the notification and the files dir are
 -- paths. So we should store them uniformly. But I don't want to bother with

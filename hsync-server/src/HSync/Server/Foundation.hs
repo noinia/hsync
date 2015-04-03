@@ -16,7 +16,7 @@ import           Data.Text(pack, unpack)
 
 import           HSync.Server
 
-import           HSync.Server.LocalAuth (YesodLocalAuth(..), localAuth, loginR)
+import           HSync.Server.LocalAuth (YesodLocalAuth(..), localAuth, loginR, registerR)
 import           HSync.Server.Settings (widgetFile, Extra (..))
 import           HSync.Server.Settings.StaticFiles
 import           HSync.Server.Settings.Development (development)
@@ -133,7 +133,6 @@ instance Yesod HSyncServer where
     urlRenderOverride _ _ = Nothing
 
     -- Routes not requiring authentication.
-    isAuthorized (AuthR _) _ = return Authorized
     isAuthorized MyLoginR  _ = return Authorized
     isAuthorized FaviconR  _ = return Authorized
     isAuthorized RobotsR   _ = return Authorized
@@ -159,6 +158,17 @@ instance Yesod HSyncServer where
     -- Viewing the tree and the state requires read access
     isAuthorized (ViewTreeR p)  _ = requireRead p
     isAuthorized (ViewStateR p) _ = requireRead p
+
+    -- The auth pages are normally authorized, For the register page
+    -- it explicitly depends on whether or not we allow registration
+    isAuthorized (AuthR r) _
+      | r == registerR       = (\e -> if extraAllowRegister e
+                                        then Authorized
+                                        else Unauthorized "Forbidden."
+                               ) <$> getExtra
+    isAuthorized (AuthR _) _ = return Authorized
+
+
 
     -- For anything else: Forbid it for now
     isAuthorized _              _ = return $ Unauthorized "Forbidden."
