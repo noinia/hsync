@@ -1,0 +1,29 @@
+#!/bin/sh
+#
+# $FreeBSD$
+#
+#   Runs as unprivileged user "hsync"
+#
+# PROVIDE: hsync
+# REQUIRE: NETWORK
+# KEYWORD: shutdown
+
+. /etc/rc.subr
+
+name="hsync"
+rcvar=hsync_enable
+
+load_rc_config $name
+: ${hsync_enable:=no}
+
+start_precmd="cd /hsync/hsync-server"
+start_cmd="${name}_start"
+#command="/usr/local/bin/${name}"
+#command_args="Production"
+procname="/usr/local/bin/${name}"
+
+hsync_start() {
+    /usr/sbin/daemon -u hsync scripts/start.sh
+}
+
+run_rc_command "$1"
