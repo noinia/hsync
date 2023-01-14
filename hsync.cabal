@@ -45,7 +45,9 @@ common setup
 
 library
     import:           warnings, setup
-    exposed-modules:  MyLib
+    exposed-modules:
+       HSync.FileTree
+       HSync.Diff
     -- other-modules:
     -- other-extensions:
     hs-source-dirs:   src
