@@ -1,5 +1,4 @@
 {-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE DefaultSignatures #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 module HSync.FileTree.Diff
   ( FileTreeChanged(..)
