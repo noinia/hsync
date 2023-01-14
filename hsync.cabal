@@ -47,6 +47,7 @@ library
     import:           warnings, setup
     exposed-modules:
        HSync.FileTree
+       HSync.FileTree.Diff
        HSync.Diff
     -- other-modules:
     -- other-extensions:

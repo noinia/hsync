@@ -4,6 +4,7 @@ module HSync.FileTree
   , FileTree(..)
   , DirectoryContent
   , FileName
+  , DirAttrs(..)
 
   , readFileTreeWithLastModified
   , readFileTree
@@ -56,6 +57,13 @@ type DirectoryContent d f = Map.Map FileName (FileTree d f)
 
 instance (Flat d, Flat f) => Flat (FileTree d f)
 
+
+--------------------------------------------------------------------------------
+
+-- | directory attributes that supports local attributes as well as a cache.
+data DirAttrs cache d = DirAttrs !cache -- ^ cached attributes about the content
+                                 !d  -- ^ "local" attributes about this directory itself
+                      deriving stock (Show,Eq,Ord,Generic)
 
 --------------------------------------------------------------------------------
 
